@@ -237,7 +237,7 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
 
             <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
               <div className="mb-3 rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-                AI-ul va răspunde doar despre <strong>{displayName}</strong>, în categoria <strong>{meta.label.toLowerCase()}</strong>. Pentru altă zonă, selectează întâi structura din model.
+                AI-ul va răspunde despre <strong>{displayName}</strong>, în categoria <strong>{meta.label.toLowerCase()}</strong>, folosind contextul Santix disponibil pentru selecția curentă.
               </div>
 
               <div className="mb-3 grid grid-cols-2 gap-2">

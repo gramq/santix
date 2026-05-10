@@ -981,33 +981,36 @@ async function getGuardrailContext(supabase: ReturnType<typeof createUserSupabas
   );
 }
 
-function buildClarifyingAnswer(input: z.infer<typeof InputSchema>, context: KnowledgeEntry[]) {
-  const redFlags = splitSentences(findContext(context, "semne_alarma"), [
-    "durere severă după traumatism",
-    "deformare",
-    "amorțeală sau slăbiciune",
-    "imposibilitatea folosirii zonei",
-  ]).slice(0, 4);
+function isVaguePainQuestion(question: string) {
+  const normalized = normalizeForScope(question).replace(/[?.!,;:]/g, "").trim();
+  return ["ma doare", "am durere", "doare", "ce poate fi", "ma dor"].includes(normalized) || normalized.split(/\s+/).length <= 3;
+}
 
-  const dbQuestions = findContext(context, "intrebari_clarificare");
-  const questions = splitSentences(dbQuestions, [
-    "A apărut după o lovitură, cădere sau mișcare bruscă?",
-    "Cât de intensă este durerea: ușoară, moderată sau severă?",
-    "Poți folosi zona aproape normal sau mișcarea este limitată?",
-    "Există umflare, vânătaie, deformare sau amorțeală?",
-    "Durerea se agravează sau persistă de câteva zile?",
-  ]).slice(0, 6);
+function buildClarifyingAnswer(input: z.infer<typeof InputSchema>) {
+  const region = (input.bodyRegion ?? "zona").toLowerCase();
+  const sideQuestion =
+    region !== "zona"
+      ? `Durerea este la ${region} stâng sau la ${region} drept?`
+      : "Durerea este pe partea stângă sau pe partea dreaptă?";
+  const structureKey = normalizeForScope(`${input.structureName} ${input.structureSlug ?? ""} ${input.modelSelectionId ?? ""}`);
+  const subzoneQuestion = structureKey.includes("humerus")
+    ? "Durerea este mai aproape de umăr, la mijlocul brațului sau mai aproape de cot?"
+    : "Durerea este mai aproape de articulația de sus, la mijloc sau mai aproape de articulația de jos?";
+  const movementQuestion = region.includes("brat")
+    ? "Se accentuează când ridici sau miști brațul?"
+    : "Se accentuează când miști zona?";
+  const urgentRegion = region.includes("brat") ? "brațul pare deformat, nu îl poți mișca" : "zona este deformată, nu o poți mișca";
 
   return [
-    `În regulă. Ca să te ajut pentru **${input.structureName}**, am nevoie de câteva detalii, nu pot trage concluzii doar din „mă doare”.`,
+    "Îmi pare rău că te doare. Ca să înțeleg mai bine, spune-mi te rog:",
     "",
-    "**Răspunde pe scurt la acestea:**",
-    ...questions.map((question, index) => `${index + 1}. ${question}?`),
+    `1. ${sideQuestion}`,
+    `2. ${subzoneQuestion}`,
+    "3. A apărut după o lovitură, căzătură sau efort?",
+    `4. ${movementQuestion}`,
+    "5. Ai umflătură, vânătaie, amorțeală sau slăbiciune?",
     "",
-    "**Mergi spre consult medical mai repede dacă apare:**",
-    ...redFlags.map((flag) => `- ${flag}`),
-    "",
-    "După ce îmi răspunzi, îți pot spune ce cauze sunt mai probabile educațional, ce poți face prudent și cât de îngrijorător pare.",
+    `Dacă durerea este severă, ${urgentRegion} sau durerea a apărut după un accident, consultă urgent un medic.`,
   ].join("\n");
 }
 
@@ -1032,27 +1035,21 @@ function buildFollowUpAnswer(input: z.infer<typeof InputSchema>, context: Knowle
     "sange",
   ]);
 
-  return [
-    severe
-      ? `Pentru **${input.structureName}**, ce descrii include semne care pot necesita evaluare medicală, mai ales dacă a apărut după traumatism sau nu poți folosi zona.`
-      : `Pentru **${input.structureName}**, pot orienta educațional răspunsul pe baza bazei Santix, dar nu pot pune diagnostic.`,
-    "",
-    "**Ce ar putea explica durerea:**",
-    ...(causes.length ? causes.map((item) => `- ${item}`) : ["- contuzie, suprasolicitare sau iritație locală, în funcție de context"]),
-    "",
-    "**Ce simptome urmărești:**",
-    ...(symptoms.length ? symptoms.map((item) => `- ${item}`) : ["- intensitate, umflare, vânătaie, limitare funcțională și evoluție în timp"]),
-    "",
-    "**Ce poți face prudent acum:**",
-    ...(recommendations.length
-      ? recommendations.map((item) => `- ${item}`)
-      : ["- evită solicitarea zonei, aplică rece învelit dacă a fost traumatism și urmărește evoluția"]),
-    "",
-    "**Când devine îngrijorător:**",
-    ...(redFlags.length ? redFlags.map((item) => `- ${item}`) : ["- durere severă, deformare, amorțeală, slăbiciune sau imposibilitate de folosire"]),
-    "",
-    "Informația este educațională și nu înlocuiește consultul unui medic.",
-  ].join("\n");
+  return formatSixSectionAnswer({
+    summary: severe
+      ? `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă au apărut după traumatism sau nu poți folosi zona.`
+      : `Pentru ${input.structureName}, pot orienta educațional răspunsul pe baza datelor Santix, fără diagnostic final.`,
+    causes,
+    aggravators: symptoms.length
+      ? symptoms
+      : ["Intensitatea crescută, umflarea, vânătaia, limitarea funcțională sau agravarea în timp pot indica o problemă mai importantă."],
+    safeActions: recommendations.length
+      ? recommendations
+      : ["Evită solicitarea zonei dureroase și urmărește evoluția simptomelor."],
+    consult: redFlags.length
+      ? redFlags
+      : ["Consultă un medic pentru durere severă, deformare, amorțeală, slăbiciune sau imposibilitate de folosire."],
+  });
 }
 
 function buildSelectionSpecificAnswer(input: z.infer<typeof InputSchema>, context: KnowledgeEntry[]) {
@@ -1060,17 +1057,19 @@ function buildSelectionSpecificAnswer(input: z.infer<typeof InputSchema>, contex
   const recommendations = splitSentences(findContext(context, "recomandari")).slice(0, 2);
   const symptoms = splitSentences(findContext(context, "simptome")).slice(0, 2);
 
-  return [
-    `**${input.structureName}** este subiectul selecției curente.`,
-    "",
-    ...(anatomy.length
-      ? anatomy.map((item) => `- ${item}`)
-      : [`- Este o structură de tip ${input.tissue}, încadrată în modelul Santix pentru regiunea selectată.`]),
-    ...(symptoms.length ? ["", "**Context clinic educațional:**", ...symptoms.map((item) => `- ${item}`)] : []),
-    ...(recommendations.length ? ["", "**De reținut:**", ...recommendations.map((item) => `- ${item}`)] : []),
-    "",
-    "Informația este educațională și nu reprezintă diagnostic medical.",
-  ].join("\n");
+  return formatSixSectionAnswer({
+    summary: `${input.structureName} este subiectul selecției curente.`,
+    causes: anatomy.length
+      ? anatomy
+      : [`Este o structură de tip ${input.tissue}, încadrată în modelul Santix pentru regiunea selectată.`],
+    aggravators: symptoms.length
+      ? symptoms
+      : ["Datele Santix nu indică factori agravanți specifici pentru această structură."],
+    safeActions: recommendations.length
+      ? recommendations
+      : ["Folosește informația ca orientare educațională și evită suprasolicitarea zonei dacă apare durere."],
+    consult: ["Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă."],
+  });
 }
 
 function buildOutOfScopeAnswer() {
@@ -1085,7 +1084,7 @@ function buildAppSpecificAnswer(context: KnowledgeEntry[]) {
   return [
     "Pot răspunde doar pe baza informațiilor Santix disponibile:",
     "",
-    ...context.slice(0, 4).map((entry) => `- ${entry.content_ro}`),
+    ...context.slice(0, 4).map((entry, index) => `${index + 1}. ${entry.content_ro}`),
   ].join("\n");
 }
 
@@ -1111,48 +1110,53 @@ function buildGeneralMedicalFallback(input: z.infer<typeof InputSchema>, route: 
       ? "Ce descrii poate include semne de alarmă. Este recomandat consult medical rapid, iar dacă durerea este severă, există deformare, amorțeală, dificultăți de respirație sau nu poți folosi zona, mergi la urgență."
       : "Pot să te orientez educațional, fără diagnostic. Durerea după efort, căzătură sau lovitură poate avea cauze diferite, de la contuzie/suprasolicitare până la entorsă, luxație sau fractură, în funcție de context.";
 
-  return [
-    ...(route.conflictNote ? [route.conflictNote, ""] : []),
-    urgentIntro,
-    "",
-    route.entities.bodyRegionLabel ? `**Zona indicată:** ${route.entities.bodyRegionLabel}` : "**Zona indicată:** nu este clară încă",
-    route.entities.symptoms.length ? `**Simptome detectate:** ${route.entities.symptoms.join(", ")}` : "**Simptome detectate:** durere/disconfort nespecific",
-    route.entities.contexts.length ? `**Context detectat:** ${route.entities.contexts.join(", ")}` : "**Context detectat:** neclar",
-    "",
-    "**Ca să diferențiem educațional situația:**",
-    ...questions.map((question) => `- ${question}`),
-    "",
-    "**Semne pentru care nu amâni evaluarea:**",
-    ...redFlags.map((flag) => `- ${flag}`),
-    "",
-    "Nu pot confirma un diagnostic sau tratament personalizat aici; informația este de orientare și nu înlocuiește consultul medical.",
-  ].join("\n");
+  return formatSixSectionAnswer({
+    summary: [route.conflictNote, urgentIntro].filter(Boolean).join(" "),
+    causes: [
+      route.entities.bodyRegionLabel ? `Zona indicată: ${route.entities.bodyRegionLabel}.` : "Zona indicată nu este clară încă.",
+      route.entities.symptoms.length
+        ? `Simptome detectate: ${route.entities.symptoms.join(", ")}.`
+        : "Simptome detectate: durere/disconfort nespecific.",
+      route.entities.contexts.length ? `Context detectat: ${route.entities.contexts.join(", ")}.` : "Context detectat: neclar.",
+    ],
+    aggravators: redFlags.length
+      ? redFlags
+      : ["Durerea severă, agravarea simptomelor sau imposibilitatea folosirii zonei pot indica risc crescut."],
+    safeActions: questions.map((question) => `Clarificare: ${question}`),
+    consult: redFlags.length
+      ? redFlags
+      : ["Consultă un medic dacă durerea este severă, persistă, se agravează sau apare după traumatism."],
+  });
 }
 
 function buildDbAnswer(input: z.infer<typeof InputSchema>, context: KnowledgeEntry[], isFirstMessage: boolean, route: AiRoute) {
+  void isFirstMessage;
+
   if (route.category === "out_of_scope") return buildOutOfScopeAnswer();
   if (route.category === "app_specific") return buildAppSpecificAnswer(context);
+
+  const vagueQuestion = isVaguePainQuestion(input.question);
+  if (route.category !== "red_flag_or_urgent" && vagueQuestion) {
+    return buildClarifyingAnswer(input);
+  }
 
   if (route.mode === "GENERAL_MEDICAL_MODE") {
     return buildGeneralMedicalFallback(input, route, context);
   }
 
   if (context.length === 0) {
-    return [
-      `Nu am găsit încă informații suficiente în baza Santix pentru ${input.structureName}.`,
-      "",
-      "Pot răspunde doar după ce această structură are date medicale în baza de cunoștințe.",
-    ].join("\n");
+    return formatSixSectionAnswer({
+      summary: `Nu am găsit încă informații suficiente în baza Santix pentru ${input.structureName}.`,
+      causes: ["Nu am suficiente informații în baza de date Santix pentru a răspunde sigur la această întrebare."],
+      aggravators: ["Nu pot evalua factorii agravanți fără context Santix relevant."],
+      safeActions: ["Reformulează întrebarea sau selectează o structură pentru care există date medicale în baza Santix."],
+      consult: ["Consultă un medic dacă simptomele sunt severe, persistente, se agravează sau apar semnale de alarmă."],
+    });
   }
 
-  const vagueQuestion = input.question.trim().split(/\s+/).length <= 5;
   const anatomyQuestion = hasAny(input.question, ["ce este", "ce rol", "rol are", "functie", "functia", "la ce foloseste"]);
   if (route.category === "selection_specific" && anatomyQuestion) {
     return buildSelectionSpecificAnswer(input, context);
-  }
-
-  if (isFirstMessage || vagueQuestion) {
-    return buildClarifyingAnswer(input, context);
   }
 
   return buildFollowUpAnswer(input, context);
@@ -1172,60 +1176,100 @@ function formatContextForPrompt(context: KnowledgeEntry[]) {
     .join("\n\n");
 }
 
+function formatSixSectionAnswer(sections: {
+  summary: string;
+  causes?: string[];
+  aggravators?: string[];
+  safeActions?: string[];
+  consult?: string[];
+}) {
+  return [
+    "1. Rezumat scurt",
+    sections.summary,
+    "",
+    "2. Posibile cauze pe baza datelor Santix",
+    ...(sections.causes?.length ? sections.causes.map((item, index) => `${index + 1}. ${item}`) : ["1. Nu am suficiente informații în baza de date Santix pentru a indica o cauză sigură."]),
+    "",
+    "3. Ce ar putea agrava problema",
+    ...(sections.aggravators?.length ? sections.aggravators.map((item, index) => `${index + 1}. ${item}`) : ["1. Solicitarea zonei dureroase, mișcările care cresc durerea sau ignorarea simptomelor persistente."]),
+    "",
+    "4. Ce poate face utilizatorul în mod general și sigur",
+    ...(sections.safeActions?.length ? sections.safeActions.map((item, index) => `${index + 1}. ${item}`) : ["1. Redu solicitarea zonei și urmărește evoluția simptomelor."]),
+    "",
+    "5. Când ar trebui să consulte un medic",
+    ...(sections.consult?.length ? sections.consult.map((item, index) => `${index + 1}. ${item}`) : ["1. Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă."]),
+    "",
+    "6. Limită informativă",
+    "Răspuns informativ bazat exclusiv pe datele Santix. Nu înlocuiește consultul medical.",
+  ].join("\n");
+}
+
 function buildOllamaPrompt(
   input: z.infer<typeof InputSchema>,
   context: KnowledgeEntry[],
   previousMessages: ConversationMessage[],
   route: AiRoute,
 ) {
-  const history = previousMessages
-    .slice(-8)
-    .map((message) => `${message.role === "user" ? "Utilizator" : "Santix"}: ${message.content_ro}`)
-    .join("\n");
+  void previousMessages;
+  void route;
+
+  const tipStructura = input.tissue === "os" ? "oase" : input.tissue === "muschi" ? "mușchi" : "tendon";
 
   return [
-    "Ești asistentul educațional Santix pentru anatomie, durere, simptome, recuperare și orientare medicală generală.",
-    "Răspunzi în română, clar, empatic și concis.",
-    "Folosești baza Santix ca sursă principală pentru informații despre aplicație, anatomie, structuri, simptome, afecțiuni și triaj.",
-    "Pentru întrebări medicale generale conexe domeniului, poți răspunde educațional general chiar dacă baza nu conține un rezultat exact; formulează prudent când răspunzi din cunoștințe generale.",
-    "Nu oferi diagnostic cert și nu prescrie tratament personalizat.",
-    "Nu inventa servicii, prețuri, abonamente, funcții sau conținut intern Santix.",
-    "Pentru semne de alarmă recomandă consult medical rapid sau urgență chiar la începutul răspunsului.",
-    "Pentru întrebări complet în afara domeniului refuzi politicos și readuci conversația spre sănătate/corp/recuperare.",
-    "Dacă lipsesc detalii importante, pune 1-3 întrebări scurte de clarificare.",
-    route.mode === "3D_SELECTION_MODE"
-      ? "Mod activ: 3D_SELECTION_MODE. Răspunde prioritar despre selecția 3D curentă și nu schimba zona fără motiv."
-      : "Mod activ: GENERAL_MEDICAL_MODE. Selecția 3D este doar un indiciu secundar; nu bloca răspunsul la structura selectată dacă întrebarea este despre simptome, traumă, sport sau triaj.",
-    route.mode === "3D_SELECTION_MODE"
-      ? `Subiect principal obligatoriu: ${input.structureName}. Dacă există și o regiune părinte în context, o menționezi doar secundar. Nu transforma răspunsul într-un răspuns despre regiunea părinte.`
-      : `Subiect medical orientativ: ${route.entities.bodyRegionLabel ?? input.structureName}.`,
-    route.selectionConflict
-      ? `${route.conflictNote} Prioritate are zona menționată explicit de utilizator, nu selecția 3D inițială. Menționează conflictul o singură dată, scurt, apoi răspunde despre zona utilizatorului.`
-      : "Dacă nu există conflict explicit, folosește selecția 3D ca punct de pornire.",
-    route.selectedSubjectMentioned
-      ? "Întrebarea utilizatorului menționează explicit structura selectată; această structură trebuie forțată ca subiect principal al răspunsului."
-      : "Dacă întrebarea este vagă, folosește selecția curentă ca punct de plecare, dar cere clarificări când este nevoie.",
-    route.category === "app_specific"
-      ? "Întrebare despre Santix: răspunde doar dacă informația apare în context. Dacă nu apare, spune că nu ai informații suficiente."
-      : "Nu folosi formularea rigidă „baza Santix nu are destule date” pentru întrebări medicale generale conexe.",
+    "Ești Santix AI, un asistent medical educațional integrat într-o aplicație 3D cu schelet de oase și mușchi.",
     "",
-    `Categorie întrebare: ${route.category}`,
-    `Motiv clasificare: ${route.reason}`,
-    `Structură 3D selectată: ${input.structureName}`,
-    `Țesut: ${input.tissue}`,
-    `Tip selecție: ${input.tissue === "os" ? "bone/os" : input.tissue === "muschi" ? "muscle/mușchi" : "tendon/țesut conjunctiv"}`,
-    `Regiune părinte: ${input.bodyRegion ?? "necunoscută"}`,
-    `Entități detectate: ${JSON.stringify(route.entities)}`,
+    "Utilizatorul a selectat deja o structură anatomică din modelul 3D.",
     "",
-    "Context Santix:",
+    "ZONA SELECTATĂ:",
+    input.structureName,
+    "",
+    "CATEGORIE SELECTATĂ:",
+    tipStructura,
+    "",
+    "CONTEXT DIN BAZA DE DATE SANTIX:",
     context.length ? formatContextForPrompt(context) : "Nu există context Santix relevant recuperat pentru această întrebare.",
     "",
-    "Istoric conversație:",
-    history || "Nu există istoric anterior.",
+    "REGULI STRICTE:",
+    "1. Consideră întotdeauna că zona anatomică este deja selectată.",
+    "2. Nu cere utilizatorului să specifice ce os, mușchi sau zonă a selectat.",
+    "3. Nu spune „specifică osul”, „alege zona” sau „selectează structura”.",
+    "4. Dacă mesajul utilizatorului este vag, de exemplu „mă doare”, întreabă despre simptome, localizare pe partea stângă/dreaptă, intensitate, debut, traumă și limitarea mișcării.",
+    "5. Răspunde doar despre zona selectată.",
+    "6. Răspunde doar pe baza contextului din baza de date Santix.",
+    "7. Nu inventa diagnostice sau tratamente.",
+    "8. Nu pune diagnostic final.",
+    "9. Nu recomanda medicamente sau doze.",
+    "10. Recomandă consult medical când apar semnale de alarmă.",
+    "11. Răspunde în română corectă, naturală și cu diacritice.",
+    "12. Nu folosi Markdown.",
+    "13. Nu folosi simboluri precum **, ### sau liste cu liniuță.",
+    "14. Folosește propoziții scurte și clare.",
+    "15. Dacă nu ai suficiente informații în baza de date, spune clar că baza Santix nu conține suficiente informații pentru un răspuns sigur.",
     "",
-    `Întrebarea utilizatorului: ${input.question}`,
+    "COMPORTAMENT PENTRU MESAJE VAGI:",
+    "Dacă utilizatorul scrie „mă doare”, „am durere”, „doare”, „ce poate fi” sau un mesaj foarte scurt:",
     "",
-    "Răspunsul trebuie să fie util, scurt și controlat. Evită listele lungi. Marchează limitele: educațional, nu diagnostic.",
+    "Nu repeta numele zonei selectate.",
+    "Nu spune „Ai selectat zona”.",
+    "Nu cere utilizatorului să specifice zona.",
+    "Nu întreba „unde te doare?”. Zona generală este deja selectată în interfață.",
+    "Nu oferi diagnostic.",
+    "Nu enumera cauze încă.",
+    "Răspunde doar cu întrebări scurte, naturale, în română corectă.",
+    "",
+    "Format obligatoriu pentru mesaj vag:",
+    "Îmi pare rău că te doare. Ca să înțeleg mai bine, spune-mi te rog:",
+    "",
+    "1. Întreabă dacă durerea este pe partea stângă sau dreaptă.",
+    "2. Întreabă dacă durerea este mai aproape de articulația de sus, la mijloc sau mai aproape de articulația de jos.",
+    "3. Întreabă dacă a apărut după o lovitură, căzătură sau efort.",
+    "4. Întreabă dacă se accentuează la mișcare.",
+    "5. Ai umflătură, vânătaie, amorțeală sau slăbiciune?",
+    "",
+    "Dacă durerea este severă, zona este deformată, nu o poți mișca sau durerea a apărut după un accident, consultă urgent un medic.",
+    "",
+    "ÎNTREBAREA UTILIZATORULUI:",
+    input.question,
   ].join("\n");
 }
 
@@ -1252,7 +1296,7 @@ async function askOllama(
           {
             role: "system",
             content:
-              "Ești Santix, un asistent medical educațional în limba română. Rămâi în domeniul sănătății, anatomiei, durerii și recuperării. Nu pui diagnostic și nu prescrii tratament personalizat.",
+              "Ești Santix AI, un asistent medical educațional. Răspunzi strict pe baza contextului primit. Nu inventezi informații. Nu pui diagnostice finale. Recomanzi consult medical când e necesar. Răspunzi în română, clar și scurt. Nu folosi Markdown, simboluri de formatare sau liste cu liniuță.",
           },
           {
             role: "user",
@@ -1351,9 +1395,13 @@ export const askSelectionAi = createServerFn({ method: "POST" })
 
     const previousMessages = ((previousMessagesData ?? []) as ConversationMessage[]).reverse();
     let answer = buildDbAnswer(data, context, (previousMessageCount ?? 0) === 0, route);
+    const shouldUseDeterministicAnswer =
+      route.category === "out_of_scope" ||
+      route.category === "app_specific" ||
+      (route.category !== "red_flag_or_urgent" && isVaguePainQuestion(data.question));
 
     try {
-      if (route.category !== "out_of_scope" && route.category !== "app_specific") {
+      if (!shouldUseDeterministicAnswer) {
         answer = await askOllama(data, context, previousMessages, route);
       }
     } catch (error) {
