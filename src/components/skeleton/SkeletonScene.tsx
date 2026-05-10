@@ -3,7 +3,7 @@ import { Canvas, useFrame, useLoader, type ThreeEvent } from "@react-three/fiber
 import { OrbitControls, Environment, ContactShadows, Html, useGLTF, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { LayersState } from "./LayersToggle";
+import type { LayerMode } from "./LayersToggle";
 
 // Map submesh node names → bone IDs from src/data/bones.ts (used by FEMALE simple model)
 const MESH_TO_BONE: Record<string, string> = {
@@ -58,14 +58,16 @@ const SELECT_COLOR = new THREE.Color("#4a2fb7");
 const SELECT_EMISSIVE = new THREE.Color("#c01874");
 const DIM_COLOR = new THREE.Color("#e7ddf3");
 
-function isTissueLayerActive(tissue: TissueType | undefined, layers: LayersState) {
-  if (tissue === "os") return layers.skeleton;
-  if (tissue === "muschi") return layers.muscles;
-  if (tissue === "tendon") return layers.tendons;
+function isTissueLayerActive(tissue: TissueType | undefined, layerMode: LayerMode) {
+  if (layerMode === "complete") return tissue === "os" || tissue === "muschi" || tissue === "tendon";
+  if (layerMode === "skeleton") return tissue === "os";
+  if (layerMode === "muscles") return tissue === "muschi";
   return false;
 }
 
-function tissuePriority(tissue: TissueType | undefined) {
+function tissuePriority(tissue: TissueType | undefined, layerMode: LayerMode) {
+  if (layerMode === "skeleton") return tissue === "os" ? 0 : 3;
+  if (layerMode === "muscles") return tissue === "muschi" ? 0 : 3;
   if (tissue === "muschi") return 0;
   if (tissue === "os") return 1;
   if (tissue === "tendon") return 2;
@@ -83,8 +85,133 @@ function hasTerm(value: string, terms: string[]) {
   return terms.some((term) => value.includes(term));
 }
 
+function stripLateralityFromId(value: string) {
+  return value.replace(/-(left|right)$/i, "");
+}
+
+function stripLateralityFromLabel(value: string) {
+  return value
+    .replace(/\s*\((stanga|stânga|dreapta|left|right)\)\s*$/i, "")
+    .replace(/\b(stanga|stânga|dreapta|left|right)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function makeRegion(regionId: string, regionLabel: string) {
   return { regionId, regionLabel };
+}
+
+function makeCatalogSelection(id: string, label: string) {
+  return { id, label };
+}
+
+function makeReadableSelection(id: string, label: string) {
+  return { id: stripLateralityFromId(id), label };
+}
+
+function inferReadableMuscleSelection(input: {
+  id?: string;
+  label?: string;
+  labelEn?: string;
+}) {
+  const name = normalizeAnatomyName([input.labelEn, input.label, input.id].filter(Boolean).join(" "));
+  const fallbackId = stripLateralityFromId(input.id ?? `muschi-${name.replace(/[^a-z0-9]+/g, "-")}`);
+
+  if (hasTerm(name, ["temporoparietalis"])) return makeReadableSelection(fallbackId, "Mușchiul temporoparietal");
+  if (hasTerm(name, ["temporalis"])) return makeReadableSelection(fallbackId, "Mușchiul temporal");
+  if (hasTerm(name, ["masseter"])) return makeReadableSelection(fallbackId, "Mușchiul maseter");
+  if (hasTerm(name, ["buccinator", "bucinator"])) return makeReadableSelection(fallbackId, "Mușchiul buccinator");
+  if (hasTerm(name, ["orbicularis oculi"])) return makeReadableSelection(fallbackId, "Mușchiul orbicular al ochiului");
+  if (hasTerm(name, ["orbicularis oris"])) return makeReadableSelection(fallbackId, "Mușchiul orbicular al gurii");
+  if (hasTerm(name, ["superior rectus muscle"])) return makeReadableSelection(fallbackId, "Mușchiul drept superior al ochiului");
+  if (hasTerm(name, ["inferior rectus muscle"])) return makeReadableSelection(fallbackId, "Mușchiul drept inferior al ochiului");
+  if (hasTerm(name, ["lateral rectus muscle"])) return makeReadableSelection(fallbackId, "Mușchiul drept lateral al ochiului");
+  if (hasTerm(name, ["medial rectus muscle"])) return makeReadableSelection(fallbackId, "Mușchiul drept medial al ochiului");
+  if (hasTerm(name, ["superior oblique muscle"])) return makeReadableSelection(fallbackId, "Mușchiul oblic superior al ochiului");
+  if (hasTerm(name, ["inferior oblique muscle"])) return makeReadableSelection(fallbackId, "Mușchiul oblic inferior al ochiului");
+
+  const rawLabel = stripLateralityFromLabel(input.label ?? input.labelEn ?? "Mușchi scheletic");
+  const readableLabel = rawLabel
+    .replace(/^muschiul\s+/i, "Mușchiul ")
+    .replace(/^muschi\s+/i, "Mușchi ")
+    .replace(/\bmuschiului\b/gi, "mușchiului")
+    .replace(/\bmuschiul\b/gi, "mușchiul")
+    .replace(/\bmuschi\b/gi, "mușchi")
+    .trim();
+
+  return makeReadableSelection(fallbackId, readableLabel || "Mușchi scheletic");
+}
+
+function inferCatalogSelection(input: {
+  tissue: TissueType;
+  id?: string;
+  label?: string;
+  labelEn?: string;
+}) {
+  const name = normalizeAnatomyName([input.labelEn, input.label, input.id].filter(Boolean).join(" "));
+  if (input.tissue !== "os") return undefined;
+
+  if (hasTerm(name, ["malleus"])) return makeCatalogSelection("ciocan", "Ciocane");
+  if (hasTerm(name, ["incus"])) return makeCatalogSelection("nicovala", "Nicovale");
+  if (hasTerm(name, ["stapes"])) return makeCatalogSelection("scarita", "Scărițe");
+  if (hasTerm(name, ["hyoid"])) return makeCatalogSelection("hioid", "Os hioid");
+
+  if (hasTerm(name, ["frontal"])) return makeCatalogSelection("frontal", "Os frontal");
+  if (hasTerm(name, ["parietal"])) return makeCatalogSelection("parietal", "Oase parietale");
+  if (hasTerm(name, ["temporal", "petrous"])) return makeCatalogSelection("temporal", "Oase temporale");
+  if (hasTerm(name, ["occipital", "foramen magnum"])) return makeCatalogSelection("occipital", "Os occipital");
+  if (hasTerm(name, ["sphenoid", "clinoid", "sella"])) return makeCatalogSelection("sfenoid", "Os sfenoid");
+  if (hasTerm(name, ["ethmoid"])) return makeCatalogSelection("etmoid", "Os etmoid");
+
+  if (hasTerm(name, ["maxilla", "maxillary", "infraorbital", "alveolar"])) return makeCatalogSelection("maxilar", "Maxilare");
+  if (hasTerm(name, ["mandible", "mandibular", "mental foramen"])) return makeCatalogSelection("mandibula", "Mandibulă");
+  if (hasTerm(name, ["zygomatic"])) return makeCatalogSelection("zigomatic", "Oase zigomatice");
+  if (hasTerm(name, ["nasal"])) return makeCatalogSelection("nazal", "Oase nazale");
+  if (hasTerm(name, ["lacrimal"])) return makeCatalogSelection("lacrimal", "Oase lacrimale");
+  if (hasTerm(name, ["palatine"])) return makeCatalogSelection("palatin", "Oase palatine");
+  if (hasTerm(name, ["vomer"])) return makeCatalogSelection("vomer", "Vomer");
+  if (hasTerm(name, ["concha", "turbinate"])) return makeCatalogSelection("cornet-inf", "Cornete nazale inferioare");
+
+  if (hasTerm(name, ["cervical", "atlas", "axis"])) return makeCatalogSelection("vert-cervicale", "Vertebre cervicale");
+  if (hasTerm(name, ["thoracic", " t1", " t2", " t3", " t4", " t5", " t6", " t7", " t8", " t9", "t10", "t11", "t12"])) {
+    return makeCatalogSelection("vert-toracice", "Vertebre toracice");
+  }
+  if (hasTerm(name, ["lumbar", " l1", " l2", " l3", " l4", " l5"])) return makeCatalogSelection("vert-lombare", "Vertebre lombare");
+  if (hasTerm(name, ["sacrum", "sacral"])) return makeCatalogSelection("sacrum", "Sacrum");
+  if (hasTerm(name, ["coccyx", "coccygeal"])) return makeCatalogSelection("coccis", "Coccis");
+
+  if (hasTerm(name, ["sternum", "manubrium", "xiphoid"])) return makeCatalogSelection("stern", "Stern");
+  if (hasTerm(name, ["rib", "costal"])) return makeCatalogSelection("coaste", "Coaste");
+  if (hasTerm(name, ["clavicle", "clavicular"])) return makeCatalogSelection("clavicula", "Clavicule");
+  if (hasTerm(name, ["scapula", "scapular", "acromion", "acromial", "coracoid", "glenoid", "supraspinous fossa", "infraspinous fossa"])) {
+    return makeCatalogSelection("scapula", "Scapule");
+  }
+
+  if (hasTerm(name, ["humerus", "humeral", "trochlea", "capitulum", "olecranon fossa", "deltoid tuberosity"])) return makeCatalogSelection("humerus", "Humerus");
+  if (hasTerm(name, ["radius", "radial"])) return makeCatalogSelection("radius", "Radius");
+  if (hasTerm(name, ["ulna", "ulnar", "olecranon"])) return makeCatalogSelection("ulna", "Ulnă");
+  if (hasTerm(name, ["carpal", "scaphoid", "lunate", "triquetrum", "pisiform", "trapezium", "trapezoid", "capitate", "hamate"])) {
+    return makeCatalogSelection("carp", "Oase carpiene");
+  }
+  if (hasTerm(name, ["metacarpal"])) return makeCatalogSelection("metacarp", "Metacarpiene");
+  if (hasTerm(name, ["phalanx of hand", "distal phalanx hand", "middle phalanx hand", "proximal phalanx hand"])) {
+    return makeCatalogSelection("falange-mana", "Falange ale mâinii");
+  }
+
+  if (hasTerm(name, ["hip bone", "ilium", "ischium", "pubis", "acetabulum", "acetabular", "obturator", "iliac", "ischial", "pubic"])) {
+    return makeCatalogSelection("coxal", "Oase coxale");
+  }
+  if (hasTerm(name, ["patella", "patellar"])) return makeCatalogSelection("rotula", "Rotulă");
+  if (hasTerm(name, ["femur", "femoral", "trochanter", "linea aspera", "adductor tubercle"])) return makeCatalogSelection("femur", "Femur");
+  if (hasTerm(name, ["tibia", "tibial", "intercondylar eminence"])) return makeCatalogSelection("tibia", "Tibia");
+  if (hasTerm(name, ["fibula", "fibular"])) return makeCatalogSelection("fibula", "Fibulă");
+  if (hasTerm(name, ["tarsal", "calcaneus", "talus", "cuboid", "cuneiform", "navicular"])) return makeCatalogSelection("tars", "Oase tarsiene");
+  if (hasTerm(name, ["metatarsal"])) return makeCatalogSelection("metatars", "Metatarsiene");
+  if (hasTerm(name, ["phalanx of foot", "distal phalanx foot", "middle phalanx foot", "proximal phalanx foot"])) {
+    return makeCatalogSelection("falange-picior", "Falange ale piciorului");
+  }
+
+  return undefined;
 }
 
 function inferIntuitiveRegion(input: {
@@ -106,7 +233,7 @@ function inferIntuitiveRegion(input: {
     if (hasTerm(name, ["deltoid", "supraspinatus", "infraspinatus", "subscapularis"])) {
       return makeRegion(`${prefix}:umar`, "Umăr");
     }
-    if (hasTerm(name, ["abdominal", "oblique", "rectus abdominis", "transversus abdominis"])) {
+    if (hasTerm(name, ["abdominal", "external abdominal oblique", "internal abdominal oblique", "rectus abdominis", "transversus abdominis"])) {
       return makeRegion(`${prefix}:abdomen`, "Abdomen");
     }
     return undefined;
@@ -130,34 +257,64 @@ function inferIntuitiveRegion(input: {
       if (hasTerm(name, ["lumbar", " l1", " l2", " l3", " l4", " l5"])) return makeRegion(`${prefix}:coloana-lombara`, "Coloana lombară");
       return makeRegion(`${prefix}:coloana`, "Coloana vertebrală");
     }
-    if (hasTerm(name, ["frontal", "parietal", "temporal", "occipital", "sphenoid", "ethmoid"])) {
+    if (hasTerm(name, ["frontal", "parietal", "temporal", "occipital", "sphenoid", "ethmoid", "clinoid", "petrous", "foramen magnum", "cranial fossa"])) {
       return makeRegion(`${prefix}:craniu`, "Craniu");
+    }
+    if (hasTerm(name, ["maxilla", "mandible", "zygomatic", "nasal", "lacrimal", "palatine", "vomer", "concha", "orbital", "alveolar", "infraorbital", "mental foramen", "arytenoid", "laryngeal"])) {
+      return makeRegion(`${prefix}:fata`, "Oasele feței");
+    }
+    if (hasTerm(name, ["malleus", "incus", "stapes"])) {
+      return makeRegion(`${prefix}:ureche-medie`, "Oasele urechii medii");
+    }
+    if (hasTerm(name, ["hyoid"])) {
+      return makeRegion(`${prefix}:hioid`, "Os hioid");
+    }
+    if (hasTerm(name, ["clavicle", "scapula", "acromion", "acromial", "coracoid", "glenoid", "supraspinous fossa", "infraspinous fossa"])) {
+      return makeRegion(`${prefix}:centura-scapulara`, "Centura scapulară");
+    }
+    if (hasTerm(name, ["humerus", "humeral", "trochlea", "capitulum", "olecranon fossa", "anatomical neck", "surgical neck", "deltoid tuberosity"])) {
+      return makeRegion(`${prefix}:brat`, "Scheletul brațului");
+    }
+    if (hasTerm(name, ["radius", "radial", "ulna", "ulnar", "olecranon", "styloid process of radius", "styloid process of ulna"])) {
+      return makeRegion(`${prefix}:antebrat`, "Scheletul antebrațului");
+    }
+    if (hasTerm(name, ["hip bone", "ilium", "ischium", "pubis", "acetabulum", "acetabular", "obturator", "iliac", "ischial", "pubic", "sacral", "gluteal line"])) {
+      return makeRegion(`${prefix}:bazin`, "Centura pelviană");
+    }
+    if (hasTerm(name, ["femur", "femoral", "patella", "patellar", "greater trochanter", "lesser trochanter", "linea aspera", "adductor tubercle", "intercondylar area"])) {
+      return makeRegion(`${prefix}:coapsa`, "Scheletul coapsei");
+    }
+    if (hasTerm(name, ["tibia", "tibial", "fibula", "fibular", "malleolus", "intercondylar eminence"])) {
+      return makeRegion(`${prefix}:gamba`, "Scheletul gambei");
     }
     return undefined;
   }
 
-  if (hasTerm(name, ["lumbrical", "interossei", "opponens", "palmar", "pollicis", "digiti minimi of hand"])) {
+  if (hasTerm(name, ["temporoparietalis", "superior oblique muscle", "inferior oblique muscle", "superior rectus muscle", "inferior rectus muscle", "lateral rectus muscle", "medial rectus muscle", "orbicularis oculi", "trochlea of superior oblique"])) {
+    return makeRegion(`${prefix}:muschii-capului-gatului`, "Mușchii capului și gâtului");
+  }
+  if (hasTerm(name, ["lumbrical", "interossei", "opponens", "palmar", "pollicis", "digiti minimi of hand", "thenar", "hypothenar"])) {
     return makeRegion(`${prefix}:muschii-mainii`, "Mușchii mâinii");
   }
-  if (hasTerm(name, ["hallucis", "digiti minimi of foot", "plantar", "quadratus plantae", "foot"])) {
+  if (hasTerm(name, ["digitorum brevis", "hallucis brevis", "adductor hallucis", "abductor hallucis", "digiti minimi of foot", "plantar", "quadratus plantae", "foot"])) {
     return makeRegion(`${prefix}:muschii-piciorului`, "Mușchii labei piciorului");
   }
-  if (hasTerm(name, ["tibialis", "fibularis", "gastrocnemius", "soleus", "plantaris", "popliteus"])) {
+  if (hasTerm(name, ["digitorum longus", "hallucis longus", "tibialis", "fibularis", "gastrocnemius", "soleus", "plantaris", "popliteus", "compartment of leg"])) {
     return makeRegion(`${prefix}:muschii-gambei`, "Mușchii gambei");
   }
-  if (hasTerm(name, ["sartorius", "rectus femoris", "vastus", "adductor", "gracilis", "biceps femoris", "semitendinosus", "semimembranosus"])) {
+  if (hasTerm(name, ["sartorius", "rectus femoris", "vastus", "adductor", "gracilis", "biceps femoris", "semitendinosus", "semimembranosus", "tensor fasciae latae", "pectineus", "compartment of thigh"])) {
     return makeRegion(`${prefix}:muschii-coapsei`, "Mușchii coapsei");
   }
-  if (hasTerm(name, ["flexor carpi", "extensor carpi", "flexor digitorum", "extensor digitorum", "pronator", "supinator", "brachioradialis"])) {
+  if (hasTerm(name, ["forearm", "flexor carpi", "extensor carpi", "flexor digitorum superficialis", "flexor digitorum profundus", "extensor digitorum", "extensor indicis", "extensor digiti minimi", "pronator", "supinator", "brachioradialis", "palmaris"])) {
     return makeRegion(`${prefix}:muschii-antebratului`, "Mușchii antebrațului");
   }
-  if (hasTerm(name, ["biceps brachii", "brachialis", "coracobrachialis", "triceps brachii", "anconeus"])) {
+  if (hasTerm(name, ["compartment of arm", "biceps brachii", "brachialis", "coracobrachialis", "triceps brachii", "anconeus"])) {
     return makeRegion(`${prefix}:muschii-bratului`, "Mușchii brațului");
   }
-  if (hasTerm(name, ["oblique", "rectus abdominis", "transversus abdominis", "pyramidalis"])) {
+  if (hasTerm(name, ["external abdominal oblique", "internal abdominal oblique", "rectus abdominis", "transversus abdominis", "pyramidalis", "quadratus lumborum"])) {
     return makeRegion(`${prefix}:muschii-abdomenului`, "Mușchii abdomenului");
   }
-  if (hasTerm(name, ["pectoralis", "serratus anterior", "intercostal", "diaphragm"])) {
+  if (hasTerm(name, ["pectoralis", "serratus anterior", "intercostal", "diaphragm", "subclavius", "transversus thoracis"])) {
     return makeRegion(`${prefix}:muschii-toracelui`, "Mușchii toracelui");
   }
   if (hasTerm(name, ["deltoid", "supraspinatus", "infraspinatus", "subscapularis", "teres major", "teres minor"])) {
@@ -165,6 +322,15 @@ function inferIntuitiveRegion(input: {
   }
   if (hasTerm(name, ["gluteus", "piriformis", "obturator", "gemellus", "quadratus femoris", "iliopsoas"])) {
     return makeRegion(`${prefix}:muschii-soldului`, "Mușchii șoldului");
+  }
+  if (hasTerm(name, ["bucinator", "buccinator", "corrugator", "depressor", "frontalis", "levator anguli", "levator labii", "levator nasolabialis", "masseter", "mentalis", "nasalis", "orbicularis", "pterygoid", "risorius", "temporalis", "zygomaticus", "sternocleidomastoid", "scalenus", "omohyoid", "sternohyoid", "thyrohyoid", "platysma", "digastric", "mylohyoid", "longus colli", "splenius", "semispinalis", "longissimus capitis", "pharyngeal constrictor", "common tendinous ring", "inferior tarsus"])) {
+    return makeRegion(`${prefix}:muschii-capului-gatului`, "Mușchii capului și gâtului");
+  }
+  if (hasTerm(name, ["trapezius", "latissimus dorsi", "rhomboid", "levator scapulae", "erector spinae", "iliocostalis", "longissimus", "spinalis", "multifidus", "thoracolumbar"])) {
+    return makeRegion(`${prefix}:muschii-spatelui`, "Mușchii spatelui");
+  }
+  if (hasTerm(name, ["levator ani", "iliopectineal arch", "pelvic floor"])) {
+    return makeRegion(`${prefix}:muschii-bazinului`, "Mușchii bazinului");
   }
 
   return undefined;
@@ -367,15 +533,15 @@ function ResolvedSimpleSkeletonModel({
 interface ComplexMaleProps {
   url: string;
   xOffset: number;
-  layers: LayersState;
+  layerMode: LayerMode;
   selection: BoneSelection | null;
   onSelect: (sel: BoneSelection | null) => void;
 }
 
-function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: ComplexMaleProps) {
+function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: ComplexMaleProps) {
   const gltf = useLoader(GLTFLoader, url);
   const groupRef = useRef<THREE.Group>(null);
-  const layersRef = useRef(layers);
+  const layerModeRef = useRef(layerMode);
 
   const { cloned, layerMeshes } = useMemo(() => {
     const root = gltf.scene.clone(true);
@@ -394,11 +560,23 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
         (mesh.userData.structureName as string | undefined) ??
         mesh.name.replace(/\.[a-z]+$/i, "").replace(/[()[\]]/g, "").trim();
       const structureNameEn = (mesh.userData.structureNameEn as string | undefined) ?? structureName;
+      const catalogSelection = inferCatalogSelection({
+        tissue,
+        id: structureId,
+        label: structureName,
+        labelEn: structureNameEn,
+      });
+      const readableMuscleSelection =
+        tissue === "muschi"
+          ? inferReadableMuscleSelection({
+              id: structureId,
+              label: structureName,
+              labelEn: structureNameEn,
+            })
+          : undefined;
 
       mesh.userData.tissue = tissue;
       mesh.userData.side = "male";
-      mesh.userData.selectionId = structureId;
-      mesh.userData.selectionLabel = structureName;
       mesh.userData.selectionLabelEn = structureNameEn;
       const intuitiveRegion = inferIntuitiveRegion({
         tissue,
@@ -406,8 +584,21 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
         label: structureName,
         labelEn: structureNameEn,
       });
-      mesh.userData.selectionRegionId = intuitiveRegion?.regionId;
-      mesh.userData.selectionRegionLabel = intuitiveRegion?.regionLabel;
+      const selectionId =
+        catalogSelection?.id ??
+        readableMuscleSelection?.id ??
+        (tissue === "muschi" && intuitiveRegion?.regionId ? intuitiveRegion.regionId : structureId);
+      const selectionLabel =
+        catalogSelection?.label ??
+        readableMuscleSelection?.label ??
+        (tissue === "muschi" ? intuitiveRegion?.regionLabel : undefined) ??
+        intuitiveRegion?.regionLabel ??
+        stripLateralityFromLabel(structureName);
+
+      mesh.userData.selectionId = selectionId;
+      mesh.userData.selectionLabel = selectionLabel;
+      mesh.userData.selectionRegionId = intuitiveRegion?.regionId ?? (catalogSelection ? `os:${catalogSelection.id}` : undefined);
+      mesh.userData.selectionRegionLabel = intuitiveRegion?.regionLabel ?? catalogSelection?.label;
 
       const baseColor =
         tissue === "os"
@@ -438,20 +629,20 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
     return { cloned: root, layerMeshes };
   }, [gltf]);
 
-  // Apply layer visibility
+  // Apply exclusive layer visibility.
   useEffect(() => {
-    layersRef.current = layers;
-    layerMeshes.os.forEach((m) => (m.visible = layers.skeleton));
-    layerMeshes.muschi.forEach((m) => (m.visible = layers.muscles));
-    layerMeshes.tendon.forEach((m) => (m.visible = layers.tendons));
-  }, [layers, layerMeshes]);
+    layerModeRef.current = layerMode;
+    layerMeshes.os.forEach((m) => (m.visible = isTissueLayerActive("os", layerMode)));
+    layerMeshes.muschi.forEach((m) => (m.visible = isTissueLayerActive("muschi", layerMode)));
+    layerMeshes.tendon.forEach((m) => (m.visible = isTissueLayerActive("tendon", layerMode)));
+  }, [layerMode, layerMeshes]);
 
   useEffect(() => {
     if (selection?.side !== "male") return;
-    if (!isTissueLayerActive(selection.tissue, layers)) {
+    if (!isTissueLayerActive(selection.tissue, layerMode)) {
       onSelect(null);
     }
-  }, [layers, onSelect, selection]);
+  }, [layerMode, onSelect, selection]);
 
   // Center & scale to a calm anatomy-viewer size without changing the authored orientation.
   const { scale, offset } = useMemo(() => {
@@ -528,12 +719,12 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
         .map((intersection) => intersection.object as THREE.Mesh)
         .filter((candidate) => {
           const tissue = candidate.userData?.tissue as TissueType | undefined;
-          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layersRef.current);
+          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layerModeRef.current);
         })
         .sort(
           (a, b) =>
-            tissuePriority(a.userData?.tissue as TissueType | undefined) -
-            tissuePriority(b.userData?.tissue as TissueType | undefined),
+            tissuePriority(a.userData?.tissue as TissueType | undefined, layerModeRef.current) -
+            tissuePriority(b.userData?.tissue as TissueType | undefined, layerModeRef.current),
         )[0] ?? null;
     if (!mesh) return;
     hoveredMeshRef.current = mesh;
@@ -551,12 +742,12 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
         .map((intersection) => intersection.object as THREE.Mesh)
         .filter((candidate) => {
           const tissue = candidate.userData?.tissue as TissueType | undefined;
-          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layersRef.current);
+          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layerModeRef.current);
         })
         .sort(
           (a, b) =>
-            tissuePriority(a.userData?.tissue as TissueType | undefined) -
-            tissuePriority(b.userData?.tissue as TissueType | undefined),
+            tissuePriority(a.userData?.tissue as TissueType | undefined, layerModeRef.current) -
+            tissuePriority(b.userData?.tissue as TissueType | undefined, layerModeRef.current),
         )[0] ?? null;
     if (!mesh) return;
     const tissue = mesh.userData?.tissue as TissueType | undefined;
@@ -572,7 +763,7 @@ function ComplexMaleModel({ url, xOffset, layers, selection, onSelect }: Complex
       tissue,
       regionId,
       regionLabel,
-      label: regionLabel ?? label,
+      label,
       labelEn,
     });
   };
@@ -622,11 +813,11 @@ function LoadingFallback() {
 interface SkeletonSceneProps {
   selection: BoneSelection | null;
   onSelect: (sel: BoneSelection | null) => void;
-  layers: LayersState;
+  layerMode: LayerMode;
   mode: AnatomyModelMode;
 }
 
-export function SkeletonScene({ selection, onSelect, layers, mode }: SkeletonSceneProps) {
+export function SkeletonScene({ selection, onSelect, layerMode, mode }: SkeletonSceneProps) {
   useEffect(() => () => { document.body.style.cursor = "auto"; }, []);
   const [isLightMode, setIsLightMode] = useState(false);
 
@@ -668,7 +859,7 @@ export function SkeletonScene({ selection, onSelect, layers, mode }: SkeletonSce
           <ComplexMaleModel
             url={MALE_COMPLEX_URL}
             xOffset={0}
-            layers={layers}
+            layerMode={layerMode}
             selection={selection}
             onSelect={onSelect}
           />

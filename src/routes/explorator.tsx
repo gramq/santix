@@ -6,7 +6,7 @@ import {
   type BoneSelection,
 } from "@/components/skeleton/SkeletonScene";
 import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
-import { LayersToggle, type LayersState } from "@/components/skeleton/LayersToggle";
+import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
 import { bones } from "@/data/bones";
 import { MousePointerClick } from "lucide-react";
 
@@ -31,11 +31,7 @@ export const Route = createFileRoute("/explorator")({
 
 function ExploratorPage() {
   const [selection, setSelection] = useState<BoneSelection | null>(null);
-  const [layers, setLayers] = useState<LayersState>({
-    skeleton: true,
-    muscles: true,
-    tendons: true,
-  });
+  const [layerMode, setLayerMode] = useState<LayerMode>("complete");
   const [modelMode, setModelMode] = useState<AnatomyModelMode>("simple");
 
   const selectedBone = useMemo(
@@ -48,7 +44,7 @@ function ExploratorPage() {
       <SkeletonScene
         selection={selection}
         onSelect={setSelection}
-        layers={layers}
+        layerMode={layerMode}
         mode={modelMode}
       />
 
@@ -82,7 +78,15 @@ function ExploratorPage() {
         ))}
       </div>
 
-      {modelMode === "complex" && <LayersToggle layers={layers} onChange={setLayers} />}
+      {modelMode === "complex" && (
+        <LayersToggle
+          mode={layerMode}
+          onChange={(nextMode) => {
+            setSelection(null);
+            setLayerMode(nextMode);
+          }}
+        />
+      )}
 
       <BoneInfoPanel
         bone={selectedBone}

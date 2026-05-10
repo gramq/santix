@@ -48,12 +48,6 @@ function SantixLanding() {
         </Link>
 
         <nav className="ml-auto hidden items-center gap-8 text-sm text-slate-400 md:flex">
-          <a href="#anatomie" className="transition hover:text-white">
-            Anatomie
-          </a>
-          <a href="#flux" className="transition hover:text-white">
-            Cum funcționează
-          </a>
           <Link to="/quiz" className="transition hover:text-white">
             Quiz
           </Link>
@@ -100,14 +94,14 @@ function SantixLanding() {
                 href="#flux"
                 className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-white/[0.02] px-7 py-4 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/55 hover:bg-cyan-300/5 hover:text-white"
               >
-                Vezi fluxul
+                Cum funcționează
                 <Sparkles className="size-4 text-cyan-300" />
               </a>
             </div>
 
             <div className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
-              <IntroStat value="206+" label="Structuri osoase" />
-              <IntroStat value="640+" label="Mușchi mapați" />
+              <IntroStat value="206" label="Oase" />
+              <IntroStat value="640" label="Mușchi" />
               <IntroStat value="3D" label="Model interactiv" />
             </div>
           </div>

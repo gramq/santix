@@ -207,19 +207,37 @@
 
 .light-mode .santix-intro .text-white,
 .light-mode .santix-intro .text-cyan-50 {
-  color: var(--foreground);
+  color: oklch(0.13 0.04 225);
 }
 
 .light-mode .santix-intro .text-slate-300,
 .light-mode .santix-intro .text-slate-400,
 .light-mode .santix-intro .text-slate-500 {
-  color: oklch(0.42 0.035 225);
+  color: oklch(0.34 0.04 225);
+}
+
+.light-mode .santix-intro .text-cyan-300 {
+  color: oklch(0.48 0.15 205);
 }
 
 .light-mode .santix-intro .bg-white\/\[0\.02\],
 .light-mode .santix-intro .bg-white\/\[0\.03\],
 .light-mode .santix-intro .bg-white\/\[0\.035\] {
-  background: oklch(1 0 0 / 0.64);
+  background: oklch(1 0 0 / 0.74);
+}
+
+.light-mode .santix-intro .border-white\/10,
+.light-mode .santix-intro .border-cyan-300\/10,
+.light-mode .santix-intro .border-cyan-300\/20 {
+  border-color: oklch(0.58 0.16 205 / 0.26);
+}
+
+.light-mode .santix-title-gradient {
+  background: linear-gradient(135deg, oklch(0.45 0.15 205) 0%, oklch(0.15 0.05 225) 52%, oklch(0.50 0.16 205) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .light-mode .santix-selection-panel {

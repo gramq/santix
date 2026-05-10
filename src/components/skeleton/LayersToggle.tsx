@@ -1,30 +1,24 @@
 import { Bone, Activity, Layers as LayersIcon } from "lucide-react";
 
-export type LayerKey = "skeleton" | "muscles" | "tendons";
-
-export interface LayersState {
-  skeleton: boolean;
-  muscles: boolean;
-  tendons: boolean;
-}
+export type LayerMode = "skeleton" | "muscles" | "complete";
 
 interface Props {
-  layers: LayersState;
-  onChange: (next: LayersState) => void;
+  mode: LayerMode;
+  onChange: (next: LayerMode) => void;
 }
 
 const ITEMS: Array<{
-  key: LayerKey;
+  key: LayerMode;
   label: string;
   hint: string;
   Icon: typeof Bone;
 }> = [
-  { key: "skeleton", label: "Doar Schelet", hint: "Oase vizibile", Icon: Bone },
-  { key: "muscles", label: "Sistem Muscular", hint: "Mușchi semi-transparenți", Icon: Activity },
-  { key: "tendons", label: "Anatomie Completă", hint: "Tendoane și țesuturi", Icon: LayersIcon },
+  { key: "skeleton", label: "Schelet", hint: "Context osos", Icon: Bone },
+  { key: "muscles", label: "Sistem Muscular", hint: "Context muscular", Icon: Activity },
+  { key: "complete", label: "Anatomie Completă", hint: "Mod avansat", Icon: LayersIcon },
 ];
 
-export function LayersToggle({ layers, onChange }: Props) {
+export function LayersToggle({ mode, onChange }: Props) {
   return (
     <div className="absolute left-6 bottom-6 glass-strong rounded-3xl p-3.5 w-[260px] fade-up">
       <div className="flex items-center gap-2 px-1.5 pb-2.5 mb-2 border-b border-primary/10">
@@ -35,12 +29,13 @@ export function LayersToggle({ layers, onChange }: Props) {
       </div>
       <div className="space-y-1">
         {ITEMS.map(({ key, label, hint, Icon }) => {
-          const active = layers[key];
+          const active = mode === key;
           return (
             <button
               key={key}
               type="button"
-              onClick={() => onChange({ ...layers, [key]: !active })}
+              onClick={() => onChange(key)}
+              aria-pressed={active}
               className={[
                 "w-full flex items-center gap-3 px-2.5 py-2 rounded-2xl transition-all text-left",
                 active
@@ -64,26 +59,17 @@ export function LayersToggle({ layers, onChange }: Props) {
               </div>
               <span
                 className={[
-                  "relative inline-flex h-[18px] w-[30px] items-center rounded-full transition-colors",
-                  active ? "bg-primary" : "bg-muted-foreground/25",
+                  "relative inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors",
+                  active ? "border-primary bg-primary/15" : "border-muted-foreground/35 bg-muted-foreground/10",
                 ].join(" ")}
               >
                 <span
                   className={[
-                    "inline-block h-3.5 w-3.5 rounded-full bg-background shadow transition-transform",
-                    active ? "translate-x-[14px]" : "translate-x-[2px]",
+                    "inline-block h-2.5 w-2.5 rounded-full transition-transform",
+                    active ? "scale-100 bg-primary shadow-[0_0_10px_rgba(0,242,254,0.75)]" : "scale-0 bg-primary",
                   ].join(" ")}
                 />
               </span>
-              <span
-                className={[
-                  "size-2 rounded-full border transition-all",
-                  active
-                    ? "border-primary bg-primary shadow-[0_0_10px_rgba(0,242,254,0.75)]"
-                    : "border-muted-foreground/45 bg-muted-foreground/20 shadow-none",
-                ].join(" ")}
-                aria-hidden
-              />
             </button>
           );
         })}
