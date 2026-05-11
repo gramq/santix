@@ -3,7 +3,7 @@ import { Boxes, BookOpen, Brain, Activity, Layers } from "lucide-react";
 
 const nav = [
   { to: "/explorator", label: "Explorator Schelet", icon: Boxes },
-  { to: "/glosar", label: "Bibliotecă anatomică", icon: BookOpen },
+  { to: "/glosar", label: "Ghid de utilizare", icon: BookOpen },
   { to: "/quiz", label: "Test Rapid", icon: Brain },
 ] as const;
 

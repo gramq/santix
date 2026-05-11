@@ -8,7 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
   { to: "/explorator", label: "Explorator" },
-  { to: "/glosar", label: "Bibliotecă" },
+  { to: "/glosar", label: "Ghid Santix" },
   { to: "/quiz", label: "Quiz" },
 ] as const;
 

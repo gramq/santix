@@ -1,114 +1,326 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { bones, categoryLabels, totalBoneCount, type BoneCategory } from "@/data/bones";
-import { Search, BookMarked, Filter } from "lucide-react";
+import { useState } from "react";
+import {
+  AlertTriangle,
+  Bone,
+  ChevronLeft,
+  Brain,
+  ChevronRight,
+  Dumbbell,
+  Layers,
+  MousePointerClick,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 export const Route = createFileRoute("/glosar")({
   head: () => ({
     meta: [
-      { title: "Bibliotecă anatomică — Santix" },
+      { title: "Ghid de utilizare Santix — Santix" },
       {
         name: "description",
-        content: "Bibliotecă anatomică a structurilor corpului uman, cu denumire latină, descriere și funcție.",
+        content: "Ghid Santix pentru alegerea scheletului 3D, sistemului muscular sau anatomiei complete.",
       },
-      { property: "og:title", content: "Bibliotecă anatomică — Santix" },
-      { property: "og:description", content: "Toate oasele corpului uman, organizate pe regiuni anatomice." },
+      { property: "og:title", content: "Ghid de utilizare Santix — Santix" },
+      {
+        property: "og:description",
+        content: "Sfaturi pentru utilizatori despre când să folosească scheletul, mușchii, anatomia completă și AI-ul Santix.",
+      },
     ],
   }),
-  component: GlosarPage,
+  component: GhidSantixPage,
 });
 
-function GlosarPage() {
-  const [query, setQuery] = useState("");
-  const [activeCat, setActiveCat] = useState<BoneCategory | "toate">("toate");
+const guideSections = [
+  {
+    Icon: Brain,
+    eyebrow: "Orientare",
+    title: "Nu trebuie să știi exact dacă te doare osul sau mușchiul",
+    body: [
+      "Durerea poate veni din os, mușchi, tendon, articulație sau nerv.",
+      "Santix te ajută să te orientezi, dar nu pune diagnostic.",
+    ],
+  },
+  {
+    Icon: Bone,
+    eyebrow: "Schelet",
+    title: "Când alegi Schelet",
+    body: [
+      "Alege Schelet dacă durerea a apărut după o lovitură, căzătură sau accident.",
+      "Este util când durerea pare profundă, zona s-a umflat după traumatism sau durerea este lângă o articulație.",
+      "Folosește-l și când vrei să înțelegi oasele, articulațiile sau suspectezi o problemă osoasă, cum ar fi fractură sau luxație.",
+    ],
+    example: "Am căzut și mă doare brațul. Începe cu Schelet.",
+  },
+  {
+    Icon: Dumbbell,
+    eyebrow: "Sistem muscular",
+    title: "Când alegi Sistem Muscular",
+    body: [
+      "Alege Sistem Muscular dacă durerea a apărut după efort sau sport.",
+      "Este potrivit pentru crampe, întindere, febră musculară sau durere când încordezi zona.",
+      "Folosește-l când durerea apare la ridicat, împins, tras, alergat sau când vrei să vezi ce mușchi participă la o mișcare.",
+    ],
+    example: "Mă doare brațul după sală. Începe cu Sistem Muscular.",
+  },
+  {
+    Icon: Layers,
+    eyebrow: "Anatomie completă",
+    title: "Când alegi Anatomie completă",
+    body: [
+      "Alege Anatomie completă dacă nu ești sigur dacă durerea vine din os sau mușchi.",
+      "Este utilă când vrei să vezi zona completă sau durerea pare legată și de mișcare, și de articulație.",
+      "Folosește acest mod când ai nevoie de context mai larg.",
+    ],
+    example: "Mă doare brațul, dar nu știu exact de unde. Începe cu Anatomie completă.",
+  },
+  {
+    Icon: MousePointerClick,
+    eyebrow: "Asistent AI",
+    title: "Cum folosești AI-ul",
+    body: [
+      "Pentru a porni AI-ul, selectează un os sau mușchi din modelul 3D.",
+      "Scrie ce simți sau ce vrei să afli.",
+      "Poți întreba despre rolul structurii, durere, mișcare sau accidentări.",
+    ],
+    examples: [
+      "Ce rol are humerusul?",
+      "Mă doare aici.",
+      "Mă doare după ce am căzut.",
+      "Mă doare când încordez brațul.",
+    ],
+  },
+  {
+    Icon: Sparkles,
+    eyebrow: "Flexibil",
+    title: "Dacă ai ales greșit",
+    body: [
+      "Nu este o problemă.",
+      "Dacă ai selectat un os, dar durerea pare musculară, AI-ul te poate orienta să verifici și Sistemul Muscular.",
+      "Dacă ai selectat un mușchi, dar durerea a apărut după o căzătură sau lovitură, AI-ul te poate orienta să verifici și Scheletul.",
+    ],
+  },
+];
 
-  const filtered = useMemo(() => {
-    return bones.filter((b) => {
-      const matchesQ =
-        !query ||
-        b.name.toLowerCase().includes(query.toLowerCase()) ||
-        b.latin.toLowerCase().includes(query.toLowerCase());
-      const matchesCat = activeCat === "toate" || b.category === activeCat;
-      return matchesQ && matchesCat;
-    });
-  }, [query, activeCat]);
+const warningSigns = [
+  "durere severă după accident",
+  "deformare vizibilă",
+  "imposibilitatea de a mișca zona",
+  "amorțeală sau pierderea sensibilității",
+  "umflare mare",
+  "durere care se agravează",
+  "durere care persistă mai multe zile",
+];
 
-  const categories = ["toate", ...Object.keys(categoryLabels)] as Array<BoneCategory | "toate">;
+const flashCards = [
+  ...guideSections,
+  {
+    Icon: AlertTriangle,
+    eyebrow: "Semne de alarmă",
+    title: "Când ceri ajutor medical rapid",
+    body: [
+      "Cere ajutor medical rapid dacă apar semne care pot indica o problemă serioasă.",
+      "Santix oferă orientare educațională, nu diagnostic medical.",
+    ],
+    examples: warningSigns,
+  },
+];
+
+function GhidSantixPage() {
+  const [activeCardIndex, setActiveCardIndex] = useState<number | null>(null);
+  const activeCard = activeCardIndex === null ? null : flashCards[activeCardIndex];
+
+  const openCard = (index: number) => setActiveCardIndex(index);
+  const closeCard = () => setActiveCardIndex(null);
+  const nextCard = () => {
+    setActiveCardIndex((current) => (current === null ? 0 : (current + 1) % flashCards.length));
+  };
+  const previousCard = () => {
+    setActiveCardIndex((current) => (current === null ? flashCards.length - 1 : (current - 1 + flashCards.length) % flashCards.length));
+  };
 
   return (
-    <div className="absolute inset-0 m-4 mt-2 rounded-3xl glass overflow-hidden flex flex-col">
-      {/* Header */}
-      <div className="p-6 border-b border-primary/10">
-        <div className="flex items-center gap-3 mb-2">
-          <BookMarked className="size-5 text-primary" />
-          <span className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold">
-            Bibliotecă anatomică
-          </span>
-        </div>
-        <h1 className="text-4xl font-bold tracking-tight">Bibliotecă <span className="text-gradient-bone">anatomică</span></h1>
-        <p className="text-sm text-muted-foreground mt-2">
-          {totalBoneCount} oase catalogate · {bones.length} categorii anatomice
-        </p>
+    <div className="santix-guide-shell absolute inset-0 m-4 mt-2 overflow-hidden rounded-3xl glass">
+      <div className="pointer-events-none absolute inset-0 santix-aura" />
+      <div className="pointer-events-none absolute inset-0 santix-guide-grid" />
+      <div className="pointer-events-none absolute left-0 right-0 top-0 h-px santix-scan" />
 
-        {/* Search */}
-        <div className="mt-5 flex items-center gap-3 glass rounded-2xl px-4 py-3">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Caută os după nume sau denumire latină…"
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-          />
+      <div className="relative z-10 h-full overflow-y-auto">
+        <div className="santix-guide-hero border-b border-primary/10 px-6 py-7">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_180px] lg:items-center">
+            <div>
+              <div className="mb-3 flex items-center gap-3">
+                <Sparkles className="size-5 text-primary" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Ghid de utilizare Santix
+                </span>
+              </div>
+              <h1 className="max-w-3xl text-3xl font-bold tracking-tight md:text-4xl">
+                Alege mai ușor între <span className="text-gradient-bone">schelet</span>, mușchi și anatomie completă
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                Santix oferă orientare educațională, nu diagnostic medical. Folosește ghidul ca punct de pornire când explorezi
+                o durere, o mișcare sau o structură anatomică.
+              </p>
+            </div>
+
+            <div className="santix-guide-hologram hidden lg:block" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <div />
+            </div>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="mt-4 flex items-center gap-2 flex-wrap">
-          <Filter className="size-3.5 text-muted-foreground mr-1" />
-          {categories.map((c) => (
+        <main className="grid gap-4 p-6 lg:grid-cols-2">
+          {guideSections.map(({ Icon, eyebrow, title, body, example, examples }, index) => (
             <button
-              key={c}
-              onClick={() => setActiveCat(c)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium tracking-tight transition-all ${
-                activeCat === c
-                  ? "bg-primary text-primary-foreground shadow-[var(--shadow-glow)]"
-                  : "bg-primary/5 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
-              }`}
+              type="button"
+              key={title}
+              onClick={() => openCard(index)}
+              className="santix-guide-card glass rounded-3xl p-5 text-left fade-up"
+              style={{ animationDelay: `${Math.min(index * 35, 220)}ms` }}
             >
-              {c === "toate" ? "Toate" : categoryLabels[c]}
+              <div className="mb-4 flex items-start gap-3">
+                <div className="santix-guide-icon flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
+                  <Icon className="size-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{eyebrow}</p>
+                  <h2 className="mt-1 text-xl font-bold tracking-tight">{title}</h2>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm leading-relaxed text-foreground/85">
+                {body.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+
+              {example && (
+                <p className="santix-guide-example mt-4 rounded-2xl border border-primary/15 bg-primary/10 px-4 py-3 text-sm text-foreground/90">
+                  Exemplu: „{example}”
+                </p>
+              )}
+
+              {examples && (
+                <div className="mt-4 grid gap-2">
+                  {examples.map((item) => (
+                    <p key={item} className="santix-guide-example rounded-2xl border border-primary/10 bg-white/[0.035] px-4 py-2 text-sm">
+                      „{item}”
+                    </p>
+                  ))}
+                </div>
+              )}
             </button>
           ))}
-        </div>
+
+          <button
+            type="button"
+            onClick={() => openCard(flashCards.length - 1)}
+            className="santix-guide-card santix-guide-warning glass rounded-3xl border border-destructive/25 p-5 text-left fade-up lg:col-span-2"
+          >
+            <div className="mb-4 flex items-start gap-3">
+              <div className="santix-guide-icon flex size-10 shrink-0 items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/10">
+                <AlertTriangle className="size-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-destructive/80">Semne de alarmă</p>
+                <h2 className="mt-1 text-xl font-bold tracking-tight">Când ceri ajutor medical rapid</h2>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {warningSigns.map((sign) => (
+                <div key={sign} className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm">
+                  {sign}
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+              Santix oferă orientare educațională, nu diagnostic medical.
+            </p>
+          </button>
+        </main>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-min">
-        {filtered.map((b, i) => (
-          <article
-            key={b.id}
-            className="glass rounded-3xl p-5 spring-hover fade-up"
-            style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
-          >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h3 className="text-lg font-bold tracking-tight">{b.name}</h3>
-                <p className="text-xs italic text-muted-foreground mt-0.5">{b.latin}</p>
+      {activeCard && (
+        <div className="santix-flash-overlay absolute inset-0 z-30 flex items-center justify-center p-4" onClick={closeCard}>
+          <div className="santix-flash-stage w-full max-w-2xl" onClick={(event) => event.stopPropagation()}>
+            <article key={activeCardIndex} className="santix-flash-card glass-strong rounded-3xl p-6 md:p-7">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="santix-guide-icon flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
+                    <activeCard.Icon className="size-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      {activeCard.eyebrow}
+                    </p>
+                    <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">{activeCard.title}</h2>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCard}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-muted-foreground transition hover:text-foreground"
+                  aria-label="Închide cardul"
+                >
+                  <X className="size-5" />
+                </button>
               </div>
-              <span className="shrink-0 text-[10px] font-bold text-primary bg-primary/15 border border-primary/25 rounded-full px-2 py-1">
-                ×{b.count}
-              </span>
-            </div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2">
-              {categoryLabels[b.category]}
-            </p>
-            <p className="text-sm text-foreground/85 leading-relaxed">{b.description}</p>
-          </article>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full text-center text-muted-foreground py-16">
-            Niciun rezultat pentru căutarea ta.
+
+              <div className="space-y-3 text-sm leading-relaxed text-foreground/85 md:text-base">
+                {activeCard.body.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+
+              {activeCard.example && (
+                <p className="mt-5 rounded-2xl border border-primary/15 bg-primary/10 px-4 py-3 text-sm text-foreground/90">
+                  Exemplu: „{activeCard.example}”
+                </p>
+              )}
+
+              {activeCard.examples && (
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                  {activeCard.examples.map((item) => (
+                    <p key={item} className="rounded-2xl border border-primary/10 bg-white/[0.035] px-4 py-2 text-sm">
+                      „{item}”
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6 flex items-center justify-between gap-3 border-t border-primary/10 pt-4">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {activeCardIndex! + 1} / {flashCards.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={previousCard}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-muted-foreground transition hover:border-primary/35 hover:text-foreground"
+                  >
+                    <ChevronLeft className="size-4" />
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextCard}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/15"
+                  >
+                    Următorul
+                    <ChevronRight className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </article>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

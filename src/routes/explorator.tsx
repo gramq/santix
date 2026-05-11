@@ -9,6 +9,7 @@ import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
 import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
 import { bones } from "@/data/bones";
 import { MousePointerClick } from "lucide-react";
+import type { AiContextSwitchAction } from "@/lib/ai-chat.functions";
 
 export const Route = createFileRoute("/explorator")({
   head: () => ({
@@ -33,17 +34,65 @@ function ExploratorPage() {
   const [selection, setSelection] = useState<BoneSelection | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>("complete");
   const [modelMode, setModelMode] = useState<AnatomyModelMode>("simple");
+  const [contextSwitchCount, setContextSwitchCount] = useState(0);
+  const [preserveAiStateOnSelectionChange, setPreserveAiStateOnSelectionChange] = useState(false);
 
   const selectedBone = useMemo(
     () => (selection ? bones.find((b) => b.id === selection.id) ?? null : null),
     [selection],
   );
 
+  const handleSelectionChange = (nextSelection: BoneSelection | null) => {
+    setContextSwitchCount(0);
+    setSelection(nextSelection);
+  };
+
+  const handleAiContextSwitch = (action: AiContextSwitchAction) => {
+    if (!action.should_switch_context || contextSwitchCount > 0 || !action.target_structure_slug) return;
+
+    const nextLayer: LayerMode =
+      action.target_layer === "muscular"
+        ? "muscles"
+        : "skeleton";
+    const nextTissue: BoneSelection["tissue"] =
+      action.target_structure_type === "muscle" || action.target_structure_type === "muscle_group"
+        ? "muschi"
+        : "os";
+    const targetBone = nextTissue === "os" ? bones.find((item) => item.id === action.target_structure_slug) : null;
+    const muscleLabels: Record<string, string> = {
+      "muschi:muschii-bratului": "Mușchii brațului",
+      "muschi:muschii-antebratului": "Mușchii antebrațului",
+      "muschi:muschii-umarului": "Mușchii umărului",
+      "muschi:muschii-mainii": "Mușchii mâinii",
+      "muschi:muschii-coapsei": "Mușchii coapsei",
+      "muschi:muschii-gambei": "Mușchii gambei",
+      "muschi:muschii-piciorului": "Mușchii labei piciorului",
+      "muschi:muschii-soldului": "Mușchii șoldului",
+      "muschi:muschii-spatelui": "Mușchii spatelui",
+      "muschi:muschii-capului-gatului": "Mușchii capului și gâtului",
+      "muschi:muschii-toracelui": "Mușchii toracelui",
+    };
+
+    setPreserveAiStateOnSelectionChange(true);
+    setContextSwitchCount((count) => count + 1);
+    setModelMode("complex");
+    setLayerMode(nextLayer);
+    setSelection({
+      id: action.target_structure_slug,
+      side: "male",
+      tissue: nextTissue,
+      regionId: nextTissue === "muschi" ? action.target_structure_slug : undefined,
+      regionLabel: nextTissue === "muschi" ? muscleLabels[action.target_structure_slug] : action.target_body_region ?? undefined,
+      label: targetBone?.name ?? muscleLabels[action.target_structure_slug] ?? action.target_body_region ?? action.target_structure_slug,
+    });
+    window.setTimeout(() => setPreserveAiStateOnSelectionChange(false), 0);
+  };
+
   return (
     <div className="absolute inset-0 m-4 mt-2 overflow-hidden rounded-3xl glass">
       <SkeletonScene
         selection={selection}
-        onSelect={setSelection}
+        onSelect={handleSelectionChange}
         layerMode={layerMode}
         mode={modelMode}
       />
@@ -62,8 +111,8 @@ function ExploratorPage() {
           <button
             key={mode}
             type="button"
-            onClick={() => {
-              setSelection(null);
+          onClick={() => {
+              handleSelectionChange(null);
               setModelMode(mode);
             }}
             className={[
@@ -82,7 +131,7 @@ function ExploratorPage() {
         <LayersToggle
           mode={layerMode}
           onChange={(nextMode) => {
-            setSelection(null);
+            handleSelectionChange(null);
             setLayerMode(nextMode);
           }}
         />
@@ -91,7 +140,10 @@ function ExploratorPage() {
       <BoneInfoPanel
         bone={selectedBone}
         selection={selection}
-        onClose={() => setSelection(null)}
+        onClose={() => handleSelectionChange(null)}
+        onContextSwitch={handleAiContextSwitch}
+        preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
+        visualLayer={layerMode}
       />
     </div>
   );

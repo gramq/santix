@@ -411,6 +411,243 @@
     50% { transform: translateY(-14px); }
   }
 
+  .santix-guide-shell {
+    isolation: isolate;
+    perspective: 1200px;
+    transform-style: preserve-3d;
+  }
+
+  .santix-guide-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(120deg, transparent 0 28%, rgba(0, 242, 254, 0.08) 45%, transparent 62%),
+      linear-gradient(180deg, rgba(0, 242, 254, 0.055), transparent 34%);
+    opacity: 0.65;
+    transform: translateZ(-50px);
+  }
+
+  .santix-guide-grid {
+    background-image:
+      linear-gradient(rgba(0, 242, 254, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 242, 254, 0.055) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: linear-gradient(to bottom, black, transparent 68%);
+    opacity: 0.45;
+    transform: rotateX(68deg) translateY(-28%) scale(1.3);
+    transform-origin: top center;
+    animation: santix-guide-grid-drift 16s linear infinite;
+  }
+
+  @keyframes santix-guide-grid-drift {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 0 92px, 92px 0; }
+  }
+
+  .santix-guide-hero {
+    position: relative;
+    transform-style: preserve-3d;
+  }
+
+  .santix-guide-card {
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+    transition:
+      transform 0.45s var(--transition-spring),
+      border-color 0.3s var(--transition-smooth),
+      box-shadow 0.3s var(--transition-smooth);
+    will-change: transform;
+  }
+
+  .santix-guide-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 18%, rgba(0, 242, 254, 0.11) 46%, transparent 70%);
+    opacity: 0;
+    transform: translateX(-115%);
+    transition: transform 0.75s ease, opacity 0.25s ease;
+  }
+
+  .santix-guide-card::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: 0;
+    pointer-events: none;
+    border: 1px solid rgba(0, 242, 254, 0.14);
+    border-radius: inherit;
+    opacity: 0.45;
+    transform: translateZ(-18px);
+  }
+
+  .santix-guide-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .santix-guide-card:hover {
+    border-color: rgba(0, 242, 254, 0.38);
+    box-shadow:
+      0 26px 60px -32px rgba(0, 242, 254, 0.55),
+      0 16px 32px -24px rgba(0, 0, 0, 0.8);
+    transform: translateY(-8px) rotateX(2.5deg) rotateY(-2deg) translateZ(18px);
+  }
+
+  .santix-guide-card:hover::before {
+    opacity: 1;
+    transform: translateX(115%);
+  }
+
+  .santix-guide-icon {
+    transform: translateZ(26px);
+    box-shadow: 0 12px 30px -18px rgba(0, 242, 254, 0.75);
+  }
+
+  .santix-guide-example {
+    transform: translateZ(12px);
+  }
+
+  .santix-guide-warning:hover {
+    border-color: rgba(255, 90, 90, 0.46);
+  }
+
+  .santix-flash-overlay {
+    background:
+      linear-gradient(180deg, rgba(2, 10, 14, 0.76), rgba(2, 10, 14, 0.9)),
+      radial-gradient(ellipse 80% 55% at 50% 35%, rgba(0, 242, 254, 0.16), transparent 68%);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    animation: santix-flash-overlay-in 0.24s ease both;
+  }
+
+  .santix-flash-stage {
+    perspective: 1600px;
+    transform-style: preserve-3d;
+  }
+
+  .santix-flash-card {
+    position: relative;
+    overflow: hidden;
+    transform-origin: left center;
+    transform-style: preserve-3d;
+    box-shadow:
+      0 28px 80px -42px rgba(0, 242, 254, 0.7),
+      0 32px 72px -52px rgba(0, 0, 0, 0.95);
+    animation: santix-page-turn-in 0.55s var(--transition-spring) both;
+  }
+
+  .santix-flash-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 18% 74%, rgba(0, 0, 0, 0.18)),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 9px);
+    opacity: 0.62;
+    mix-blend-mode: screen;
+  }
+
+  .santix-flash-card::after {
+    content: "";
+    position: absolute;
+    inset-block: 18px;
+    left: 18px;
+    width: 2px;
+    pointer-events: none;
+    border-radius: 999px;
+    background: linear-gradient(180deg, transparent, rgba(0, 242, 254, 0.5), transparent);
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
+  }
+
+  .santix-flash-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @keyframes santix-flash-overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes santix-page-turn-in {
+    0% {
+      opacity: 0;
+      transform: rotateY(-72deg) translateX(-28px) translateZ(-80px);
+      filter: blur(3px);
+    }
+    56% {
+      opacity: 1;
+      transform: rotateY(8deg) translateX(4px) translateZ(22px);
+      filter: blur(0);
+    }
+    100% {
+      opacity: 1;
+      transform: rotateY(0) translateX(0) translateZ(0);
+      filter: blur(0);
+    }
+  }
+
+  .santix-guide-hologram {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    margin-left: auto;
+    transform-style: preserve-3d;
+    transform: rotateX(58deg) rotateZ(-36deg);
+    animation: santix-guide-hologram-float 5.5s ease-in-out infinite;
+  }
+
+  .santix-guide-hologram span,
+  .santix-guide-hologram div {
+    position: absolute;
+    inset: 20px;
+    border: 1px solid rgba(0, 242, 254, 0.48);
+    border-radius: 18px;
+    background:
+      linear-gradient(135deg, rgba(0, 242, 254, 0.12), rgba(255, 255, 255, 0.025)),
+      repeating-linear-gradient(90deg, rgba(0, 242, 254, 0.16) 0 1px, transparent 1px 14px);
+    box-shadow:
+      inset 0 0 26px rgba(0, 242, 254, 0.14),
+      0 18px 48px -26px rgba(0, 242, 254, 0.7);
+  }
+
+  .santix-guide-hologram span:nth-child(1) {
+    transform: translateZ(-34px);
+    opacity: 0.32;
+  }
+
+  .santix-guide-hologram span:nth-child(2) {
+    inset: 32px;
+    transform: translateZ(0);
+    opacity: 0.55;
+  }
+
+  .santix-guide-hologram span:nth-child(3) {
+    inset: 44px;
+    transform: translateZ(34px);
+    opacity: 0.8;
+  }
+
+  .santix-guide-hologram div {
+    inset: 58px 42px;
+    border-radius: 999px;
+    transform: translateZ(58px) rotateZ(18deg);
+    opacity: 0.85;
+  }
+
+  @keyframes santix-guide-hologram-float {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -10px; }
+  }
+
   .santix-hotspot-ring {
     animation: santix-hotspot 2.6s ease-in-out infinite;
   }

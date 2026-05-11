@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Bone, categoryLabels } from "@/data/bones";
 import { X, BookMarked, Sparkles, Stethoscope, AlertTriangle, Activity, Layers, Bot, Send, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { askSelectionAi } from "@/lib/ai-chat.functions";
+import { askSelectionAi, type AiContextSwitchAction } from "@/lib/ai-chat.functions";
 import {
   analyzePainLocally,
   getPainQuestions,
@@ -12,11 +12,15 @@ import {
 } from "@/data/painKnowledge";
 import { classifyAnatomyStructure } from "@/data/anatomyCurriculum";
 import type { BoneSelection, TissueType } from "./SkeletonScene";
+import type { LayerMode } from "./LayersToggle";
 
 interface Props {
   bone: Bone | null;
   selection: BoneSelection | null;
   onClose: () => void;
+  onContextSwitch?: (action: AiContextSwitchAction) => void;
+  preserveAiStateOnSelectionChange?: boolean;
+  visualLayer?: LayerMode;
 }
 
 const TISSUE_META: Record<TissueType, { label: string; Icon: typeof BookMarked; tagBg: string; tagText: string }> = {
@@ -40,7 +44,14 @@ const TISSUE_META: Record<TissueType, { label: string; Icon: typeof BookMarked; 
   },
 };
 
-export function BoneInfoPanel({ bone, selection, onClose }: Props) {
+export function BoneInfoPanel({
+  bone,
+  selection,
+  onClose,
+  onContextSwitch,
+  preserveAiStateOnSelectionChange = false,
+  visualLayer = "complete",
+}: Props) {
   const { session, user } = useAuth();
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [result, setResult] = useState<SymptomAnalysis | null>(null);
@@ -50,8 +61,13 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
   const [aiConversationId, setAiConversationId] = useState<string | undefined>();
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const previousSelectionKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const selectionKey = selection ? `${selection.side}:${selection.tissue}:${selection.regionId ?? ""}:${selection.id}` : null;
+    if (previousSelectionKeyRef.current === selectionKey) return;
+    previousSelectionKeyRef.current = selectionKey;
+    if (preserveAiStateOnSelectionChange) return;
     setAnswers({});
     setResult(null);
     setError(null);
@@ -60,11 +76,18 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
     setAiConversationId(undefined);
     setAiLoading(false);
     setAiError(null);
-  }, [selection?.id, selection?.regionId, selection?.side]);
+  }, [preserveAiStateOnSelectionChange, selection]);
 
   if (!selection) return null;
 
   const tissue = selection.tissue;
+  const aiLayer = tissue === "muschi" ? "muscular" : "skeleton";
+  const aiLayerLabel = aiLayer === "muscular" ? "muscular" : "schelet";
+  const serverVisualLayer = visualLayer === "muscles" ? "muscular" : visualLayer;
+  const completeLayerNote =
+    visualLayer === "complete"
+      ? "Anatomie completă este o vizualizare combinată. AI-ul folosește contextul osos sau muscular în funcție de structura selectată."
+      : null;
   const meta = TISSUE_META[tissue];
   const Icon = meta.Icon;
   const curriculum = classifyAnatomyStructure({
@@ -141,6 +164,8 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
           structureSlug: bone?.id ?? selection.id,
           modelSelectionId: bone?.id ?? selection.id,
           bodyRegion: curriculum.segment,
+          visualLayer: serverVisualLayer,
+          aiLayer,
           conversationId: aiConversationId,
         },
       });
@@ -150,6 +175,9 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
         ...current,
         { role: "assistant", content: response.answer },
       ]);
+      if (response.contextSwitch?.should_switch_context) {
+        onContextSwitch?.(response.contextSwitch);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Asistentul AI nu a putut răspunde.";
       setAiError(message);
@@ -230,18 +258,23 @@ export function BoneInfoPanel({ bone, selection, onClose }: Props) {
               <div>
                 <h3 className="text-sm font-bold tracking-tight">Asistent AI Santix</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Context blocat · {displayName.toLowerCase()}
+                  Context AI: {aiLayerLabel} · {displayName.toLowerCase()}
                 </p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
+              {completeLayerNote && (
+                <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {completeLayerNote}
+                </div>
+              )}
               <div className="mb-3 rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-                AI-ul va răspunde despre <strong>{displayName}</strong>, în categoria <strong>{meta.label.toLowerCase()}</strong>, folosind contextul Santix disponibil pentru selecția curentă.
+                AI-ul va răspunde despre <strong>{displayName}</strong>, în context <strong>{aiLayerLabel}</strong>, folosind datele Santix disponibile pentru structura selectată.
               </div>
 
               <div className="mb-3 grid grid-cols-2 gap-2">
-                <InfoChip label="Țesut AI" value={meta.label} />
+                <InfoChip label="Context AI" value={aiLayerLabel} />
                 <InfoChip label="Context" value={selection.label ?? selection.regionLabel ?? selection.id} />
               </div>
 
