@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "embeddings:ai": "node scripts/populate_ai_embeddings.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { createQueryEmbedding } from "./ai/embeddings";
 import { createAiProvider } from "./ai/provider";
+import { hybridSearchKnowledge, type KnowledgeEntry, type RetrievalFilters } from "./ai/retrieval";
 import { buildStructuredAiOutput, type SantixStructuredAiOutput } from "./ai/structured-output";
 
 const TissueSchema = z.enum(["os", "muschi", "tendon"]);
@@ -19,18 +19,6 @@ const InputSchema = z.object({
   aiLayer: z.enum(["skeleton", "muscular"]).optional(),
   conversationId: z.string().uuid().optional(),
 });
-
-type KnowledgeEntry = {
-  id: string;
-  tissue?: string;
-  structure_slug?: string | null;
-  model_selection_id?: string | null;
-  body_region?: string | null;
-  category: string;
-  title_ro: string;
-  content_ro: string;
-  priority: number;
-};
 
 type ConversationMessage = {
   role: "user" | "assistant" | "system";
@@ -109,6 +97,7 @@ type ContextSwitchAction = {
 export type AiContextSwitchAction = ContextSwitchAction;
 
 type SymptomStateValue = "yes" | "no" | "unknown";
+type PainQuality = "unknown" | "stabbing" | "burning" | "throbbing" | "dull" | "sharp" | "pressure" | "pulling" | "cramp";
 type SymptomNextStep =
   | "ask_trauma_or_effort"
   | "ask_onset"
@@ -128,6 +117,7 @@ type SymptomState = {
   ai_layer: TargetLayer;
   current_topic: "anatomy" | "pain" | "injury" | "symptom" | "out_of_scope";
   pain_present: boolean;
+  pain_quality: PainQuality;
   trauma_or_effort: SymptomStateValue;
   trauma_type: "fall" | "hit" | "sport" | "effort" | "none" | "unknown";
   onset: "sudden" | "gradual" | "unknown";
@@ -250,6 +240,10 @@ function normalizeColloquialAddressing(value: string | undefined) {
   text = text.replace(new RegExp(`\\b(${COLLOQUIAL_ADDRESS_TERMS.join("|")})\\b`, "g"), " ");
   text = text.replace(/\bma\b(?!\s+(doare|dor|durea|lovit|cazut|impiedicat))/g, " ");
   return text.replace(/\s+/g, " ").trim();
+}
+
+export function normalizeMedicalText(value: string | undefined) {
+  return normalizeColloquialAddressing(value);
 }
 
 function stripPunctuation(value: string) {
@@ -413,6 +407,17 @@ const PAIN_STARTER_TERMS = [
   "accident",
 ];
 
+const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: string[] }> = [
+  { key: "stabbing", terms: ["intepatoare", "intepator", "inteapa", "intepaturi", "intepatura", "junghi", "junghiuri"] },
+  { key: "burning", terms: ["arzatoare", "arsura", "arde", "ustura", "usturime"] },
+  { key: "throbbing", terms: ["pulsatila", "pulseaza", "zvacneste", "zvacnitoare"] },
+  { key: "dull", terms: ["surda", "apasatoare", "disconfort"] },
+  { key: "sharp", terms: ["ascutita", "taioasa"] },
+  { key: "pressure", terms: ["presiune", "apasa", "apasare"] },
+  { key: "pulling", terms: ["trage", "tragere", "intinde"] },
+  { key: "cramp", terms: ["crampa", "carcel", "spasm"] },
+];
+
 const ANATOMY_INTENT_TERMS = [
   "ce este",
   "ce rol are",
@@ -501,6 +506,7 @@ function targetForEntities(entities: ExtractedEntities) {
 function hasRecognizableIntent(text: string, entities: ExtractedEntities) {
   return (
     PAIN_STARTER_TERMS.some((term) => text.includes(term)) ||
+    PAIN_QUALITY_TERMS.some((entry) => entry.terms.some((term) => text.includes(term))) ||
     ANATOMY_INTENT_TERMS.some((term) => text.includes(term)) ||
     SELECTION_TERMS.some((term) => text.includes(term)) ||
     APP_SPECIFIC_TERMS.some((term) => text.includes(term)) ||
@@ -769,6 +775,7 @@ function emptySymptomState(input: z.infer<typeof InputSchema>): SymptomState {
     ai_layer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
     current_topic: "anatomy",
     pain_present: false,
+    pain_quality: "unknown",
     trauma_or_effort: "unknown",
     trauma_type: "unknown",
     onset: "unknown",
@@ -929,6 +936,25 @@ function parseSeverity(text: string): SymptomState["severity"] | null {
   return null;
 }
 
+function parsePainQuality(text: string): PainQuality {
+  return PAIN_QUALITY_TERMS.find((entry) => entry.terms.some((term) => text.includes(term)))?.key ?? "unknown";
+}
+
+function painQualityLabel(quality: PainQuality) {
+  const labels: Record<PainQuality, string> = {
+    unknown: "necunoscută",
+    stabbing: "înțepătoare",
+    burning: "arzătoare",
+    throbbing: "pulsatilă",
+    dull: "surdă",
+    sharp: "ascuțită",
+    pressure: "ca o presiune",
+    pulling: "ca o tragere",
+    cramp: "ca o crampă",
+  };
+  return labels[quality];
+}
+
 function parseOnset(text: string): SymptomState["onset"] | null {
   if (hasAny(text, ["brusc", "dintr o data", "dintr-o data", "deodata", "a aparut dintr o data"])) return "sudden";
   if (hasAny(text, ["treptat", "incet"])) return "gradual";
@@ -951,6 +977,7 @@ function isContextualReply(question: string, state: SymptomState) {
     isContextualAffirmative(text) ||
     isContextualNegative(text) ||
     isMovementOkReply(text) ||
+    parsePainQuality(text) !== "unknown" ||
     Boolean(parseDuration(text)) ||
     hasAny(text, ["putin", "tare", "sever", "brusc", "treptat", "usor", "usoara", "moderat", "moderata", "nu pot"])
   );
@@ -984,7 +1011,14 @@ function applySymptomFactsFromText(message: string, state: SymptomState, previou
     return;
   }
 
-  if (hasAny(text, ["ma doare", "ma dor", "durere", "doare", "dureros"])) {
+  const parsedPainQuality = parsePainQuality(text);
+  if (parsedPainQuality !== "unknown") {
+    state.pain_quality = parsedPainQuality;
+    state.current_topic = "pain";
+    markAnswered(state, "pain_quality");
+  }
+
+  if (hasAny(text, ["ma doare", "ma dor", "ma inteapa", "durere", "doare", "dureros"]) || parsedPainQuality !== "unknown") {
     state.pain_present = true;
     state.current_topic = "pain";
   }
@@ -1177,7 +1211,8 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
   const hasSymptomOrInjury =
     entities.symptoms.length > 0 ||
     entities.contexts.length > 0 ||
-    hasAny(text, ["ma doare", "accidentare", "trauma", "lovitura", "cazut", "sport", "alerg"]);
+    PAIN_QUALITY_TERMS.some((entry) => entry.terms.some((term) => text.includes(term))) ||
+    hasAny(text, ["ma doare", "ma inteapa", "inteapa", "accidentare", "trauma", "lovitura", "cazut", "sport", "alerg"]);
   const isAppSpecific = APP_SPECIFIC_TERMS.some((term) => text.includes(term));
   const isMedical = MEDICAL_GENERAL_TERMS.some((term) => text.includes(term)) || hasSymptomOrInjury || !!entities.bodyRegion;
   const isOutOfScope = OUT_OF_SCOPE_TERMS.some((term) => text.includes(term)) && !isMedical && !isAppSpecific;
@@ -1634,31 +1669,29 @@ async function getGeneralMedicalContext(
   route: AiRoute,
   selectionContext: KnowledgeEntry[],
 ): Promise<KnowledgeEntry[]> {
-  const queryEmbedding = await createQueryEmbedding(input.question).catch((error) => {
-    console.warn("Semantic search disabled for this request:", error);
-    return null;
-  });
-  const semanticRows = queryEmbedding
-    ? await safeSelect<KnowledgeEntry & { similarity?: number }>(
-        supabase.rpc("match_ai_knowledge_entries", {
-          p_query_embedding: queryEmbedding,
-          p_ai_layer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
-          p_body_region: route.entities.bodyRegion ?? input.bodyRegion ?? null,
-          p_structure_slug: input.structureSlug ?? null,
-          p_match_threshold: 0.72,
-          p_match_count: 8,
-        }),
-      )
-    : [];
-
-  const aiKnowledgeRows = await safeSelect<KnowledgeEntry>(
-    supabase
-      .from("ai_knowledge_entries")
-      .select("id, tissue, structure_slug, model_selection_id, body_region, category, title_ro, content_ro, priority")
-      .eq("active", true)
-      .order("priority", { ascending: false })
-      .limit(120),
-  );
+  const ragCategories =
+    route.category === "red_flag_or_urgent"
+      ? ["semne_alarma", "intrebari_clarificare"]
+      : route.category === "symptom_or_injury"
+        ? ["simptome", "cauze_posibile", "recomandari", "semne_alarma", "intrebari_clarificare"]
+        : null;
+  const ragTags = unique([
+    ...route.entities.symptoms,
+    ...route.entities.contexts,
+    route.entities.bodyRegionKey ?? "",
+    route.entities.severity ?? "",
+    route.entities.duration ?? "",
+  ].map(normalizeForScope));
+  const ragFilters: RetrievalFilters = {
+    aiLayer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
+    bodyRegion: route.entities.bodyRegion ?? input.bodyRegion ?? null,
+    structureSlug: route.selectedSubjectMentioned ? input.structureSlug ?? null : route.targetStructureSlug ?? input.structureSlug ?? null,
+    categories: ragCategories,
+    tags: ragTags.length ? ragTags : null,
+    limit: route.category === "red_flag_or_urgent" ? 20 : 16,
+    matchThreshold: 0.68,
+  };
+  const ragRows = await hybridSearchKnowledge(supabase, input.question, ragFilters);
 
   const symptomsRows = await safeSelect<{
     id: string;
@@ -1787,12 +1820,11 @@ async function getGeneralMedicalContext(
   );
 
   const broadContext = [
-    ...semanticRows.map((entry) => ({
+    ...ragRows.map((entry) => ({
       ...entry,
-      title_ro: `Rezultat semantic: ${entry.title_ro}`,
+      title_ro: `${entry.retrieval_source === "semantic" ? "Rezultat semantic" : "Rezultat keyword"}: ${entry.title_ro}`,
       priority: Math.min(10, (entry.priority ?? 4) + 2),
     })),
-    ...aiKnowledgeRows,
     ...symptomContext,
     ...conditionContext,
     ...triageQuestionContext,
@@ -1922,6 +1954,9 @@ export function buildClarifyingAnswer(input: z.infer<typeof InputSchema>, sympto
     case "ask_movement":
       return "Înțeleg. Poți mișca zona normal?";
     case "ask_severity":
+      if (symptomState.pain_quality !== "unknown") {
+        return `Înțeleg, durerea este ${painQualityLabel(symptomState.pain_quality)}. Ca intensitate, este ușoară, moderată sau foarte puternică?`;
+      }
       return symptomState.movement_ok === "yes"
         ? "În regulă. Durerea este ușoară, moderată sau foarte puternică?"
         : "Durerea este ușoară, moderată sau foarte puternică?";
