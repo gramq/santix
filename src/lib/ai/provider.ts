@@ -1,94 +1,28 @@
-export type AiProviderMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+import { createOllamaProvider } from "./providers/ollama";
+import type { AIProvider } from "./types";
 
-export type GenerateTextInput = {
-  messages: AiProviderMessage[];
-  temperature?: number;
-  topP?: number;
-  maxTokens?: number;
-};
+export type {
+  AIProvider,
+  AIProviderInput,
+  AIProviderOutput,
+  AiProvider,
+  AiProviderMessage,
+  GenerateStructuredInput,
+  GenerateTextInput,
+} from "./types";
 
-export type GenerateStructuredInput<T> = GenerateTextInput & {
-  fallback: T;
-  validate?: (value: unknown) => T | null;
-};
+export { createOllamaProvider } from "./providers/ollama";
 
-export interface AiProvider {
-  name: string;
-  generateText(input: GenerateTextInput): Promise<string>;
-  generateStructured<T>(input: GenerateStructuredInput<T>): Promise<T>;
-}
+export function createAiProvider(): AIProvider {
+  const provider = (process.env.AI_PROVIDER ?? "ollama").toLowerCase();
 
-function extractJsonObject(text: string) {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  return trimmed.slice(start, end + 1);
-}
-
-function parseStructured<T>(text: string, fallback: T, validate?: (value: unknown) => T | null) {
-  const jsonText = extractJsonObject(text);
-  if (!jsonText) return fallback;
-
-  try {
-    const parsed = JSON.parse(jsonText) as unknown;
-    return validate?.(parsed) ?? (parsed as T);
-  } catch {
-    return fallback;
+  if (provider === "ollama") {
+    return createOllamaProvider();
   }
-}
 
-export function createOllamaProvider(): AiProvider {
-  const ollamaUrl = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
-  const model = process.env.OLLAMA_MODEL ?? "llama3.2:3b";
+  if (provider === "openai") {
+    throw new Error("OpenAI provider not implemented yet. Architecture ready.");
+  }
 
-  return {
-    name: "ollama",
-    async generateText(input) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45_000);
-
-      try {
-        const response = await fetch(`${ollamaUrl.replace(/\/$/, "")}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model,
-            stream: false,
-            messages: input.messages,
-            options: {
-              temperature: input.temperature ?? 0.35,
-              top_p: input.topP ?? 0.9,
-              num_predict: input.maxTokens ?? 420,
-            },
-          }),
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(`Ollama error ${response.status}: ${text}`);
-        }
-
-        const json = (await response.json()) as { message?: { content?: string } };
-        const answer = json.message?.content?.trim();
-        if (!answer) throw new Error("Ollama nu a întors conținut.");
-        return answer;
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-    async generateStructured(input) {
-      const text = await this.generateText(input);
-      return parseStructured(text, input.fallback, input.validate);
-    },
-  };
-}
-
-export function createAiProvider(): AiProvider {
-  return createOllamaProvider();
+  throw new Error(`Provider AI necunoscut: ${provider}`);
 }

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Boxes, BookOpen, Brain, Activity, Layers } from "lucide-react";
+import { Boxes, BookOpen, Brain } from "lucide-react";
+import { AiHistorySidebarBlock } from "@/components/layout/AiHistorySidebarBlock";
 
 const nav = [
   { to: "/explorator", label: "Explorator Schelet", icon: Boxes },
@@ -26,7 +27,10 @@ export function Sidebar() {
       </Link>
 
       {/* Nav */}
-      <nav className="glass rounded-3xl p-3 fade-up flex flex-col gap-1" style={{ animationDelay: "60ms" }}>
+      <nav
+        className="glass rounded-3xl p-3 fade-up flex flex-col gap-1"
+        style={{ animationDelay: "60ms" }}
+      >
         {nav.map(({ to, label, icon: Icon }) => {
           const active = location.pathname === to;
           return (
@@ -41,41 +45,15 @@ export function Sidebar() {
             >
               <Icon className={`size-[18px] ${active ? "text-primary" : ""}`} strokeWidth={2} />
               <span className="tracking-tight">{label}</span>
-              {active && <span className="ml-auto size-1.5 rounded-full bg-primary shadow-[0_0_10px_var(--bone-glow)]" />}
+              {active && (
+                <span className="ml-auto size-1.5 rounded-full bg-primary shadow-[0_0_10px_var(--bone-glow)]" />
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Stats */}
-      <div className="mt-auto glass rounded-3xl p-5 fade-up" style={{ animationDelay: "120ms" }}>
-        <div className="flex items-center gap-2 mb-4">
-          <Activity className="size-4 text-medical" />
-          <span className="text-[11px] tracking-[0.2em] uppercase text-muted-foreground font-semibold">Statistici corp</span>
-        </div>
-        <div className="space-y-3">
-          <Stat value="206" label="Oase" accent="primary" />
-          <Stat value="360" label="Articulații" accent="medical" />
-          <Stat value="640" label="Mușchi" accent="accent" />
-        </div>
-      </div>
+      <AiHistorySidebarBlock />
     </aside>
-  );
-}
-
-function Stat({ value, label, accent }: { value: string; label: string; accent: "primary" | "medical" | "accent" }) {
-  const accentMap = {
-    primary: "text-primary",
-    medical: "text-medical",
-    accent: "text-accent",
-  };
-  return (
-    <div className="flex items-baseline justify-between rounded-2xl bg-primary/[0.04] border border-primary/10 px-4 py-3 spring-hover">
-      <div className="flex items-center gap-2">
-        <Layers className={`size-3.5 ${accentMap[accent]}`} />
-        <span className="text-xs text-muted-foreground tracking-wide">{label}</span>
-      </div>
-      <span className={`text-2xl font-bold tracking-tight ${accentMap[accent]}`}>{value}</span>
-    </div>
   );
 }

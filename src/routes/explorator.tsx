@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SkeletonScene,
   type AnatomyModelMode,
@@ -10,6 +10,11 @@ import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle
 import { bones } from "@/data/bones";
 import { MousePointerClick } from "lucide-react";
 import type { AiContextSwitchAction } from "@/lib/ai-chat.functions";
+import {
+  AI_CONVERSATION_OPEN_EVENT,
+  getConversationStructureLabel,
+  type OpenAiConversationDetail,
+} from "@/lib/aiHistory";
 
 export const Route = createFileRoute("/explorator")({
   head: () => ({
@@ -36,29 +41,64 @@ function ExploratorPage() {
   const [modelMode, setModelMode] = useState<AnatomyModelMode>("simple");
   const [contextSwitchCount, setContextSwitchCount] = useState(0);
   const [preserveAiStateOnSelectionChange, setPreserveAiStateOnSelectionChange] = useState(false);
+  const [openConversationId, setOpenConversationId] = useState<string | null>(null);
 
   const selectedBone = useMemo(
-    () => (selection ? bones.find((b) => b.id === selection.id) ?? null : null),
+    () => (selection ? (bones.find((b) => b.id === selection.id) ?? null) : null),
     [selection],
   );
 
   const handleSelectionChange = (nextSelection: BoneSelection | null) => {
     setContextSwitchCount(0);
+    setOpenConversationId(null);
     setSelection(nextSelection);
   };
 
-  const handleAiContextSwitch = (action: AiContextSwitchAction) => {
-    if (!action.should_switch_context || contextSwitchCount > 0 || !action.target_structure_slug) return;
+  useEffect(() => {
+    const handleOpenConversation = (event: Event) => {
+      const conversation = (event as CustomEvent<OpenAiConversationDetail>).detail;
+      if (!conversation?.id) return;
 
-    const nextLayer: LayerMode =
-      action.target_layer === "muscular"
-        ? "muscles"
-        : "skeleton";
+      const tissue: BoneSelection["tissue"] = conversation.tissue ?? "os";
+      const structureId =
+        conversation.model_selection_id ?? conversation.structure_slug ?? conversation.id;
+      const targetBone =
+        tissue === "os"
+          ? bones.find((item) => item.id === structureId || item.id === conversation.structure_slug)
+          : null;
+      const label = targetBone?.name ?? getConversationStructureLabel(conversation);
+
+      setPreserveAiStateOnSelectionChange(true);
+      setContextSwitchCount(0);
+      setModelMode("complex");
+      setLayerMode(tissue === "muschi" ? "muscles" : "skeleton");
+      setOpenConversationId(conversation.id);
+      setSelection({
+        id: targetBone?.id ?? structureId,
+        side: "male",
+        tissue,
+        regionId: tissue === "muschi" ? structureId : undefined,
+        regionLabel: tissue === "muschi" ? label : undefined,
+        label,
+      });
+      window.setTimeout(() => setPreserveAiStateOnSelectionChange(false), 0);
+    };
+
+    window.addEventListener(AI_CONVERSATION_OPEN_EVENT, handleOpenConversation);
+    return () => window.removeEventListener(AI_CONVERSATION_OPEN_EVENT, handleOpenConversation);
+  }, []);
+
+  const handleAiContextSwitch = (action: AiContextSwitchAction) => {
+    if (!action.should_switch_context || contextSwitchCount > 0 || !action.target_structure_slug)
+      return;
+
+    const nextLayer: LayerMode = action.target_layer === "muscular" ? "muscles" : "skeleton";
     const nextTissue: BoneSelection["tissue"] =
       action.target_structure_type === "muscle" || action.target_structure_type === "muscle_group"
         ? "muschi"
         : "os";
-    const targetBone = nextTissue === "os" ? bones.find((item) => item.id === action.target_structure_slug) : null;
+    const targetBone =
+      nextTissue === "os" ? bones.find((item) => item.id === action.target_structure_slug) : null;
     const muscleLabels: Record<string, string> = {
       "muschi:muschii-bratului": "Mușchii brațului",
       "muschi:muschii-antebratului": "Mușchii antebrațului",
@@ -82,8 +122,15 @@ function ExploratorPage() {
       side: "male",
       tissue: nextTissue,
       regionId: nextTissue === "muschi" ? action.target_structure_slug : undefined,
-      regionLabel: nextTissue === "muschi" ? muscleLabels[action.target_structure_slug] : action.target_body_region ?? undefined,
-      label: targetBone?.name ?? muscleLabels[action.target_structure_slug] ?? action.target_body_region ?? action.target_structure_slug,
+      regionLabel:
+        nextTissue === "muschi"
+          ? muscleLabels[action.target_structure_slug]
+          : (action.target_body_region ?? undefined),
+      label:
+        targetBone?.name ??
+        muscleLabels[action.target_structure_slug] ??
+        action.target_body_region ??
+        action.target_structure_slug,
     });
     window.setTimeout(() => setPreserveAiStateOnSelectionChange(false), 0);
   };
@@ -111,7 +158,7 @@ function ExploratorPage() {
           <button
             key={mode}
             type="button"
-          onClick={() => {
+            onClick={() => {
               handleSelectionChange(null);
               setModelMode(mode);
             }}
@@ -144,6 +191,7 @@ function ExploratorPage() {
         onContextSwitch={handleAiContextSwitch}
         preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
         visualLayer={layerMode}
+        openConversationId={openConversationId}
       />
     </div>
   );
