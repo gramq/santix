@@ -305,7 +305,23 @@ function inferIntuitiveRegion(input: {
   if (hasTerm(name, ["sartorius", "rectus femoris", "vastus", "adductor", "gracilis", "biceps femoris", "semitendinosus", "semimembranosus", "tensor fasciae latae", "pectineus", "compartment of thigh"])) {
     return makeRegion(`${prefix}:muschii-coapsei`, "Mușchii coapsei");
   }
-  if (hasTerm(name, ["forearm", "flexor carpi", "extensor carpi", "flexor digitorum superficialis", "flexor digitorum profundus", "extensor digitorum", "extensor indicis", "extensor digiti minimi", "pronator", "supinator", "brachioradialis", "palmaris"])) {
+  if (
+    hasTerm(name, [
+      "forearm",
+      "flexor carpi",
+      "extensor carpi",
+      "flexor digitorum superficialis",
+      "flexor digitorum profundus",
+      "extensor digitorum communis",
+      "extensor digitorum muscle",
+      "extensor indicis",
+      "extensor digiti minimi of hand",
+      "pronator",
+      "supinator",
+      "brachioradialis",
+      "palmaris",
+    ])
+  ) {
     return makeRegion(`${prefix}:muschii-antebratului`, "Mușchii antebrațului");
   }
   if (hasTerm(name, ["compartment of arm", "biceps brachii", "brachialis", "coracobrachialis", "triceps brachii", "anconeus"])) {
@@ -519,11 +535,6 @@ function ResolvedSimpleSkeletonModel({
       onClick={handleClick}
     >
       <primitive object={cloned} position={offset} />
-      <Html position={[0, -3.2 / scale, 0]} center distanceFactor={10} zIndexRange={[10, 0]}>
-        <div className="px-3 py-1 rounded-full bg-black/55 border border-primary/20 backdrop-blur-md text-[10px] tracking-[0.22em] uppercase font-bold text-primary shadow-[0_0_18px_rgba(0,242,254,0.16)]">
-          {label}
-        </div>
-      </Html>
     </group>
   );
 }
@@ -778,11 +789,6 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       onClick={handleClick}
     >
       <primitive object={cloned} position={offset} />
-      <Html position={[0, -3.35 / scale, 0]} center distanceFactor={8} zIndexRange={[10, 0]}>
-        <div className="px-3 py-1 rounded-full bg-black/55 border border-primary/20 backdrop-blur-md text-[10px] tracking-[0.22em] uppercase font-bold text-primary shadow-[0_0_18px_rgba(0,242,254,0.16)]">
-          Model principal
-        </div>
-      </Html>
     </group>
   );
 }

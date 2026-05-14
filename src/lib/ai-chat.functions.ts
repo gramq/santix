@@ -2173,7 +2173,9 @@ async function getFallbackAnatomyContext(
 ): Promise<KnowledgeEntry[]> {
   let query = supabase
     .from("anatomy_structures")
-    .select("id, slug, name_ro, description_ro, function_ro")
+    .select(
+      "id, slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, description_ro, function_ro",
+    )
     .eq("tissue", input.tissue)
     .limit(1);
 
@@ -2198,7 +2200,7 @@ async function getFallbackAnatomyContext(
       model_selection_id: scope.modelSelectionId,
       body_region: scope.bodyRegion,
       category: "anatomie",
-      title_ro: `Context anatomic: ${data.name_ro}`,
+      title_ro: `Context anatomic: ${displayNameFromRow(data, data.name_ro)}`,
       content_ro: [
         data.description_ro,
         data.function_ro ? `Funcție principală: ${data.function_ro}` : "",
@@ -2208,6 +2210,209 @@ async function getFallbackAnatomyContext(
       priority: 5,
     },
   ];
+}
+
+function displayNameFromRow(row: Record<string, unknown> | null | undefined, fallback: string) {
+  const displayName = textFromRow(row, "display_name_ro");
+  if (displayName) return displayName;
+
+  const commonName = textFromRow(row, "common_name_ro");
+  const scientificName = textFromRow(row, "scientific_name_ro");
+  if (commonName && scientificName) return commonName;
+  if (commonName) return commonName;
+
+  return textFromRow(row, "name_ro") ?? fallback;
+}
+
+function subtitleFromRow(row: Record<string, unknown> | null | undefined) {
+  return (
+    textFromRow(row, "subtitle_name") ??
+    textFromRow(row, "scientific_name_ro") ??
+    textFromRow(row, "latin_name") ??
+    textFromRow(row, "name_latin") ??
+    textFromRow(row, "english_name")
+  );
+}
+
+function textFromRow(row: Record<string, unknown> | null | undefined, key: string) {
+  const value = row?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isMissingStructuredStateColumn(error: unknown) {
+  const message =
+    typeof error === "object" && error && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : error instanceof Error
+        ? error.message
+        : String(error ?? "");
+
+  return (
+    message.includes("structured_state") &&
+    (message.includes("does not exist") || message.includes("schema cache"))
+  );
+}
+
+async function createAiConversation({
+  supabase,
+  userId,
+  structureSlug,
+  scope,
+  aiInput,
+  route,
+}: {
+  supabase: ReturnType<typeof createUserSupabaseClient>;
+  userId: string;
+  structureSlug: string | null;
+  scope: SelectionScope;
+  aiInput: z.infer<typeof InputSchema>;
+  route: AiRoute;
+}) {
+  const insertPayload = {
+    user_id: userId,
+    structure_slug: structureSlug,
+    model_selection_id: scope.modelSelectionId,
+    tissue: aiInput.tissue,
+    title: buildConversationTitle(aiInput, route),
+  };
+
+  const { data: conversation, error } = await supabase
+    .from("ai_conversations")
+    .insert(insertPayload)
+    .select("id, structured_state")
+    .single();
+
+  if (!error && conversation) {
+    return {
+      id: conversation.id as string,
+      structuredState: (conversation as { structured_state?: unknown }).structured_state ?? {},
+      structuredStateAvailable: true,
+    };
+  }
+
+  if (!isMissingStructuredStateColumn(error)) {
+    throw new Error(error?.message ?? "Nu am putut crea conversația AI.");
+  }
+
+  console.warn("ai_conversations.structured_state is missing; continuing with empty AI state.");
+  const fallback = await supabase
+    .from("ai_conversations")
+    .insert(insertPayload)
+    .select("id")
+    .single();
+
+  if (fallback.error || !fallback.data) {
+    throw new Error(fallback.error?.message ?? "Nu am putut crea conversația AI.");
+  }
+
+  return {
+    id: fallback.data.id as string,
+    structuredState: {},
+    structuredStateAvailable: false,
+  };
+}
+
+async function loadAiConversationState(
+  supabase: ReturnType<typeof createUserSupabaseClient>,
+  conversationId: string,
+) {
+  const { data: conversation, error } = await supabase
+    .from("ai_conversations")
+    .select("id, structured_state")
+    .eq("id", conversationId)
+    .single();
+
+  if (!error && conversation) {
+    return {
+      structuredState: (conversation as { structured_state?: unknown }).structured_state ?? {},
+      structuredStateAvailable: true,
+    };
+  }
+
+  if (!isMissingStructuredStateColumn(error)) {
+    throw new Error(error?.message ?? "Nu am putut încărca conversația AI.");
+  }
+
+  console.warn("ai_conversations.structured_state is missing; loading conversation without persisted AI state.");
+  const fallback = await supabase.from("ai_conversations").select("id").eq("id", conversationId).single();
+  if (fallback.error || !fallback.data) {
+    throw new Error(fallback.error?.message ?? "Nu am putut încărca conversația AI.");
+  }
+
+  return { structuredState: {}, structuredStateAvailable: false };
+}
+
+async function updateAiConversationState({
+  supabase,
+  conversationId,
+  symptomState,
+  structuredStateAvailable,
+}: {
+  supabase: ReturnType<typeof createUserSupabaseClient>;
+  conversationId: string;
+  symptomState: SymptomState;
+  structuredStateAvailable: boolean;
+}) {
+  const payload = structuredStateAvailable
+    ? {
+        updated_at: new Date().toISOString(),
+        structured_state: toPersistableState(symptomState as unknown as Record<string, unknown>),
+      }
+    : {
+        updated_at: new Date().toISOString(),
+      };
+
+  const { error } = await supabase.from("ai_conversations").update(payload).eq("id", conversationId);
+  if (error && isMissingStructuredStateColumn(error)) {
+    console.warn("ai_conversations.structured_state is missing; saved conversation timestamp only.");
+    await supabase
+      .from("ai_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+    return;
+  }
+
+  if (error) throw new Error(error.message);
+}
+
+async function resolveStructureDisplayNameForAi(
+  supabase: ReturnType<typeof createUserSupabaseClient>,
+  input: z.infer<typeof InputSchema>,
+  scope: SelectionScope,
+  structureSlug: string | null,
+) {
+  const candidates = [structureSlug, scope.modelSelectionId, scope.structureSlug].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  for (const candidate of candidates) {
+    const { data, error } = await supabase
+      .from("anatomy_structures")
+      .select(
+        "slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, english_name, latin_name, name_latin",
+      )
+      .or(`slug.eq.${candidate},model_selection_id.eq.${candidate}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) return displayNameFromRow(data, input.structureName);
+  }
+
+  const normalizedInputName = input.structureName.trim();
+  if (normalizedInputName) {
+    const { data, error } = await supabase
+      .from("anatomy_structures")
+      .select(
+        "slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, english_name, latin_name, name_latin",
+      )
+      .ilike("english_name", `%${normalizedInputName}%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) return displayNameFromRow(data, input.structureName);
+  }
+
+  return input.structureName;
 }
 
 async function getSelectionContext(
@@ -3147,7 +3352,7 @@ async function askOllama(
 export const askSelectionAi = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }): Promise<SelectionAiResponse> => {
-    const aiInput = normalizeInputForAi(data);
+    const rawAiInput = normalizeInputForAi(data);
     const supabase = createUserSupabaseClient(data.accessToken);
 
     const {
@@ -3160,42 +3365,37 @@ export const askSelectionAi = createServerFn({ method: "POST" })
     }
 
     let conversationId = data.conversationId;
-    let persistedStructuredState: unknown = null;
+    let persistedStructuredState: unknown = {};
+    let structuredStateAvailable = true;
+    const rawScope = inferSelectionScope(rawAiInput);
+    const structureSlug = await resolveExistingStructureSlug(supabase, rawScope);
+    const displayStructureName = await resolveStructureDisplayNameForAi(
+      supabase,
+      rawAiInput,
+      rawScope,
+      structureSlug,
+    );
+    const aiInput = { ...rawAiInput, structureName: displayStructureName };
     const route = classifyQuestion(aiInput);
     const scope = inferSelectionScope(aiInput);
-    const structureSlug = await resolveExistingStructureSlug(supabase, scope);
 
     if (!conversationId) {
-      const { data: conversation, error: conversationError } = await supabase
-        .from("ai_conversations")
-        .insert({
-          user_id: user.id,
-          structure_slug: structureSlug,
-          model_selection_id: scope.modelSelectionId,
-          tissue: aiInput.tissue,
-          title: buildConversationTitle(aiInput, route),
-        })
-        .select("id, structured_state")
-        .single();
-
-      if (conversationError || !conversation) {
-        throw new Error(conversationError?.message ?? "Nu am putut crea conversația AI.");
-      }
+      const conversation = await createAiConversation({
+        supabase,
+        userId: user.id,
+        structureSlug,
+        scope,
+        aiInput,
+        route,
+      });
 
       conversationId = conversation.id;
-      persistedStructuredState = (conversation as { structured_state?: unknown }).structured_state ?? null;
+      persistedStructuredState = conversation.structuredState;
+      structuredStateAvailable = conversation.structuredStateAvailable;
     } else {
-      const { data: conversation, error: conversationError } = await supabase
-        .from("ai_conversations")
-        .select("id, structured_state")
-        .eq("id", conversationId)
-        .single();
-
-      if (conversationError || !conversation) {
-        throw new Error(conversationError?.message ?? "Nu am putut încărca conversația AI.");
-      }
-
-      persistedStructuredState = (conversation as { structured_state?: unknown }).structured_state ?? null;
+      const conversationState = await loadAiConversationState(supabase, conversationId);
+      persistedStructuredState = conversationState.structuredState;
+      structuredStateAvailable = conversationState.structuredStateAvailable;
     }
 
     let selectionContext: KnowledgeEntry[] = [];
@@ -3319,13 +3519,12 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       throw new Error("Conversația AI nu a fost inițializată corect.");
     }
 
-    await supabase
-      .from("ai_conversations")
-      .update({
-        updated_at: new Date().toISOString(),
-        structured_state: toPersistableState(symptomState as unknown as Record<string, unknown>),
-      })
-      .eq("id", activeConversationId);
+    await updateAiConversationState({
+      supabase,
+      conversationId: activeConversationId,
+      symptomState,
+      structuredStateAvailable,
+    });
 
     return {
       conversationId: activeConversationId,

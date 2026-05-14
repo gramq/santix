@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_conversations: {
+        Row: {
+          id: string
+          user_id: string
+          structure_slug: string | null
+          model_selection_id: string | null
+          tissue: "os" | "muschi" | "tendon" | "nerv" | "organ" | "articulatie" | null
+          title: string
+          structured_state: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          structure_slug?: string | null
+          model_selection_id?: string | null
+          tissue?: "os" | "muschi" | "tendon" | "nerv" | "organ" | "articulatie" | null
+          title?: string
+          structured_state?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          structure_slug?: string | null
+          model_selection_id?: string | null
+          tissue?: "os" | "muschi" | "tendon" | "nerv" | "organ" | "articulatie" | null
+          title?: string
+          structured_state?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +58,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      tissue_type: "os" | "muschi" | "tendon" | "nerv" | "organ" | "articulatie"
     }
     CompositeTypes: {
       [_ in never]: never

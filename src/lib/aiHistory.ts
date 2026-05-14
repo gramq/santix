@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { TissueType } from "@/components/skeleton/SkeletonScene";
+import { getAnatomyDisplayName, type AnatomyNameRecord } from "@/data/anatomyDisplayNames";
+import { fetchAnatomyStructureName } from "@/lib/anatomyStructures";
 
 export const AI_HISTORY_REFRESH_EVENT = "santix-ai-history-refresh";
 export const AI_CONVERSATION_OPEN_EVENT = "santix-open-ai-conversation";
@@ -15,6 +17,8 @@ export interface AiConversationSummary {
   updated_at: string;
   last_message_preview?: string;
   message_count?: number;
+  structure_display_name?: string;
+  structure_subtitle?: string;
 }
 
 export interface AiConversationMessage {
@@ -72,8 +76,11 @@ export async function fetchAiConversationSummaries(
       ]);
 
       const latestMessage = (latestMessages?.[0] as AiMessageRow | undefined)?.content_ro;
+      const display = await fetchConversationDisplayName(conversation);
       return {
         ...conversation,
+        structure_display_name: display?.title,
+        structure_subtitle: display?.subtitle,
         message_count: count ?? 0,
         last_message_preview: latestMessage ? truncatePreview(latestMessage) : undefined,
       };
@@ -145,13 +152,39 @@ export function formatConversationRelativeTime(value: string) {
 }
 
 export function getConversationStructureLabel(
-  conversation: Pick<AiConversationSummary, "model_selection_id" | "structure_slug" | "tissue">,
+  conversation: Pick<
+    AiConversationSummary,
+    "model_selection_id" | "structure_slug" | "tissue" | "structure_display_name"
+  >,
 ) {
+  if (conversation.structure_display_name) return conversation.structure_display_name;
   if (conversation.model_selection_id) return humanizeStructureId(conversation.model_selection_id);
   if (conversation.structure_slug) return humanizeStructureId(conversation.structure_slug);
   if (conversation.tissue === "muschi") return "Mușchi";
   if (conversation.tissue === "os") return "Os";
   return "Structură";
+}
+
+async function fetchConversationDisplayName(
+  conversation: Pick<AiConversationSummary, "model_selection_id" | "structure_slug" | "tissue">,
+) {
+  const structure = await fetchAnatomyStructureName({
+    id: conversation.model_selection_id ?? conversation.structure_slug,
+    regionId: conversation.structure_slug,
+    tissue: conversation.tissue,
+  });
+
+  if (!structure) return null;
+  return getAnatomyDisplayName({
+    dbStructure: structure as AnatomyNameRecord,
+    selection: {
+      id: conversation.model_selection_id ?? conversation.structure_slug ?? "structura",
+      side: "male",
+      tissue: conversation.tissue ?? "os",
+      label: structure.name_ro ?? undefined,
+      labelEn: structure.english_name ?? undefined,
+    },
+  });
 }
 
 export function formatConversationTitle(title: string) {

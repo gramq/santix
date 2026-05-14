@@ -316,7 +316,11 @@ function ConversationRow({
   onDelete: () => void;
 }) {
   const Icon = conversation.tissue === "muschi" ? Dumbbell : Bone;
-  const title = formatConversationTitle(conversation.title);
+  const formattedTitle = formatConversationTitle(conversation.title);
+  const title =
+    conversation.structure_display_name && formattedTitle.includes("—")
+      ? `${formattedTitle.split("—")[0].trim()} — ${conversation.structure_display_name}`
+      : formattedTitle;
   const structureLabel = getConversationStructureLabel(conversation);
   const timeLabel = formatConversationRelativeTime(conversation.updated_at);
 

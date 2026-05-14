@@ -25,6 +25,10 @@ import {
 import { classifyAnatomyStructure } from "@/data/anatomyCurriculum";
 import { getAnatomyDisplayName } from "@/data/anatomyDisplayNames";
 import {
+  fetchAnatomyStructureName,
+  type AnatomyStructureNameRow,
+} from "@/lib/anatomyStructures";
+import {
   AI_CONVERSATION_DELETED_EVENT,
   dispatchAiHistoryRefresh,
   fetchAiConversationMessages,
@@ -107,7 +111,9 @@ export function BoneInfoPanel({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [contextSuggestion, setContextSuggestion] = useState<ContextSwitchSuggestion | null>(null);
+  const [dbStructureName, setDbStructureName] = useState<AnatomyStructureNameRow | null>(null);
   const previousSelectionKeyRef = useRef<string | null>(null);
+  const missingNameLogKeyRef = useRef<string | null>(null);
   const shownSuggestionKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -127,6 +133,28 @@ export function BoneInfoPanel({
     setAiError(null);
     setContextSuggestion(null);
   }, [preserveAiStateOnSelectionChange, selection]);
+
+  useEffect(() => {
+    if (!selection) {
+      setDbStructureName(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchAnatomyStructureName({
+      id: bone?.id ?? selection.id,
+      label: selection.label,
+      labelEn: selection.labelEn,
+      regionId: selection.regionId,
+      tissue: selection.tissue,
+    }).then((structure) => {
+      if (!cancelled) setDbStructureName(structure);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bone?.id, selection]);
 
   useEffect(() => {
     if (!openConversationId) return;
@@ -177,6 +205,21 @@ export function BoneInfoPanel({
       window.removeEventListener(AI_CONVERSATION_DELETED_EVENT, handleDeletedConversation);
   }, [aiConversationId]);
 
+  useEffect(() => {
+    if (!import.meta.env.DEV || !selection) return;
+    const display = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName });
+    if (!display.missing_ro_display_name) return;
+    const key = `${selection.tissue}:${selection.id}:${selection.labelEn ?? selection.label ?? ""}`;
+    if (missingNameLogKeyRef.current === key) return;
+    missingNameLogKeyRef.current = key;
+    console.warn("[Santix anatomy names] Missing Romanian display name", {
+      id: selection.id,
+      label: selection.label,
+      labelEn: selection.labelEn,
+      source: display.source,
+    });
+  }, [bone, dbStructureName, selection]);
+
   if (!selection) return null;
 
   const tissue = selection.tissue;
@@ -200,11 +243,11 @@ export function BoneInfoPanel({
     id: selection.id,
   });
 
-  const displayInfo = getAnatomyDisplayName({ bone, selection });
+  const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName });
   const displayName = displayInfo.display_name;
   const displayTitle = displayInfo.title;
   const displaySubtitle = displayInfo.subtitle;
-  const aiStructureName = displayInfo.original_name;
+  const aiStructureName = displayTitle;
   const displayLatin = displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
   const categoryText = bone ? categoryLabels[bone.category] : curriculum.group;
   const description =
@@ -324,9 +367,12 @@ export function BoneInfoPanel({
         {
           role: "assistant",
           content:
-            "Nu am putut citi baza Santix pentru această selecție. Verifică dacă ești logat și dacă migration-urile au fost aplicate.",
+            "Nu am putut porni conversația momentan. Reîncearcă în câteva secunde.",
         },
       ]);
+      if (import.meta.env.DEV) {
+        console.error("Santix AI conversation error", err);
+      }
     } finally {
       setAiLoading(false);
     }
@@ -560,7 +606,7 @@ export function BoneInfoPanel({
               <div>
                 <h3 className="text-sm font-bold tracking-tight">Triaj rapid local</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Întrebări generale · {displayName.toLowerCase()}
+                  Întrebări generale · {displayTitle.toLowerCase()}
                 </p>
               </div>
             </div>
@@ -646,7 +692,7 @@ export function BoneInfoPanel({
                   <h4 className="text-[10px] tracking-[0.22em] uppercase font-semibold mb-1">
                     Nivel durere
                   </h4>
-                  <p className="text-sm font-bold">{painLevels[result.nivel].label}</p>
+                  <p className="text-sm font-bold">{result.title ?? painLevels[result.nivel].label}</p>
                   <p className="mt-1 text-xs leading-snug opacity-85">{result.explicatieNivel}</p>
                 </div>
                 <div>

@@ -2,6 +2,7 @@ export type PainLevel = "usor" | "mediu" | "consultare_doctor";
 
 export interface SymptomAnalysis {
   nivel: PainLevel;
+  title?: string;
   cauze: string[];
   recomandare: string;
   explicatieNivel: string;
@@ -347,6 +348,18 @@ export function analyzePainLocally({
   const debut = answers.debut;
   const duration = answers.durata;
   const functionLevel = answers.functie;
+  const structureRisk = getStructureRiskCategory({ selectedName, segment, group, tissueType });
+  const isSmallDistalStructure = structureRisk === "small_bone";
+  const hasSeverePain = intensity === 2;
+  const hasTrauma = debut === 2;
+  const hasMajorRedFlag = signs === 2 || functionLevel === 2;
+  const hasPersistenceOrWorsening = duration === 1 || duration === 2;
+  const hasFunctionalLimitation = functionLevel === 1 || functionLevel === 2;
+
+  if (isSmallDistalStructure && hasSeverePain) {
+    scores.consultare_doctor -= 3;
+    scores.mediu += 3;
+  }
 
   if (zoneRisk.level === "high" && intensity === 1) {
     scores.consultare_doctor += 4;
@@ -366,6 +379,21 @@ export function analyzePainLocally({
     scores.consultare_doctor += 2;
   }
 
+  const smallStructureResult = isSmallDistalStructure
+    ? buildSmallStructureAnalysis({
+        tissueType,
+        scores,
+        findings,
+        hasSeverePain,
+        hasTrauma,
+        hasMajorRedFlag,
+        hasPersistenceOrWorsening,
+        hasFunctionalLimitation,
+      })
+    : null;
+
+  if (smallStructureResult) return smallStructureResult;
+
   const level = pickLevel(scores);
   const knowledge = getKnowledgeFor(tissueType);
   const details = painLevels[level];
@@ -379,6 +407,112 @@ export function analyzePainLocally({
       ["traumă", "pocnet", "alarmă", "imposibilitate", "pierdere", "severă"].some((word) => finding.includes(word)),
     ),
   };
+}
+
+function buildSmallStructureAnalysis({
+  tissueType,
+  scores,
+  findings,
+  hasSeverePain,
+  hasTrauma,
+  hasMajorRedFlag,
+  hasPersistenceOrWorsening,
+  hasFunctionalLimitation,
+}: {
+  tissueType: "os" | "muschi" | "tendon";
+  scores: Record<PainLevel, number>;
+  findings: string[];
+  hasSeverePain: boolean;
+  hasTrauma: boolean;
+  hasMajorRedFlag: boolean;
+  hasPersistenceOrWorsening: boolean;
+  hasFunctionalLimitation: boolean;
+}): SymptomAnalysis | null {
+  if (hasMajorRedFlag) {
+    return {
+      nivel: "consultare_doctor",
+      title: "Consult rapid",
+      cauze: [
+        "leziune importantă a degetului sau a unei structuri mici",
+        "posibilă fractură, luxație sau afectare de tendon/ligament dacă există deformare sau imposibilitate de mișcare",
+        "afectare neurovasculară posibilă dacă există amorțeală, pierdere de sensibilitate sau culoare anormală",
+      ],
+      recomandare:
+        "Aceste semne pot indica o leziune importantă. Este recomandat consult medical rapid, mai ales dacă degetul este deformat, nu îl poți îndoi/întinde normal, apare amorțeală, umflare mare sau culoare anormală.",
+      explicatieNivel: `Consult rapid: verdictul este determinat de semne de alarmă reale, nu doar de intensitatea durerii. Indicatori: ${findings.join(", ")}.`,
+      redFlags: findings.filter((finding) =>
+        ["alarmă", "imposibilitate", "deformare", "amorțeală", "slăbiciune"].some((word) =>
+          finding.includes(word),
+        ),
+      ),
+    };
+  }
+
+  if (hasSeverePain && hasTrauma) {
+    return {
+      nivel: "consultare_doctor",
+      title: "Consult medical recomandat",
+      cauze: [
+        "contuzie locală după lovitură",
+        "entorsă sau iritație a articulației degetului",
+        "fisură sau fractură posibilă dacă durerea rămâne intensă ori apar semne noi",
+      ],
+      recomandare:
+        "Durerea severă la deget după o lovitură poate indica o contuzie, entorsă sau posibilă fisură/fractură. Dacă există deformare, umflare mare, amorțeală sau nu poți mișca degetul, cere consult rapid.",
+      explicatieNivel: `Consult medical recomandat: durerea severă este asociată cu traumă/lovitură. Indicatori: ${findings.join(", ")}.`,
+      redFlags: findings.filter((finding) => ["traumă", "pocnet"].some((word) => finding.includes(word))),
+    };
+  }
+
+  if (hasSeverePain) {
+    return {
+      nivel: "mediu",
+      title: hasPersistenceOrWorsening ? "Consult dacă persistă" : "Monitorizare atentă",
+      cauze: [
+        "iritație locală sau suprasolicitare a degetului",
+        "inflamație locală fără semne majore de alarmă",
+        "leziune posibilă dacă durerea persistă, se agravează sau apare limitare funcțională",
+      ],
+      recomandare:
+        "Durerea intensă la un deget poate apărea după iritație locală, suprasolicitare sau o lovitură minoră. Dacă durerea persistă, se agravează, apare umflare mare, deformare, amorțeală sau nu poți mișca degetul normal, este recomandat consult medical.",
+      explicatieNivel: `Monitorizare atentă: durerea este intensă, dar nu ai introdus deformare, imposibilitate de mișcare, amorțeală sau traumă clară. Indicatori: ${findings.join(", ")}.`,
+      redFlags: [],
+    };
+  }
+
+  if (hasPersistenceOrWorsening || hasFunctionalLimitation || scores.mediu >= 4) {
+    return {
+      nivel: "mediu",
+      title: "Monitorizare atentă",
+      cauze: [
+        "suprasolicitare sau iritație locală",
+        "inflamație ușoară a articulației degetului",
+        "contuzie minoră dacă zona a fost lovită ușor",
+      ],
+      recomandare:
+        "Monitorizează evoluția, redu solicitarea degetului și evită mișcările care cresc durerea. Cere consult dacă durerea persistă câteva zile, se agravează sau apar umflare mare, deformare, amorțeală ori limitare clară.",
+      explicatieNivel: `Monitorizare atentă: nu apar semne majore de alarmă, dar simptomele merită urmărite. Indicatori: ${findings.join(", ")}.`,
+      redFlags: [],
+    };
+  }
+
+  if (tissueType === "os" && scores.usor >= scores.mediu) {
+    return {
+      nivel: "usor",
+      title: "Recomandări generale",
+      cauze: [
+        "disconfort local minor",
+        "presiune sau suprasolicitare ușoară",
+        "iritare locală trecătoare",
+      ],
+      recomandare:
+        "Poți monitoriza zona, reduce solicitarea și urmări dacă apar semne noi. Cere sfat medical dacă durerea crește, persistă sau apare umflare mare, deformare, amorțeală ori dificultate de mișcare.",
+      explicatieNivel: `Ușor: simptomele descrise nu indică semne de alarmă. Indicatori: ${findings.join(", ")}.`,
+      redFlags: [],
+    };
+  }
+
+  return null;
 }
 
 function getZoneRisk({
@@ -425,6 +559,66 @@ function getZoneRisk({
   }
 
   return { level: "low", mediumBoost: 0, doctorBoost: 0 };
+}
+
+type RiskCategory = "small_bone" | "large_bone" | "joint" | "muscle" | "spine" | "chest" | "unknown";
+
+function getStructureRiskCategory({
+  selectedName,
+  segment,
+  group,
+  tissueType,
+}: {
+  selectedName: string;
+  segment?: string;
+  group?: string;
+  tissueType: "os" | "muschi" | "tendon";
+}): RiskCategory {
+  if (tissueType === "muschi") return "muscle";
+
+  const text = [selectedName, segment, group]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (["coloana", "vertebr", "cervical", "toracic", "lombar"].some((term) => text.includes(term))) {
+    return "spine";
+  }
+
+  if (["coaste", "stern", "torace", "piept"].some((term) => text.includes(term))) {
+    return "chest";
+  }
+
+  if (
+    [
+      "falanga",
+      "phalange",
+      "deget",
+      "police",
+      "inelar",
+      "carp",
+      "metacarp",
+      "tars",
+      "metatars",
+      "mana",
+      "picior",
+      "laba piciorului",
+    ].some((term) => text.includes(term))
+  ) {
+    return "small_bone";
+  }
+
+  if (["femur", "tibia", "humerus", "radius", "ulna", "fibula", "coxal"].some((term) => text.includes(term))) {
+    return "large_bone";
+  }
+
+  if (["genunchi", "umar", "sold", "glezna", "cot"].some((term) => text.includes(term))) {
+    return "joint";
+  }
+
+  return "unknown";
 }
 
 export function validateAnswerConsistency(answers: Record<string, number>): SymptomValidation {

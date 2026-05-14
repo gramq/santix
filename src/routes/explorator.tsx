@@ -1,10 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  SkeletonScene,
-  type AnatomyModelMode,
-  type BoneSelection,
-} from "@/components/skeleton/SkeletonScene";
+import { SkeletonScene, type BoneSelection } from "@/components/skeleton/SkeletonScene";
 import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
 import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
 import { bones } from "@/data/bones";
@@ -38,7 +34,6 @@ export const Route = createFileRoute("/explorator")({
 function ExploratorPage() {
   const [selection, setSelection] = useState<BoneSelection | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>("complete");
-  const [modelMode, setModelMode] = useState<AnatomyModelMode>("simple");
   const [contextSwitchCount, setContextSwitchCount] = useState(0);
   const [preserveAiStateOnSelectionChange, setPreserveAiStateOnSelectionChange] = useState(false);
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
@@ -66,11 +61,10 @@ function ExploratorPage() {
         tissue === "os"
           ? bones.find((item) => item.id === structureId || item.id === conversation.structure_slug)
           : null;
-      const label = targetBone?.name ?? getConversationStructureLabel(conversation);
+      const label = getConversationStructureLabel(conversation) ?? targetBone?.name;
 
       setPreserveAiStateOnSelectionChange(true);
       setContextSwitchCount(0);
-      setModelMode("complex");
       setLayerMode(tissue === "muschi" ? "muscles" : "skeleton");
       setOpenConversationId(conversation.id);
       setSelection({
@@ -115,7 +109,6 @@ function ExploratorPage() {
 
     setPreserveAiStateOnSelectionChange(true);
     setContextSwitchCount((count) => count + 1);
-    setModelMode("complex");
     setLayerMode(nextLayer);
     setSelection({
       id: action.target_structure_slug,
@@ -141,7 +134,7 @@ function ExploratorPage() {
         selection={selection}
         onSelect={handleSelectionChange}
         layerMode={layerMode}
-        mode={modelMode}
+        mode="complex"
       />
 
       {!selection && (
@@ -153,36 +146,13 @@ function ExploratorPage() {
         </div>
       )}
 
-      <div className="absolute right-6 top-6 flex items-center gap-1 rounded-2xl p-1.5 glass fade-up">
-        {(["simple", "complex"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => {
-              handleSelectionChange(null);
-              setModelMode(mode);
-            }}
-            className={[
-              "rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all",
-              modelMode === mode
-                ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-12px_oklch(0.62_0.20_255_/_0.7)]"
-                : "text-muted-foreground hover:bg-muted/70",
-            ].join(" ")}
-          >
-            {mode === "simple" ? "Rapid" : "Complex"}
-          </button>
-        ))}
-      </div>
-
-      {modelMode === "complex" && (
-        <LayersToggle
-          mode={layerMode}
-          onChange={(nextMode) => {
-            handleSelectionChange(null);
-            setLayerMode(nextMode);
-          }}
-        />
-      )}
+      <LayersToggle
+        mode={layerMode}
+        onChange={(nextMode) => {
+          handleSelectionChange(null);
+          setLayerMode(nextMode);
+        }}
+      />
 
       <BoneInfoPanel
         bone={selectedBone}
