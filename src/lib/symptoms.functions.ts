@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { classifyPainLocally, getKnowledgeFor, painLevels, type PainLevel } from "@/data/painKnowledge";
+import { validateAiUserText } from "@/lib/security/inputSafety";
 
 const InputSchema = z.object({
   structureName: z.string().min(1).max(120),
@@ -28,104 +29,13 @@ const TISSUE_LABEL: Record<"os" | "muschi" | "tendon", string> = {
 export const analyzeSymptoms = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }): Promise<SymptomAnalysis> => {
-    const localLevel = classifyPainLocally(data.symptoms);
-    const localKnowledge = getKnowledgeFor(data.tissueType);
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-
-    if (!openaiApiKey) {
-      return buildLocalAnalysis(data.tissueType, localLevel);
+    const safeSymptoms = validateAiUserText(data.symptoms, 800);
+    if (safeSymptoms.rejectedReason) {
+      throw new Error(safeSymptoms.rejectedReason);
     }
 
-    const tissueLabel = TISSUE_LABEL[data.tissueType];
-
-    const systemPrompt = `Ești un asistent medical educațional care clasifică simptome legate de o structură anatomică specifică. Răspunzi DOAR în limba română, cu diacritice. Nu pui diagnostic medical real. Clasifici severitatea exclusiv într-unul dintre cele 3 niveluri: usor, mediu, consultare_doctor. Pentru semne severe precum traumă, deformare, amorțeală, slăbiciune, durere insuportabilă, febră sau imposibilitate de folosire, alegi consultare_doctor.`;
-
-    const userPrompt = `Structură selectată: ${data.structureName}${data.structureLatin ? ` (${data.structureLatin})` : ""}
-Tip țesut: ${tissueLabel}
-Context anatomic: ${data.structureDescription || "n/a"}
-Clasificare locală inițială: ${localLevel}
-Bază locală pentru acest țesut:
-- Ușor: ${localKnowledge.usor.join("; ")}
-- Mediu: ${localKnowledge.mediu.join("; ")}
-- Consultare doctor: ${localKnowledge.consultare_doctor.join("; ")}
-
-Simptome descrise de utilizator: "${data.symptoms}"
-
-Returnează strict JSON valid cu:
-- nivel: "usor" | "mediu" | "consultare_doctor"
-- cauze: 2-3 cauze posibile, specifice pentru ${tissueLabel}
-- recomandare: recomandare practică, inclusiv când trebuie medic
-- explicatieNivel: de ce ai ales nivelul`;
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-5.5",
-        instructions: systemPrompt,
-        input: userPrompt,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "analiza_simptome",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                nivel: { type: "string", enum: ["usor", "mediu", "consultare_doctor"] },
-                cauze: {
-                  type: "array",
-                  minItems: 2,
-                  maxItems: 3,
-                  items: { type: "string" },
-                },
-                recomandare: { type: "string" },
-                explicatieNivel: { type: "string" },
-              },
-              required: ["nivel", "cauze", "recomandare", "explicatieNivel"],
-            },
-          },
-        },
-      }),
-    });
-
-    if (response.status === 429) {
-      throw new Error("Prea multe cereri. Te rugăm să încerci din nou în câteva momente.");
-    }
-    if (response.status === 402) {
-      throw new Error("Creditele OpenAI sunt epuizate sau cheia nu are billing activ.");
-    }
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("OpenAI API error:", response.status, text);
-      throw new Error("Asistentul AI este temporar indisponibil.");
-    }
-
-    const json = (await response.json()) as {
-      output_text?: string;
-      output?: Array<{
-        content?: Array<{ type?: string; text?: string }>;
-      }>;
-    };
-
-    const outputText =
-      json.output_text ??
-      json.output
-        ?.flatMap((item) => item.content ?? [])
-        .filter((content) => content.type === "output_text")
-        .map((content) => content.text)
-        .join("");
-
-    if (!outputText) {
-      throw new Error("Răspuns invalid de la asistentul AI.");
-    }
-
-    const parsed = ResponseSchema.parse(JSON.parse(outputText));
-    return parsed;
+    const localLevel = classifyPainLocally(safeSymptoms.text);
+    return buildLocalAnalysis(data.tissueType, localLevel);
   });
 
 function buildLocalAnalysis(tissueType: "os" | "muschi" | "tendon", level: PainLevel): SymptomAnalysis {

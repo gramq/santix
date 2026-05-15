@@ -14,15 +14,10 @@ export function Sidebar() {
     <aside className="hidden lg:flex w-72 shrink-0 flex-col p-4 gap-4">
       {/* Brand */}
       <Link to="/" aria-label="Santix" className="glass rounded-3xl p-5 fade-up">
-        <div className="group flex items-center gap-3 rounded-2xl border border-primary/10 bg-white/[0.035] p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
-          <div className="relative flex size-12 shrink-0 items-center justify-center rounded-2xl border border-primary/45 bg-primary/10 transition-all duration-300 group-hover:border-primary/75 group-hover:bg-primary/15">
-            <span className="size-4 rounded-md bg-primary transition-all duration-300 group-hover:scale-110" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-black leading-none tracking-[0.14em] text-foreground transition-colors group-hover:text-primary">
-              San<span className="text-primary">tix</span>
-            </h1>
-          </div>
+        <div className="group flex items-center justify-center rounded-2xl border border-primary/10 bg-white/[0.035] px-5 py-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
+          <h1 className="text-2xl font-black leading-none tracking-[0.18em] text-foreground transition-colors group-hover:text-primary">
+            San<span className="text-primary">tix</span>
+          </h1>
         </div>
       </Link>
 

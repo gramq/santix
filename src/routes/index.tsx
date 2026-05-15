@@ -38,16 +38,16 @@ function SantixLanding() {
       <div className="pointer-events-none absolute left-0 right-0 top-0 h-px santix-scan" />
 
       <header className="relative z-10 flex items-center gap-4 px-6 py-5 md:px-10">
-        <Link to="/" aria-label="Santix" className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-xl border border-cyan-300/45 bg-cyan-300/5 transition-colors hover:border-cyan-300/75">
-            <span className="size-3 rounded bg-cyan-300" />
-          </span>
+        <Link to="/" aria-label="Santix" className="flex items-center">
           <span className="text-xl font-black tracking-[0.08em]">
             San<span className="text-cyan-300">tix</span>
           </span>
         </Link>
 
         <nav className="ml-auto hidden items-center gap-8 text-sm text-slate-400 md:flex">
+          <Link to="/glosar" className="transition hover:text-white">
+            Ghid Santix
+          </Link>
           <Link to="/quiz" className="transition hover:text-white">
             Quiz
           </Link>
@@ -57,7 +57,7 @@ function SantixLanding() {
           to="/explorator"
           className="ml-auto inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_30px_rgba(0,242,254,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_0_44px_rgba(0,242,254,0.42)] md:ml-0"
         >
-          Deschide explorerul
+          Începe acum
           <ArrowRight className="size-4" />
         </Link>
         <ThemeToggle />
@@ -72,14 +72,13 @@ function SantixLanding() {
             </div>
 
             <h1 className="max-w-4xl text-5xl font-black leading-[0.96] tracking-tight text-white md:text-7xl lg:text-8xl">
-              Înțelege-ți
-              <span className="block santix-title-gradient">corpul tău.</span>
+              San<span className="santix-title-gradient">tix</span>
             </h1>
 
             <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">
-              Santix te poartă din introducere direct în explorerul anatomic pe
-              care l-ai construit: schelet, mușchi, tendoane, simptome și
-              explicații clare într-o interfață 3D.
+              Creează-ți cont pentru a folosi Santix complet: explorezi corpul
+              în 3D, păstrezi conversațiile recente și poți întreba asistentul AI
+              despre zona selectată, într-un mod educațional.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-3">
@@ -87,7 +86,7 @@ function SantixLanding() {
                 to="/explorator"
                 className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] transition hover:-translate-y-1 hover:shadow-[0_0_54px_rgba(0,242,254,0.45)]"
               >
-                Explorează anatomia
+                Începe acum
                 <MousePointerClick className="size-4" />
               </Link>
               <a
@@ -100,9 +99,9 @@ function SantixLanding() {
             </div>
 
             <div className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
-              <IntroStat value="206" label="Oase" />
-              <IntroStat value="640" label="Mușchi" />
-              <IntroStat value="3D" label="Model interactiv" />
+              <IntroStat value="3" label="Straturi anatomice" />
+              <IntroStat value="AI" label="Întrebări ghidate" />
+              <IntroStat value="Istoric" label="Conversații salvate" />
             </div>
           </div>
 
@@ -112,21 +111,30 @@ function SantixLanding() {
         </section>
 
         <section id="anatomie" className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
+          <div className="mx-auto mb-10 max-w-7xl">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+              Ce poți face
+            </p>
+            <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
+              Explorezi corpul, alegi zona care te interesează și înveți pas cu pas.
+            </h2>
+          </div>
+
           <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
             <Feature
               icon={Layers}
-              title="Model în straturi"
-              text="Comută între explorare rapidă și complexă pentru schelet, mușchi și tendoane."
+              title="Corp 3D pe straturi"
+              text="Comuți între schelet, mușchi și anatomie completă pentru a vedea zona mai clar."
             />
             <Feature
               icon={Brain}
-              title="Asistent de simptome"
-              text="Selectezi zona dureroasă și primești cauze posibile într-un format educațional."
+              title="Întrebări despre zona aleasă"
+              text="Poți întreba despre durere, mișcare sau rolul unei structuri, într-un limbaj simplu."
             />
             <Feature
               icon={ShieldCheck}
-              title="Învățare clinică ghidată"
-              text="Bibliotecă, quiz și explicații anatomice structurate pentru înțelegere rapidă și verificabilă."
+              title="Istoric personal"
+              text="Dacă ești autentificat, poți reveni la conversațiile tale recente cu asistentul."
             />
           </div>
         </section>
@@ -136,10 +144,10 @@ function SantixLanding() {
             <div className="mb-10 flex items-end justify-between gap-6">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-                  Flux simplu
+                  Cum funcționează
                 </p>
                 <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
-                  Din intro intri direct în explorer.
+                  De la o zonă aleasă la o explicație mai clară.
                 </h2>
               </div>
               <Link
@@ -152,9 +160,9 @@ function SantixLanding() {
             </div>
 
             <div className="grid gap-5 md:grid-cols-3">
-              <Step number="01" title="Identifici zona" text="Pornești de la corpul uman și alegi regiunea care te interesează: os, mușchi sau articulație." />
-              <Step number="02" title="Explorezi anatomia" text="Modelul 3D îți arată structurile relevante și păstrează contextul vizual al selecției." />
-              <Step number="03" title="Consolidezi informația" text="Continui cu explicații, bibliotecă și quiz pentru a transforma explorarea în învățare." />
+              <Step number="01" title="Alegi zona" text="Pornești de la modelul 3D și apeși pe osul sau mușchiul care te interesează." />
+              <Step number="02" title="Citești explicația" text="Panoul de detalii îți arată numele pe înțelesul tău și informațiile importante." />
+              <Step number="03" title="Întrebi mai departe" text="Asistentul te poate ghida cu întrebări despre durere, mișcare sau situația descrisă." />
             </div>
           </div>
         </section>

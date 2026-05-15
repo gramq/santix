@@ -6,6 +6,8 @@ import { createAiProvider } from "./ai/provider";
 import { hybridSearchKnowledge, type KnowledgeEntry, type RetrievalFilters } from "./ai/retrieval";
 import { mergePersistedStateIntoLegacy, toPersistableState } from "./ai/state";
 import { buildStructuredAiOutput, type SantixStructuredAiOutput } from "./ai/structured-output";
+import { validateAiUserText, sanitizeTextForStorage } from "./security/inputSafety";
+import { assertRateLimitAllowed, enforceAiRateLimit } from "./security/rateLimit";
 
 const TissueSchema = z.enum(["os", "muschi", "tendon"]);
 
@@ -3352,7 +3354,12 @@ async function askOllama(
 export const askSelectionAi = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }): Promise<SelectionAiResponse> => {
-    const rawAiInput = normalizeInputForAi(data);
+    const safeQuestion = validateAiUserText(data.question, 900);
+    if (safeQuestion.rejectedReason) {
+      throw new Error(safeQuestion.rejectedReason);
+    }
+
+    const rawAiInput = normalizeInputForAi({ ...data, question: safeQuestion.text });
     const supabase = createUserSupabaseClient(data.accessToken);
 
     const {
@@ -3363,6 +3370,23 @@ export const askSelectionAi = createServerFn({ method: "POST" })
     if (userError || !user) {
       throw new Error("Trebuie să fii logat pentru a folosi asistentul AI.");
     }
+
+    assertRateLimitAllowed(
+      await enforceAiRateLimit(supabase, {
+        userId: user.id,
+        action: "selection_ai_per_minute",
+        limit: 12,
+        windowSeconds: 60,
+      }),
+    );
+    assertRateLimitAllowed(
+      await enforceAiRateLimit(supabase, {
+        userId: user.id,
+        action: "selection_ai_per_day",
+        limit: 150,
+        windowSeconds: 86_400,
+      }),
+    );
 
     let conversationId = data.conversationId;
     let persistedStructuredState: unknown = {};
@@ -3471,13 +3495,14 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       console.warn("Ollama unavailable, using deterministic Santix answer:", error);
     }
 
-    const structured = buildStructuredResponse(answer, route, symptomState, contextSwitch, context);
+    const safeAnswer = sanitizeTextForStorage(answer, 2_400);
+    const structured = buildStructuredResponse(safeAnswer, route, symptomState, contextSwitch, context);
 
     const { error: messageError } = await supabase.from("ai_messages").insert([
       {
         conversation_id: conversationId,
         role: "user",
-        content_ro: data.question,
+        content_ro: safeQuestion.text,
         retrieved_context: [
           {
             route: route.category,
@@ -3492,7 +3517,7 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       {
         conversation_id: conversationId,
         role: "assistant",
-        content_ro: answer,
+        content_ro: safeAnswer,
         retrieved_context: {
           route: route.category,
           mode: route.mode,
@@ -3528,7 +3553,7 @@ export const askSelectionAi = createServerFn({ method: "POST" })
 
     return {
       conversationId: activeConversationId,
-      answer,
+      answer: safeAnswer,
       contextCount: context.length,
       structured,
       route: {

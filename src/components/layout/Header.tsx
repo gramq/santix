@@ -14,7 +14,14 @@ const links = [
 
 export function Header() {
   const location = useLocation();
-  const { user, loading } = useAuth();
+  const {
+    user,
+    loading,
+    authNotice,
+    clearAuthNotice,
+    passwordRecovery,
+    clearPasswordRecovery,
+  } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -25,10 +32,7 @@ export function Header() {
     <>
       <header className="glass rounded-3xl mx-4 mt-4 px-5 py-3 flex items-center gap-4 fade-up">
         <Link to="/" aria-label="Santix" className="shrink-0">
-          <span className="group flex items-center gap-2.5 rounded-2xl border border-primary/10 bg-white/[0.035] px-3 py-2 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
-            <span className="relative flex size-7 items-center justify-center rounded-xl border border-primary/45 bg-primary/10 transition-all duration-300 group-hover:border-primary/75 group-hover:bg-primary/15">
-              <span className="size-2.5 rounded-[4px] bg-primary transition-all duration-300 group-hover:scale-110" />
-            </span>
+          <span className="group flex items-center rounded-2xl border border-primary/10 bg-white/[0.035] px-4 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
             <span className="text-sm font-black tracking-[0.12em] text-foreground transition-colors group-hover:text-primary">
               San<span className="text-primary">tix</span>
             </span>
@@ -83,7 +87,14 @@ export function Header() {
           )}
         </div>
       </header>
-      <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthDialog
+        open={authOpen || Boolean(authNotice) || passwordRecovery}
+        onClose={() => setAuthOpen(false)}
+        authNotice={authNotice}
+        onClearAuthNotice={clearAuthNotice}
+        passwordRecovery={passwordRecovery}
+        onClearPasswordRecovery={clearPasswordRecovery}
+      />
     </>
   );
 }

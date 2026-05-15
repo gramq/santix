@@ -1,41 +1,142 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LogIn, Mail, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import type { AuthNotice } from "@/components/auth/AuthProvider";
 
 interface AuthDialogProps {
   open: boolean;
   onClose: () => void;
+  authNotice?: AuthNotice;
+  onClearAuthNotice?: () => void;
+  passwordRecovery?: boolean;
+  onClearPasswordRecovery?: () => void;
 }
 
-type AuthMode = "login" | "register";
+type AuthMode = "login" | "register" | "reset" | "updatePassword";
 
-export function AuthDialog({ open, onClose }: AuthDialogProps) {
+export function AuthDialog({
+  open,
+  onClose,
+  authNotice,
+  onClearAuthNotice,
+  passwordRecovery,
+  onClearPasswordRecovery,
+}: AuthDialogProps) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!open || !authNotice) return;
+    if (authNotice.type === "error") {
+      setError(authNotice.message);
+      setMessage(null);
+    } else {
+      setMessage(authNotice.message);
+      setError(null);
+    }
+    onClearAuthNotice?.();
+  }, [authNotice, onClearAuthNotice, open]);
+
+  useEffect(() => {
+    if (open && passwordRecovery) {
+      setMode("updatePassword");
+      setError(null);
+      setMessage(null);
+      setPassword("");
+      setConfirmPassword("");
+    }
+  }, [open, passwordRecovery]);
+
   if (!open) return null;
 
-  const title = mode === "login" ? "Intră în cont" : "Creează cont";
-  const submitLabel = mode === "login" ? "Logare cu email" : "Creează cont";
+  const title =
+    mode === "login"
+      ? "Intră în cont"
+      : mode === "register"
+        ? "Creează cont"
+        : mode === "reset"
+          ? "Resetează parola"
+          : "Alege o parolă nouă";
+  const submitLabel =
+    mode === "login"
+      ? "Logare cu email"
+      : mode === "register"
+        ? "Creează cont"
+        : mode === "reset"
+          ? "Trimite link de resetare"
+          : "Salvează parola nouă";
+  const helperText =
+    mode === "login"
+      ? "Intră cu datele contului tău Santix."
+      : mode === "register"
+        ? "Alege datele pentru noul tău cont Santix."
+        : mode === "reset"
+          ? "Primești pe email un link pentru schimbarea parolei."
+          : "Introdu noua parolă pentru contul tău Santix.";
+
+  const handleClose = () => {
+    onClearPasswordRecovery?.();
+    onClose();
+  };
+
+  const getCleanEmail = () => email.trim().toLowerCase();
+
+  const checkEmailExists = async (cleanEmail: string) => {
+    const { data, error: rpcError } = await supabase.rpc("auth_email_exists", {
+      p_email: cleanEmail,
+    });
+
+    if (rpcError) {
+      throw new Error("Nu am putut verifica emailul. Încearcă din nou.");
+    }
+
+    return data === true;
+  };
+
+  const validateEmailForMode = async (cleanEmail: string) => {
+    if (!cleanEmail) {
+      throw new Error("Introdu emailul înainte de a continua.");
+    }
+
+    const exists = await checkEmailExists(cleanEmail);
+
+    if (mode === "login" && !exists) {
+      throw new Error("Nu există un cont Santix pentru acest email. Creează un cont mai întâi.");
+    }
+
+    if (mode === "register" && exists) {
+      throw new Error("Există deja un cont Santix pentru acest email. Intră în cont.");
+    }
+  };
 
   const handleGoogle = async () => {
     setLoading(true);
     setError(null);
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: {
-          prompt: "select_account",
+
+    try {
+      window.localStorage.setItem("santix_oauth_intent", mode);
+
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: {
+            prompt: "select_account",
+          },
         },
-      },
-    });
-    if (googleError) {
-      setError(googleError.message);
+      });
+
+      if (googleError) {
+        setError(googleError.message);
+        setLoading(false);
+      }
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : "Nu am putut continua cu Google.");
       setLoading(false);
     }
   };
@@ -46,30 +147,87 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
     setError(null);
     setMessage(null);
 
-    const credentials = { email: email.trim(), password };
-    const response =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword(credentials)
-        : await supabase.auth.signUp({
-            ...credentials,
-            options: {
-              emailRedirectTo: window.location.origin,
-            },
-          });
+    try {
+      const cleanEmail = getCleanEmail();
 
-    setLoading(false);
+      if (mode === "updatePassword") {
+        if (password.length < 6) {
+          throw new Error("Parola trebuie să aibă cel puțin 6 caractere.");
+        }
+        if (password !== confirmPassword) {
+          throw new Error("Parolele nu coincid.");
+        }
 
-    if (response.error) {
-      setError(response.error.message);
-      return;
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        setLoading(false);
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
+
+        onClearPasswordRecovery?.();
+        setPassword("");
+        setConfirmPassword("");
+        onClose();
+        return;
+      }
+
+      if (mode === "reset") {
+        if (!cleanEmail) {
+          throw new Error("Introdu emailul contului Santix.");
+        }
+
+        const exists = await checkEmailExists(cleanEmail);
+        if (!exists) {
+          throw new Error("Nu există un cont Santix pentru acest email.");
+        }
+
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: `${window.location.origin}/explorator`,
+        });
+
+        setLoading(false);
+
+        if (resetError) {
+          setError(resetError.message);
+          return;
+        }
+
+        setMessage("Ți-am trimis linkul de resetare pe email.");
+        return;
+      }
+
+      await validateEmailForMode(cleanEmail);
+
+      const credentials = { email: cleanEmail, password };
+      const response =
+        mode === "login"
+          ? await supabase.auth.signInWithPassword(credentials)
+          : await supabase.auth.signUp({
+              ...credentials,
+              options: {
+                emailRedirectTo: window.location.origin,
+              },
+            });
+
+      setLoading(false);
+
+      if (response.error) {
+        setError(response.error.message);
+        return;
+      }
+
+      if (mode === "register" && !response.data.session) {
+        setMessage("Cont creat. Verifică emailul pentru confirmare, dacă Supabase o cere.");
+        return;
+      }
+
+      onClose();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : "Nu am putut procesa cererea.");
+      setLoading(false);
     }
-
-    if (mode === "register" && !response.data.session) {
-      setMessage("Cont creat. Verifică emailul pentru confirmare, dacă Supabase o cere.");
-      return;
-    }
-
-    onClose();
   };
 
   return (
@@ -79,12 +237,12 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-foreground">{title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Folosește contul pentru consultații AI și istoricul triajelor.
+              {helperText}
             </p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Închide"
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-muted text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-primary"
           >
@@ -92,47 +250,74 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={loading}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-background/35 text-sm font-semibold text-foreground transition-all hover:border-primary/45 hover:bg-primary/[0.08] hover:shadow-[0_0_28px_rgba(0,242,254,0.14)] disabled:opacity-60"
-        >
-          <LogIn className="size-4 text-primary" />
-          Continuă cu Google
-        </button>
-
-        <div className="my-4 flex items-center gap-3">
-          <span className="h-px flex-1 bg-primary/10" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">sau</span>
-          <span className="h-px flex-1 bg-primary/10" />
-        </div>
-
         <form onSubmit={handleEmail} className="space-y-3">
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              autoComplete="email"
-              className="h-11 w-full rounded-2xl border border-primary/25 bg-background/45 px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/20"
-            />
-          </label>
+          {mode !== "updatePassword" && (
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">Email</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                autoComplete="email"
+                className="h-11 w-full rounded-2xl border border-primary/25 bg-background/45 px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          )}
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">Parolă</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              minLength={6}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              className="h-11 w-full rounded-2xl border border-primary/25 bg-background/45 px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/20"
-            />
-          </label>
+          {(mode === "login" || mode === "register") && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={loading}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-background/35 text-sm font-semibold text-foreground transition-all hover:border-primary/45 hover:bg-primary/[0.08] hover:shadow-[0_0_28px_rgba(0,242,254,0.14)] disabled:opacity-60"
+              >
+                <LogIn className="size-4 text-primary" />
+                Continuă cu Google
+              </button>
+
+              <div className="flex items-center gap-3 py-1">
+                <span className="h-px flex-1 bg-primary/10" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">sau</span>
+                <span className="h-px flex-1 bg-primary/10" />
+              </div>
+            </>
+          )}
+
+          {mode !== "reset" && (
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                {mode === "updatePassword" ? "Parolă nouă" : "Parolă"}
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={6}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                className="h-11 w-full rounded-2xl border border-primary/25 bg-background/45 px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          )}
+
+          {mode === "updatePassword" && (
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Confirmă parola
+              </span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="h-11 w-full rounded-2xl border border-primary/25 bg-background/45 px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          )}
 
           {error && (
             <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
@@ -163,10 +348,28 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
             setError(null);
             setMessage(null);
           }}
-          className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
+          className={mode === "updatePassword" ? "hidden" : "mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"}
         >
-          {mode === "login" ? "Nu ai cont? Creează unul" : "Ai deja cont? Intră în cont"}
+          {mode === "login"
+            ? "Nu ai cont? Creează unul"
+            : mode === "register"
+              ? "Ai deja cont? Intră în cont"
+              : "Înapoi la logare"}
         </button>
+
+        {mode === "login" && (
+          <button
+            type="button"
+            onClick={() => {
+              setMode("reset");
+              setError(null);
+              setMessage(null);
+            }}
+            className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-primary hover:underline"
+          >
+            Ai uitat parola?
+          </button>
+        )}
       </div>
     </div>
   );
