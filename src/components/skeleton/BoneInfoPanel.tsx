@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { type Bone, categoryLabels } from "@/data/bones";
 import {
   X,
@@ -12,6 +13,7 @@ import {
   Compass,
   Send,
   UserRound,
+  HeartPulse,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { askSelectionAi, type AiContextSwitchAction } from "@/lib/ai-chat.functions";
@@ -35,6 +37,7 @@ import {
 } from "@/lib/aiHistory";
 import type { BoneSelection, TissueType } from "./SkeletonScene";
 import type { LayerMode } from "./LayersToggle";
+import { getInternalOrgan, type InternalOrgan } from "@/data/internalOrgans";
 
 interface Props {
   bone: Bone | null;
@@ -53,6 +56,13 @@ type ContextSwitchSuggestion = {
   key: string;
 };
 
+type TechnicalDetail = {
+  label: "Origine" | "Inserție" | "Inervație" | "Acțiune";
+  value: string;
+};
+
+type AnatomyDetailSource = Record<string, unknown>;
+
 function shouldShowContextSuggestion(action: AiContextSwitchAction | undefined) {
   return Boolean(
     action?.should_switch_context &&
@@ -64,6 +74,115 @@ function shouldShowContextSuggestion(action: AiContextSwitchAction | undefined) 
       action.selected_context_fit === "different_body_region_detected" ||
       action.selected_context_fit === "red_flag_priority"),
   );
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function getTechnicalDetails(input: {
+  bone: Bone | null;
+  selection: BoneSelection;
+  dbStructure: AnatomyStructureNameRow | null;
+  curriculum: ReturnType<typeof classifyAnatomyStructure>;
+  functionText: string;
+}): TechnicalDetail[] {
+  const selectionSource = input.selection as unknown as AnatomyDetailSource;
+  const boneSource = (input.bone ?? {}) as AnatomyDetailSource;
+  const dbSource = (input.dbStructure ?? {}) as AnatomyDetailSource;
+  const organ = getInternalOrgan(input.selection.id);
+  const region = input.selection.regionLabel ?? input.curriculum.subgroup ?? input.curriculum.group;
+  const segment = input.curriculum.segment.toLowerCase();
+  const group = input.curriculum.group.toLowerCase();
+  const aspect = input.curriculum.aspect?.toLowerCase();
+  const placementText = aspect
+    ? `${input.curriculum.group}, ${input.curriculum.segment}, ${aspect}`
+    : `${input.curriculum.group}, ${input.curriculum.segment}`;
+
+  const origin =
+    firstString(
+      selectionSource.origine,
+      selectionSource.origin,
+      selectionSource.origin_ro,
+      dbSource.origine,
+      dbSource.origin,
+      dbSource.origin_ro,
+      boneSource.origine,
+      boneSource.origin,
+      boneSource.origin_ro,
+      organ?.technical.origin,
+    ) ??
+    (input.selection.tissue === "os"
+      ? `Parte a ${input.curriculum.group.toLowerCase()}, în segmentul ${input.curriculum.segment.toLowerCase()}.`
+      : `Repere de pornire încadrate în ${placementText}.`);
+
+  const insertion =
+    firstString(
+      selectionSource.inserție,
+      selectionSource.insertie,
+      selectionSource.insertion,
+      selectionSource.insertion_ro,
+      dbSource.inserție,
+      dbSource.insertie,
+      dbSource.insertion,
+      dbSource.insertion_ro,
+      boneSource.inserție,
+      boneSource.insertie,
+      boneSource.insertion,
+      boneSource.insertion_ro,
+      organ?.technical.insertion,
+    ) ??
+    (input.selection.tissue === "tendon"
+      ? `Asociată cu zona ${region.toLowerCase()} și transmiterea forței către structurile vecine.`
+      : `Se continuă către structurile vecine din zona ${region.toLowerCase()}, contribuind la mișcarea segmentului ${segment}.`);
+
+  const innervation =
+    firstString(
+      selectionSource.inervație,
+      selectionSource.inervatie,
+      selectionSource.innervation,
+      selectionSource.innervation_ro,
+      dbSource.inervație,
+      dbSource.inervatie,
+      dbSource.innervation,
+      dbSource.innervation_ro,
+      boneSource.inervație,
+      boneSource.inervatie,
+      boneSource.innervation,
+      boneSource.innervation_ro,
+      organ?.technical.innervation,
+    ) ??
+    (input.selection.tissue === "os"
+      ? "Nu se aplică direct ca la mușchi; sensibilitatea este legată de periost și structurile vecine."
+      : `Controlată de nervii care deservesc grupa ${group}; detaliul exact poate varia în funcție de fasciculul selectat.`);
+
+  const action =
+    firstString(
+      selectionSource.acțiune,
+      selectionSource.actiune,
+      selectionSource.action,
+      selectionSource.action_ro,
+      dbSource.acțiune,
+      dbSource.actiune,
+      dbSource.action,
+      dbSource.action_ro,
+      boneSource.acțiune,
+      boneSource.actiune,
+      boneSource.action,
+      boneSource.action_ro,
+      boneSource.funcție,
+      organ?.technical.action,
+    ) ?? input.functionText;
+
+  return [
+    { label: "Origine", value: origin },
+    { label: "Inserție", value: insertion },
+    { label: "Inervație", value: innervation },
+    { label: "Acțiune", value: action },
+  ];
 }
 
 const TISSUE_META: Record<
@@ -87,6 +206,12 @@ const TISSUE_META: Record<
     Icon: Layers,
     tagBg: "bg-accent/15 border-accent/30",
     tagText: "text-accent-foreground",
+  },
+  organ: {
+    label: "Organ intern",
+    Icon: HeartPulse,
+    tagBg: "bg-primary/15 border-primary/30",
+    tagText: "text-primary",
   },
 };
 
@@ -223,8 +348,9 @@ export function BoneInfoPanel({
   if (!selection) return null;
 
   const tissue = selection.tissue;
+  const selectedOrgan = tissue === "organ" ? getInternalOrgan(selection.id) : undefined;
   const aiLayer = tissue === "muschi" ? "muscular" : "skeleton";
-  const aiLayerLabel = aiLayer === "muscular" ? "muscular" : "schelet";
+  const aiLayerLabel = tissue === "organ" ? "organe interne" : aiLayer === "muscular" ? "muscular" : "schelet";
   const serverVisualLayer = visualLayer === "muscles" ? "muscular" : visualLayer;
   const completeLayerNote =
     visualLayer === "complete"
@@ -244,27 +370,41 @@ export function BoneInfoPanel({
   });
 
   const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName });
-  const displayName = displayInfo.display_name;
-  const displayTitle = displayInfo.title;
-  const displaySubtitle = displayInfo.subtitle;
+  const displayName = selectedOrgan?.name ?? displayInfo.display_name;
+  const displayTitle = selectedOrgan?.name ?? displayInfo.title;
+  const displaySubtitle = selectedOrgan?.latinName ?? displayInfo.subtitle;
   const aiStructureName = displayTitle;
-  const displayLatin = displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
-  const categoryText = bone ? categoryLabels[bone.category] : curriculum.group;
+  const displayLatin = selectedOrgan?.latinName ?? displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
+  const categoryText = selectedOrgan?.category ?? (bone ? categoryLabels[bone.category] : curriculum.group);
   const description =
+    selectedOrgan?.description ??
     bone?.description ??
-    (tissue === "muschi"
+    (tissue === "organ"
+      ? "Organ intern inclus în vizualizarea completă Santix."
+      : tissue === "muschi"
       ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Mușchii produc mișcare prin contracție și se atașează de oase prin tendoane.`
       : tissue === "tendon"
         ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Țesut conjunctiv fibros care stabilizează sau transmite forța musculară.`
         : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Structură osoasă organizată după regiunile aparatului locomotor.`);
-  const funcText = bone?.funcție ?? curriculum.functionHint;
+  const funcText = selectedOrgan?.function ?? bone?.funcție ?? curriculum.functionHint;
+  const isCompleteAnatomyMode = visualLayer === "complete";
+  const isOrganSelection = tissue === "organ";
+  const hideAssistantInComplete = isCompleteAnatomyMode && !isOrganSelection;
+  const technicalDetails = getTechnicalDetails({
+    bone,
+    selection,
+    dbStructure: dbStructureName,
+    curriculum,
+    functionText: funcText,
+  });
 
-  const questions = getPainQuestions(tissue);
+  const questions = tissue === "organ" ? [] : getPainQuestions(tissue);
   const answeredCount = questions.filter((question) => answers[question.id] !== undefined).length;
   const canSubmit = answeredCount === questions.length;
 
   const handleAnalyze = () => {
     if (!canSubmit) return;
+    if (tissue === "organ") return;
     setError(null);
     setResult(null);
     const consistency = validateAnswerConsistency(answers);
@@ -463,6 +603,20 @@ export function BoneInfoPanel({
         <Section title="Descriere">
           <p className="text-sm leading-relaxed text-foreground/90">{description}</p>
         </Section>
+        <AnimatePresence mode="wait" initial={false}>
+          {isCompleteAnatomyMode && (
+            <motion.div
+              key="technical-details"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              <TechnicalDetails details={technicalDetails} />
+              {selectedOrgan && <OrganQuizSummary organ={selectedOrgan} />}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <Section title="Funcție">
           <p className="text-sm leading-relaxed text-foreground/90">{funcText}</p>
         </Section>
@@ -476,8 +630,16 @@ export function BoneInfoPanel({
           </div>
         </Section>
 
-        {user ? (
-          <div className="order-first pb-3 mb-1 border-b border-primary/10">
+        <AnimatePresence mode="wait" initial={false}>
+          {!hideAssistantInComplete ? (user ? (
+          <motion.div
+            key="ai-assistant"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="order-first pb-3 mb-1 border-b border-primary/10"
+          >
             <div className="flex items-center gap-2 mb-3">
               <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
                 <Bot className="size-4 text-primary-foreground" />
@@ -573,7 +735,9 @@ export function BoneInfoPanel({
                   onChange={(event) => setAiInput(event.target.value)}
                   disabled={aiLoading}
                   placeholder={
-                    tissue === "os"
+                    tissue === "organ"
+                      ? "Ex: Ce rol are acest organ?"
+                      : tissue === "os"
                       ? "Ex: Mă doare după o lovitură"
                       : "Ex: Mă doare când încordez zona"
                   }
@@ -590,15 +754,47 @@ export function BoneInfoPanel({
               </form>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
-              <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
-              <p className="text-[11.5px] leading-snug text-destructive font-semibold">
-                Asistentul va oferi informații educaționale, nu diagnostic medical.
-              </p>
+            {!isCompleteAnatomyMode && (
+              <div className="mt-3 rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
+                <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-[11.5px] leading-snug text-destructive font-semibold">
+                  Asistentul va oferi informații educaționale, nu diagnostic medical.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        ) : isOrganSelection ? (
+          <motion.div
+            key="organ-ai-locked"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="order-first pb-3 mb-1 border-b border-primary/10"
+          >
+            <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
+                  <Bot className="size-4 text-primary-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">AI pentru organe</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Intră în cont pentru întrebări despre organul selectat.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="order-first pb-3 mb-1 border-b border-primary/10">
+          <motion.div
+            key="local-triage"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="order-first pb-3 mb-1 border-b border-primary/10"
+          >
             <div className="flex items-center gap-2 mb-3">
               <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
                 <Stethoscope className="size-4 text-primary-foreground" />
@@ -744,8 +940,9 @@ export function BoneInfoPanel({
                 </div>
               </div>
             )}
-          </div>
-        )}
+          </motion.div>
+        )) : null}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -758,6 +955,60 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {title}
       </h3>
       {children}
+    </div>
+  );
+}
+
+function TechnicalDetails({ details }: { details: TechnicalDetail[] }) {
+  return (
+    <div className="rounded-2xl border border-primary/20 bg-white/[0.04] p-3 shadow-[0_0_30px_-24px_rgba(0,242,254,0.9)]">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex size-8 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+          <Layers className="size-4" />
+        </div>
+        <div>
+          <h3 className="text-sm font-bold tracking-tight text-foreground">Detalii anatomice</h3>
+          <p className="text-[11px] text-muted-foreground">
+            Repere tehnice pentru vizualizarea completă
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2">
+        {details.map((detail) => (
+          <div
+            key={detail.label}
+            className="rounded-2xl border border-primary/15 bg-background/40 px-3 py-2.5"
+          >
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+              {detail.label}
+            </p>
+            <p className="text-xs leading-relaxed text-foreground/90">{detail.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrganQuizSummary({ organ }: { organ: InternalOrgan }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-primary/20 bg-white/[0.04] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold tracking-tight text-foreground">Întrebări rapide</h3>
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+          {organ.difficulty === "incepator" ? "Începător" : "Mediu"}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {organ.quiz.slice(0, 2).map((item) => (
+          <div key={item.question} className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2">
+            <p className="text-xs font-semibold leading-snug text-foreground/90">{item.question}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              {item.explanation}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { Route as QuizRouteImport } from './routes/quiz'
 import { Route as GlosarRouteImport } from './routes/glosar'
 import { Route as ExploratorRouteImport } from './routes/explorator'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
 const QuizRoute = QuizRouteImport.update({
   id: '/quiz',
@@ -34,18 +35,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
   '/quiz': typeof QuizRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
   '/quiz': typeof QuizRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
   '/quiz': typeof QuizRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/explorator' | '/glosar' | '/quiz'
+  fullPaths: '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/explorator' | '/glosar' | '/quiz'
-  id: '__root__' | '/' | '/explorator' | '/glosar' | '/quiz'
+  to: '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
+  id: '__root__' | '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +76,7 @@ export interface RootRouteChildren {
   ExploratorRoute: typeof ExploratorRoute
   GlosarRoute: typeof GlosarRoute
   QuizRoute: typeof QuizRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExploratorRoute: ExploratorRoute,
   GlosarRoute: GlosarRoute,
   QuizRoute: QuizRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

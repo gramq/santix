@@ -38,6 +38,7 @@ export function anatomyLookupKeys(input: {
     normalizedLabel ? `os-${normalizedLabel}` : null,
     normalizedLabel ? `muschi-${normalizedLabel}` : null,
     normalizedLabel ? `tendon-${normalizedLabel}` : null,
+    normalizedLabel ? `organ-${normalizedLabel}` : null,
   ]);
 }
 

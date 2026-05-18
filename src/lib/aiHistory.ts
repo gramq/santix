@@ -162,6 +162,7 @@ export function getConversationStructureLabel(
   if (conversation.structure_slug) return humanizeStructureId(conversation.structure_slug);
   if (conversation.tissue === "muschi") return "Mușchi";
   if (conversation.tissue === "os") return "Os";
+  if (conversation.tissue === "organ") return "Organ";
   return "Structură";
 }
 
@@ -200,6 +201,7 @@ function humanizeStructureId(value: string) {
     .replace(/^muschi:/, "")
     .replace(/^os:/, "")
     .replace(/^tendon:/, "")
+    .replace(/^organ:/, "")
     .replace(/-/g, " ")
     .replace(/\s+/g, " ")
     .trim()

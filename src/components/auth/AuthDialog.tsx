@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { LogIn, Mail, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import type { AuthNotice } from "@/components/auth/AuthProvider";
 
 interface AuthDialogProps {
@@ -13,6 +14,28 @@ interface AuthDialogProps {
 }
 
 type AuthMode = "login" | "register" | "reset" | "updatePassword";
+
+function getFriendlyAuthError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("email rate limit")) {
+    return "Ai cerut prea multe emailuri într-un timp scurt. Așteaptă câteva minute și încearcă din nou.";
+  }
+
+  if (normalized.includes("invalid login credentials")) {
+    return "Emailul sau parola nu sunt corecte.";
+  }
+
+  if (normalized.includes("email not confirmed")) {
+    return "Confirmă emailul înainte de logare.";
+  }
+
+  if (normalized.includes("user already registered") || normalized.includes("already registered")) {
+    return "Există deja un cont Santix pentru acest email. Intră în cont.";
+  }
+
+  return message;
+}
 
 export function AuthDialog({
   open,
@@ -92,7 +115,8 @@ export function AuthDialog({
     });
 
     if (rpcError) {
-      throw new Error("Nu am putut verifica emailul. Încearcă din nou.");
+      console.warn("auth_email_exists nu este disponibil încă în Supabase:", rpcError.message);
+      return null;
     }
 
     return data === true;
@@ -104,6 +128,7 @@ export function AuthDialog({
     }
 
     const exists = await checkEmailExists(cleanEmail);
+    if (exists === null) return;
 
     if (mode === "login" && !exists) {
       throw new Error("Nu există un cont Santix pentru acest email. Creează un cont mai întâi.");
@@ -124,7 +149,7 @@ export function AuthDialog({
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: getAuthRedirectUrl(),
           queryParams: {
             prompt: "select_account",
           },
@@ -132,7 +157,7 @@ export function AuthDialog({
       });
 
       if (googleError) {
-        setError(googleError.message);
+        setError(getFriendlyAuthError(googleError.message));
         setLoading(false);
       }
     } catch (unknownError) {
@@ -162,7 +187,7 @@ export function AuthDialog({
         setLoading(false);
 
         if (updateError) {
-          setError(updateError.message);
+          setError(getFriendlyAuthError(updateError.message));
           return;
         }
 
@@ -179,18 +204,18 @@ export function AuthDialog({
         }
 
         const exists = await checkEmailExists(cleanEmail);
-        if (!exists) {
+        if (exists === false) {
           throw new Error("Nu există un cont Santix pentru acest email.");
         }
 
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: `${window.location.origin}/explorator`,
+          redirectTo: getAuthRedirectUrl(),
         });
 
         setLoading(false);
 
         if (resetError) {
-          setError(resetError.message);
+          setError(getFriendlyAuthError(resetError.message));
           return;
         }
 
@@ -207,14 +232,14 @@ export function AuthDialog({
           : await supabase.auth.signUp({
               ...credentials,
               options: {
-                emailRedirectTo: window.location.origin,
+                emailRedirectTo: getAuthRedirectUrl(),
               },
             });
 
       setLoading(false);
 
       if (response.error) {
-        setError(response.error.message);
+        setError(getFriendlyAuthError(response.error.message));
         return;
       }
 

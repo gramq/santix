@@ -18,6 +18,7 @@ export type KnowledgeEntry = {
 
 export type RetrievalFilters = {
   aiLayer?: "skeleton" | "muscular" | null;
+  tissue?: "os" | "muschi" | "tendon" | "organ" | "nerv" | "articulatie" | null;
   bodyRegion?: string | null;
   structureSlug?: string | null;
   categories?: string[] | null;
@@ -100,6 +101,7 @@ function scoreKeywordEntry(entry: KnowledgeEntry, query: string, filters: Retrie
   if (filters.bodyRegion && entry.body_region === filters.bodyRegion) score += 10;
   if (filters.categories?.includes(entry.category)) score += 4;
   if (filters.tags?.some((tag) => entry.tags?.includes(tag))) score += 5;
+  if (filters.tissue && entry.tissue === filters.tissue) score += 6;
   if (filters.aiLayer === "skeleton" && entry.tissue === "os") score += 3;
   if (filters.aiLayer === "muscular" && entry.tissue === "muschi") score += 3;
 
@@ -155,8 +157,12 @@ export async function keywordSearchKnowledge(
     .select("id, tissue, structure_slug, model_selection_id, body_region, category, title_ro, content_ro, priority, tags, metadata")
     .eq("active", true);
 
-  if (filters.aiLayer === "skeleton") builder = builder.eq("tissue", "os");
-  if (filters.aiLayer === "muscular") builder = builder.eq("tissue", "muschi");
+  if (filters.tissue) {
+    builder = builder.eq("tissue", filters.tissue);
+  } else {
+    if (filters.aiLayer === "skeleton") builder = builder.eq("tissue", "os");
+    if (filters.aiLayer === "muscular") builder = builder.eq("tissue", "muschi");
+  }
   if (filters.categories?.length) builder = builder.in("category", filters.categories);
 
   const rows = await safeRows<KnowledgeEntry>(

@@ -9,9 +9,6 @@ export interface AnatomyCurriculumInfo {
   functionHint: string;
 }
 
-const SOURCE_NOTE =
-  "Structurare adaptata dupa manualul de Biologie, clasa a XI-a, Corint: capitolul Miscarea - sistem osos, articulatii si sistem muscular.";
-
 function hasAny(value: string, terms: string[]) {
   return terms.some((term) => value.includes(term));
 }
@@ -386,7 +383,7 @@ function muscleInfo(name: string): AnatomyCurriculumInfo {
     system: "Sistem muscular",
     segment: "Corp",
     group: "Muschii scheletici",
-    subgroup: SOURCE_NOTE,
+    subgroup: "Incadrare generala",
     functionHint: "Muschii scheletici sunt componenta activa a miscarii.",
   };
 }
@@ -547,8 +544,68 @@ function boneInfo(name: string): AnatomyCurriculumInfo {
     system: "Sistem osos",
     segment: "Corp",
     group: "Schelet",
-    subgroup: SOURCE_NOTE,
+    subgroup: "Incadrare generala",
     functionHint: "Oasele formeaza componenta pasiva a aparatului locomotor.",
+  };
+}
+
+function organInfo(name: string): AnatomyCurriculumInfo {
+  if (hasAny(name, ["heart", "cor", "inima"])) {
+    return {
+      system: "Organe interne",
+      segment: "Torace",
+      group: "Aparat cardiovascular",
+      subgroup: "Inima",
+      functionHint: "Pompeaza sangele catre plamani si catre restul corpului.",
+    };
+  }
+
+  if (hasAny(name, ["lung", "pulmon", "plaman"])) {
+    return {
+      system: "Organe interne",
+      segment: "Torace",
+      group: "Aparat respirator",
+      subgroup: "Plamani",
+      functionHint: "Realizeaza schimbul de oxigen si dioxid de carbon.",
+    };
+  }
+
+  if (hasAny(name, ["liver", "hepar", "ficat", "stomach", "ventriculus", "stomac", "intestine", "pancreas", "esophagus", "oesophagus", "esofag"])) {
+    return {
+      system: "Organe interne",
+      segment: "Abdomen",
+      group: "Aparat digestiv",
+      subgroup: "Organe digestive",
+      functionHint: "Participa la digestie, absorbtie sau procesarea substantelor nutritive.",
+    };
+  }
+
+  if (hasAny(name, ["kidney", "renes", "rinichi", "bladder", "vesica", "vezica"])) {
+    return {
+      system: "Organe interne",
+      segment: "Abdomen si pelvis",
+      group: "Aparat urinar",
+      subgroup: "Organe urinare",
+      functionHint: "Participa la filtrarea, stocarea si eliminarea urinei.",
+    };
+  }
+
+  if (hasAny(name, ["trachea", "trahee"])) {
+    return {
+      system: "Organe interne",
+      segment: "Gat si torace",
+      group: "Aparat respirator",
+      subgroup: "Cai respiratorii",
+      functionHint: "Permite trecerea aerului catre plamani.",
+    };
+  }
+
+  return {
+    system: "Organe interne",
+    segment: "Corp",
+    group: "Organe interne",
+    subgroup: "Incadrare generala",
+    functionHint: "Organ intern implicat in functionarea organismului.",
   };
 }
 
@@ -561,6 +618,7 @@ export function classifyAnatomyStructure(input: {
   const name = normalize([input.labelEn, input.label, input.id].filter(Boolean).join(" "));
 
   if (input.tissue === "os") return withAspect(boneInfo(name), name);
+  if (input.tissue === "organ") return withAspect(organInfo(name), name);
 
   if (input.tissue === "tendon") {
     const muscle = muscleInfo(name);

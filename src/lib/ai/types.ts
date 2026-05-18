@@ -84,7 +84,7 @@ export type ConversationState = {
   user_id: string | null;
   selected_structure_slug: string | null;
   selected_structure_name: string | null;
-  selected_structure_type: "bone" | "muscle" | "body_region" | "unknown";
+  selected_structure_type: "bone" | "muscle" | "organ" | "body_region" | "unknown";
   visual_layer: VisualLayer;
   ai_layer: AiLayer;
   current_topic: ConversationTopic;

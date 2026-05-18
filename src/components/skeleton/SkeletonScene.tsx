@@ -4,6 +4,12 @@ import { OrbitControls, Environment, ContactShadows, Html, useGLTF, useProgress 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { LayerMode } from "./LayersToggle";
+import {
+  internalOrgans,
+  type InternalOrgan,
+  type OrganModelPart,
+  type OrganVisualPrimitive,
+} from "@/data/internalOrgans";
 
 // Map submesh node names → bone IDs from src/data/bones.ts (used by FEMALE simple model)
 const MESH_TO_BONE: Record<string, string> = {
@@ -30,12 +36,85 @@ const MESH_TO_BONE: Record<string, string> = {
 
 const MALE_COMPLEX_URL = "/anatomy/z-anatomy-musculoskeletal.glb?v=20260502-selection-2";
 const FALLBACK_URL = "/skeleton.glb";
+const BODY_REFERENCE = {
+  height: 5.8,
+  thoraxTop: 1.82,
+  thoraxBottom: 0.58,
+  diaphragm: 0.52,
+  abdomenBottom: -0.2,
+  pelvisCenter: -0.58,
+  centerZ: 0.04,
+  posteriorZ: -0.1,
+};
+
+const ANATOMICAL_ANCHORS: Record<OrganModelPart["anchor"], THREE.Vector3> = {
+  "thoracic-cavity": new THREE.Vector3(0, 1.22, -0.05),
+  "heart-mediastinum": new THREE.Vector3(0.05, 1.0, 0.08),
+  "right-upper-abdomen": new THREE.Vector3(-0.12, 0.52, 0),
+  "left-upper-abdomen": new THREE.Vector3(0.12, 0.48, 0.02),
+  "retroperitoneal-pair": new THREE.Vector3(0, 0.34, -0.14),
+  "retroperitoneal-left": new THREE.Vector3(0.17, 0.34, -0.14),
+  "retroperitoneal-right": new THREE.Vector3(-0.17, 0.34, -0.14),
+  "upper-abdomen-center": new THREE.Vector3(0, 0.42, -0.06),
+  "spine-reference": new THREE.Vector3(0, 0.1, -0.15),
+};
+
+function bodyHalfWidthAtY(y: number) {
+  if (y >= BODY_REFERENCE.thoraxBottom) return 0.46;
+  if (y >= 0.18) return 0.42;
+  if (y >= BODY_REFERENCE.abdomenBottom) return 0.38;
+  return 0.24;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function resolveAnatomicalPosition(model: OrganModelPart) {
+  const anchor = ANATOMICAL_ANCHORS[model.anchor].clone();
+  const offset = model.offset ? new THREE.Vector3(...model.offset) : new THREE.Vector3();
+  const position = anchor.add(offset);
+  const targetHalfWidth = Math.min(Math.max(model.targetSize[0], model.targetSize[1]) * 0.42, 0.26);
+  const bodyHalfWidth = bodyHalfWidthAtY(position.y);
+
+  position.x = clamp(position.x, -bodyHalfWidth + targetHalfWidth, bodyHalfWidth - targetHalfWidth);
+  position.z = clamp(position.z, -0.18, 0.18);
+
+  return position;
+}
+
+function resolveAnatomicalScale(model: OrganModelPart, rawSize: THREE.Vector3) {
+  const target = new THREE.Vector3(...model.targetSize);
+  const safeSize = new THREE.Vector3(
+    rawSize.x || 1,
+    rawSize.y || rawSize.x || 1,
+    rawSize.z || rawSize.x || 1,
+  );
+
+  if (model.scaleMode === "fit-box") {
+    return new THREE.Vector3(
+      target.x / safeSize.x,
+      target.y / safeSize.y,
+      target.z / safeSize.z,
+    );
+  }
+
+  const uniformScale = Math.min(
+    target.x / safeSize.x,
+    target.y / safeSize.y,
+    target.z / safeSize.z,
+  );
+  return new THREE.Vector3(uniformScale, uniformScale, uniformScale);
+}
 
 // Keep first paint light. The complex anatomy GLB is loaded only after the user opts in.
 useGLTF.preload(FALLBACK_URL);
+internalOrgans.forEach((organ) => {
+  organ.modelParts?.forEach((part) => useGLTF.preload(part.url));
+});
 
 export type SkeletonSide = "male" | "female";
-export type TissueType = "os" | "muschi" | "tendon";
+export type TissueType = "os" | "muschi" | "tendon" | "organ";
 export type AnatomyModelMode = "simple" | "complex";
 
 export interface BoneSelection {
@@ -54,24 +133,39 @@ export interface BoneSelection {
 
 const HOVER_COLOR_BONE = new THREE.Color("#7b5cff");
 const HOVER_COLOR_MUSCLE = new THREE.Color("#d91f7b");
+const HOVER_COLOR_ORGAN = new THREE.Color("#00f2fe");
 const SELECT_COLOR = new THREE.Color("#4a2fb7");
 const SELECT_EMISSIVE = new THREE.Color("#c01874");
 const DIM_COLOR = new THREE.Color("#e7ddf3");
+const COMPLETE_REFERENCE_COLOR = new THREE.Color("#7fb7bd");
 
 function isTissueLayerActive(tissue: TissueType | undefined, layerMode: LayerMode) {
-  if (layerMode === "complete") return tissue === "os" || tissue === "muschi" || tissue === "tendon";
+  if (layerMode === "complete") return tissue === "os" || tissue === "muschi" || tissue === "tendon" || tissue === "organ";
   if (layerMode === "skeleton") return tissue === "os";
   if (layerMode === "muscles") return tissue === "muschi";
   return false;
 }
 
+function isTissueInteractive(tissue: TissueType | undefined, layerMode: LayerMode) {
+  if (layerMode === "complete") return tissue === "organ";
+  return isTissueLayerActive(tissue, layerMode);
+}
+
 function tissuePriority(tissue: TissueType | undefined, layerMode: LayerMode) {
   if (layerMode === "skeleton") return tissue === "os" ? 0 : 3;
   if (layerMode === "muscles") return tissue === "muschi" ? 0 : 3;
+  if (tissue === "organ") return 0;
   if (tissue === "muschi") return 0;
   if (tissue === "os") return 1;
   if (tissue === "tendon") return 2;
   return 3;
+}
+
+function completeLayerOpacity(tissue: TissueType | undefined) {
+  if (tissue === "os") return 0.12;
+  if (tissue === "muschi") return 0.07;
+  if (tissue === "tendon") return 0.08;
+  return 0.12;
 }
 
 function normalizeAnatomyName(value: string) {
@@ -556,7 +650,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
 
   const { cloned, layerMeshes } = useMemo(() => {
     const root = gltf.scene.clone(true);
-    const layerMeshes: Record<TissueType, THREE.Mesh[]> = { os: [], muschi: [], tendon: [] };
+    const layerMeshes: Record<TissueType, THREE.Mesh[]> = { os: [], muschi: [], tendon: [], organ: [] };
     root.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -616,7 +710,9 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
           ? new THREE.Color("#f6ead2")
           : tissue === "muschi"
             ? new THREE.Color("#b23a32")
-            : new THREE.Color("#ead2ad");
+            : tissue === "organ"
+              ? new THREE.Color("#00d8e8")
+              : new THREE.Color("#ead2ad");
 
       const mat = new THREE.MeshPhysicalMaterial({
         color: baseColor,
@@ -627,7 +723,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
         emissive: SELECT_EMISSIVE.clone(),
         emissiveIntensity: 0,
         transparent: true,
-        opacity: tissue === "muschi" ? 0.62 : tissue === "tendon" ? 0.72 : 1,
+        opacity: tissue === "muschi" ? 0.62 : tissue === "tendon" ? 0.72 : tissue === "organ" ? 0.88 : 1,
         depthWrite: tissue === "os",
         envMapIntensity: 1.1,
         side: THREE.DoubleSide,
@@ -635,6 +731,9 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       mat.userData.baseColor = baseColor.clone();
       mat.userData.baseOpacity = mat.opacity;
       mesh.material = mat;
+      if (tissue === "organ") {
+        mesh.visible = false;
+      }
       layerMeshes[tissue].push(mesh);
     });
     return { cloned: root, layerMeshes };
@@ -646,11 +745,12 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
     layerMeshes.os.forEach((m) => (m.visible = isTissueLayerActive("os", layerMode)));
     layerMeshes.muschi.forEach((m) => (m.visible = isTissueLayerActive("muschi", layerMode)));
     layerMeshes.tendon.forEach((m) => (m.visible = isTissueLayerActive("tendon", layerMode)));
+    layerMeshes.organ.forEach((m) => (m.visible = false));
   }, [layerMode, layerMeshes]);
 
   useEffect(() => {
     if (selection?.side !== "male") return;
-    if (!isTissueLayerActive(selection.tissue, layerMode)) {
+    if (!isTissueInteractive(selection.tissue, layerMode)) {
       onSelect(null);
     }
   }, [layerMode, onSelect, selection]);
@@ -672,6 +772,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
   useFrame(() => {
     const hovered = hoveredMeshRef.current;
     const hasSelection = selection !== null && selection.side === "male";
+    const isCompleteLayer = layerModeRef.current === "complete";
     cloned.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
@@ -683,38 +784,50 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       const selectionRegionId = mesh.userData.selectionRegionId as string | undefined;
 
       const isSelected =
+        !isCompleteLayer &&
         selection !== null &&
         selection.side === "male" &&
         (selection.id === selectionId ||
           (!!selection.regionId && selection.regionId === selectionRegionId));
       const isHov =
+        !isCompleteLayer &&
         !!selectionId &&
         hovered !== null &&
         hovered.userData.selectionId === selectionId &&
         !isSelected;
 
-      mesh.renderOrder = isSelected ? 10 : 0;
-      mat.depthWrite = isSelected || (!hasSelection && tissue === "os");
+      mesh.renderOrder = isCompleteLayer ? -10 : isSelected ? 10 : 0;
+      mat.depthWrite = isCompleteLayer ? false : isSelected || (!hasSelection && tissue === "os");
       mat.depthTest = true;
 
-      const targetOpacity = isSelected
-        ? 1
-        : hasSelection
-          ? tissue === "os"
-            ? 0.18
-            : tissue === "muschi"
-              ? 0.12
-              : 0.1
-          : isHov
-            ? Math.min(1, baseOpacity + 0.2)
-            : baseOpacity;
+      const targetOpacity = isCompleteLayer
+        ? completeLayerOpacity(tissue)
+        : isSelected
+          ? 1
+          : hasSelection
+            ? tissue === "os"
+              ? 0.18
+              : tissue === "muschi"
+                ? 0.12
+                : 0.1
+            : isHov
+              ? Math.min(1, baseOpacity + 0.2)
+              : baseOpacity;
       mat.opacity += (targetOpacity - mat.opacity) * 0.22;
 
-      const targetEmissive = isSelected ? 1.35 : isHov ? 0.2 : 0;
+      const targetEmissive = isCompleteLayer ? 0 : isSelected ? 1.35 : isHov ? 0.2 : 0;
       mat.emissiveIntensity += (targetEmissive - mat.emissiveIntensity) * 0.18;
 
       const hoverColor = tissue === "muschi" ? HOVER_COLOR_MUSCLE : HOVER_COLOR_BONE;
-      const targetColor = isSelected ? SELECT_COLOR : hasSelection ? DIM_COLOR : isHov ? hoverColor : baseColor;
+      const targetColor = isCompleteLayer
+        ? COMPLETE_REFERENCE_COLOR
+        : isSelected
+          ? SELECT_COLOR
+          : hasSelection
+            ? DIM_COLOR
+            : isHov
+              ? hoverColor
+              : baseColor;
       mat.color.lerp(targetColor, 0.18);
     });
 
@@ -724,13 +837,18 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
   });
 
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
+    if (layerModeRef.current === "complete") {
+      hoveredMeshRef.current = null;
+      document.body.style.cursor = "auto";
+      return;
+    }
     e.stopPropagation();
     const mesh =
       e.intersections
         .map((intersection) => intersection.object as THREE.Mesh)
         .filter((candidate) => {
           const tissue = candidate.userData?.tissue as TissueType | undefined;
-          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layerModeRef.current);
+          return !!candidate.userData?.selectionId && isTissueInteractive(tissue, layerModeRef.current);
         })
         .sort(
           (a, b) =>
@@ -742,18 +860,24 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
     document.body.style.cursor = "pointer";
   };
   const handlePointerOut = (e: ThreeEvent<PointerEvent>) => {
+    if (layerModeRef.current === "complete") {
+      hoveredMeshRef.current = null;
+      document.body.style.cursor = "auto";
+      return;
+    }
     e.stopPropagation();
     hoveredMeshRef.current = null;
     document.body.style.cursor = "auto";
   };
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (layerModeRef.current === "complete") return;
     e.stopPropagation();
     const mesh =
       e.intersections
         .map((intersection) => intersection.object as THREE.Mesh)
         .filter((candidate) => {
           const tissue = candidate.userData?.tissue as TissueType | undefined;
-          return !!candidate.userData?.selectionId && isTissueLayerActive(tissue, layerModeRef.current);
+          return !!candidate.userData?.selectionId && isTissueInteractive(tissue, layerModeRef.current);
         })
         .sort(
           (a, b) =>
@@ -789,6 +913,266 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       onClick={handleClick}
     >
       <primitive object={cloned} position={offset} />
+    </group>
+  );
+}
+
+function AnatomyGlbModel({
+  organ,
+  model,
+  selected = false,
+  hovered = false,
+  opacity = 0.7,
+  interactive = true,
+}: {
+  organ?: InternalOrgan;
+  model: OrganModelPart;
+  selected?: boolean;
+  hovered?: boolean;
+  opacity?: number;
+  interactive?: boolean;
+}) {
+  const gltf = useGLTF(model.url);
+  const groupRef = useRef<THREE.Group>(null);
+  const materialsRef = useRef<THREE.Material[]>([]);
+  const baseColor = useMemo(() => new THREE.Color(organ?.color ?? COMPLETE_REFERENCE_COLOR), [organ?.color]);
+  const glowColor = useMemo(() => new THREE.Color(organ?.emissiveColor ?? "#00f2fe"), [organ?.emissiveColor]);
+
+  const { scene, centerOffset, targetPosition, targetScale } = useMemo(() => {
+    const cloned = gltf.scene.clone(true);
+    const materials: THREE.Material[] = [];
+
+    cloned.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+
+      const originalMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const clonedMaterials = originalMaterials.map((sourceMaterial) => {
+        const clonedMaterial = sourceMaterial.clone();
+        clonedMaterial.transparent = true;
+        clonedMaterial.opacity = opacity;
+        clonedMaterial.depthTest = true;
+        clonedMaterial.depthWrite = true;
+        clonedMaterial.side = THREE.DoubleSide;
+        clonedMaterial.toneMapped = false;
+
+        const standardMaterial = clonedMaterial as THREE.MeshStandardMaterial;
+        if ("color" in standardMaterial) {
+          standardMaterial.color = baseColor.clone().lerp(new THREE.Color("#d8ffff"), 0.18);
+        }
+        if ("map" in standardMaterial) {
+          standardMaterial.map = null;
+          standardMaterial.needsUpdate = true;
+        }
+        if ("emissive" in standardMaterial) {
+          standardMaterial.emissive = glowColor.clone();
+          standardMaterial.emissiveIntensity = organ ? 0.24 : 0.08;
+        }
+
+        materials.push(clonedMaterial);
+        return clonedMaterial;
+      });
+
+      mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0];
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.renderOrder = organ ? 34 : 18;
+      if (!interactive) mesh.raycast = () => null;
+    });
+
+    materialsRef.current = materials;
+
+    const box = new THREE.Box3().setFromObject(cloned);
+    const center = box.getCenter(new THREE.Vector3()).multiplyScalar(-1);
+    const size = box.getSize(new THREE.Vector3());
+    const scale = resolveAnatomicalScale(model, size);
+    if (model.mirrorX) scale.x *= -1;
+
+    return {
+      scene: cloned,
+      centerOffset: center,
+      targetPosition: resolveAnatomicalPosition(model),
+      targetScale: scale,
+    };
+  }, [baseColor, gltf.scene, glowColor, interactive, model, opacity, organ]);
+
+  const initialPosition = useMemo(
+    () => targetPosition.clone().add(new THREE.Vector3(0, -0.08, 0)),
+    [targetPosition],
+  );
+  const initialScale = useMemo(() => targetScale.clone().multiplyScalar(0.72), [targetScale]);
+  const targetRotation = useMemo(
+    () => new THREE.Euler(...(model.rotation ?? [0, 0, 0])),
+    [model.rotation],
+  );
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    group.position.copy(initialPosition);
+    group.scale.copy(initialScale);
+    group.rotation.copy(targetRotation);
+  }, [initialPosition, initialScale, targetRotation]);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (group) {
+      group.position.lerp(targetPosition, 0.12);
+      group.scale.lerp(targetScale, 0.12);
+      group.rotation.x += (targetRotation.x - group.rotation.x) * 0.12;
+      group.rotation.y += (targetRotation.y - group.rotation.y) * 0.12;
+      group.rotation.z += (targetRotation.z - group.rotation.z) * 0.12;
+    }
+
+    materialsRef.current.forEach((material) => {
+      material.opacity += ((selected ? 0.9 : hovered ? 0.78 : opacity) - material.opacity) * 0.18;
+
+      const standardMaterial = material as THREE.MeshStandardMaterial;
+      if ("emissive" in standardMaterial) {
+        standardMaterial.emissive.lerp(selected || hovered ? glowColor : baseColor, 0.08);
+        standardMaterial.emissiveIntensity +=
+          ((selected ? 0.75 : hovered ? 0.45 : organ ? 0.24 : 0.08) - standardMaterial.emissiveIntensity) *
+          0.18;
+      }
+    });
+  });
+
+  return (
+    <group
+      ref={groupRef}
+      position={initialPosition}
+      scale={initialScale}
+      rotation={model.rotation ?? [0, 0, 0]}
+      renderOrder={organ ? 34 : 18}
+    >
+      <primitive object={scene} position={centerOffset} />
+    </group>
+  );
+}
+
+function OrganPrimitive({
+  organ,
+  part,
+  selected,
+  hovered,
+}: {
+  organ: InternalOrgan;
+  part: OrganVisualPrimitive;
+  selected: boolean;
+  hovered: boolean;
+}) {
+  const color = organ.color;
+  const emissive = organ.emissiveColor;
+  const material = (
+    <meshPhysicalMaterial
+      color={color}
+      emissive={emissive}
+      emissiveIntensity={selected ? 0.75 : hovered ? 0.45 : 0.24}
+      transparent
+      opacity={selected ? 0.9 : hovered ? 0.78 : 0.7}
+      roughness={0.32}
+      metalness={0.04}
+      transmission={0.16}
+      thickness={0.18}
+      clearcoat={0.35}
+      depthWrite
+      depthTest
+    />
+  );
+
+  if (part.kind === "tube") {
+    const curve = new THREE.CatmullRomCurve3(
+      part.points.map((point) => new THREE.Vector3(...point)),
+      part.closed ?? false,
+      "catmullrom",
+      0.5,
+    );
+    return (
+      <mesh renderOrder={35}>
+        <tubeGeometry args={[curve, part.segments ?? 32, part.radius, 12, part.closed ?? false]} />
+        {material}
+      </mesh>
+    );
+  }
+
+  const rotation = part.rotation ?? [0, 0, 0];
+  return (
+    <mesh position={part.position} scale={part.scale} rotation={rotation} renderOrder={35}>
+      {part.kind === "sphere" && <sphereGeometry args={[1, 36, 28]} />}
+      {part.kind === "capsule" && <capsuleGeometry args={[1, 1.8, 16, 32]} />}
+      {part.kind === "cylinder" && <cylinderGeometry args={[1, 1, 2, 32]} />}
+      {part.kind === "torus" && <torusGeometry args={[1, 0.18, 18, 48]} />}
+      {material}
+    </mesh>
+  );
+}
+
+function InternalOrgansLayer({
+  layerMode,
+  selection,
+  onSelect,
+}: {
+  layerMode: LayerMode;
+  selection: BoneSelection | null;
+  onSelect: (sel: BoneSelection | null) => void;
+}) {
+  const [hoveredOrganId, setHoveredOrganId] = useState<string | null>(null);
+
+  if (layerMode !== "complete") return null;
+
+  return (
+    <group renderOrder={50} position={[0, 0.02, -0.02]} scale={[0.98, 0.99, 0.84]}>
+      {internalOrgans.map((organ) => {
+        const selected = selection?.tissue === "organ" && selection.id === organ.id;
+        const hovered = hoveredOrganId === organ.id;
+        return (
+          <group
+            key={organ.id}
+            onPointerOver={(event) => {
+              event.stopPropagation();
+              setHoveredOrganId(organ.id);
+              document.body.style.cursor = "pointer";
+            }}
+            onPointerOut={(event) => {
+              event.stopPropagation();
+              setHoveredOrganId((current) => (current === organ.id ? null : current));
+              document.body.style.cursor = "auto";
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect({
+                id: organ.id,
+                side: "male",
+                tissue: "organ",
+                regionId: organ.bodyRegion,
+                regionLabel: organ.category,
+                label: organ.name,
+                labelEn: organ.latinName,
+              });
+            }}
+          >
+            {organ.modelParts?.map((model, index) => (
+              <AnatomyGlbModel
+                key={`${organ.id}-model-${index}`}
+                organ={organ}
+                model={model}
+                selected={selected}
+                hovered={hovered}
+              />
+            ))}
+            {organ.renderVisualParts &&
+              organ.visualParts.map((part, index) => (
+                <OrganPrimitive
+                  key={`${organ.id}-visual-${index}`}
+                  organ={organ}
+                  part={part}
+                  selected={selected}
+                  hovered={hovered}
+                />
+              ))}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -862,13 +1246,20 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
 
       <Suspense fallback={<LoadingFallback />}>
         {mode === "complex" ? (
-          <ComplexMaleModel
-            url={MALE_COMPLEX_URL}
-            xOffset={0}
-            layerMode={layerMode}
-            selection={selection}
-            onSelect={onSelect}
-          />
+          <>
+            <ComplexMaleModel
+              url={MALE_COMPLEX_URL}
+              xOffset={0}
+              layerMode={layerMode}
+              selection={selection}
+              onSelect={onSelect}
+            />
+            <InternalOrgansLayer
+              layerMode={layerMode}
+              selection={selection}
+              onSelect={onSelect}
+            />
+          </>
         ) : (
           <SimpleSkeletonModel
             url={FALLBACK_URL}

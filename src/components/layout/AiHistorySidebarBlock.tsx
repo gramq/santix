@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bone, Bot, Clock3, Dumbbell, History, Loader2, Trash2, X } from "lucide-react";
+import { Bone, Bot, Clock3, Dumbbell, HeartPulse, History, Loader2, Trash2, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   AI_HISTORY_REFRESH_EVENT,
@@ -315,7 +315,7 @@ function ConversationRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const Icon = conversation.tissue === "muschi" ? Dumbbell : Bone;
+  const Icon = conversation.tissue === "organ" ? HeartPulse : conversation.tissue === "muschi" ? Dumbbell : Bone;
   const formattedTitle = formatConversationTitle(conversation.title);
   const title =
     conversation.structure_display_name && formattedTitle.includes("—")

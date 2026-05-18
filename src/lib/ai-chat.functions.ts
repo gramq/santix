@@ -9,7 +9,7 @@ import { buildStructuredAiOutput, type SantixStructuredAiOutput } from "./ai/str
 import { validateAiUserText, sanitizeTextForStorage } from "./security/inputSafety";
 import { assertRateLimitAllowed, enforceAiRateLimit } from "./security/rateLimit";
 
-const TissueSchema = z.enum(["os", "muschi", "tendon"]);
+const TissueSchema = z.enum(["os", "muschi", "tendon", "organ"]);
 
 const InputSchema = z.object({
   accessToken: z.string().min(10),
@@ -999,7 +999,7 @@ function emptySymptomState(input: z.infer<typeof InputSchema>): SymptomState {
     selected_structure_type: input.tissue,
     selected_region: input.bodyRegion ?? null,
     selected_body_region: input.bodyRegion ?? null,
-    visual_layer: input.visualLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
+    visual_layer: input.visualLayer ?? (input.tissue === "organ" ? "complete" : input.tissue === "muschi" ? "muscular" : "skeleton"),
     ai_layer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
     current_topic: "anatomy",
     pain_present: false,
@@ -2574,6 +2574,7 @@ async function getGeneralMedicalContext(
   );
   const ragFilters: RetrievalFilters = {
     aiLayer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
+    tissue: input.tissue,
     bodyRegion: route.entities.bodyRegion ?? input.bodyRegion ?? null,
     structureSlug: route.selectedSubjectMentioned
       ? (input.structureSlug ?? null)
@@ -3246,7 +3247,13 @@ function buildOllamaPrompt(
   void route;
 
   const tipStructura =
-    input.tissue === "os" ? "oase" : input.tissue === "muschi" ? "mușchi" : "tendon";
+    input.tissue === "os"
+      ? "oase"
+      : input.tissue === "muschi"
+        ? "mușchi"
+        : input.tissue === "organ"
+          ? "organ intern"
+          : "tendon";
   const history = previousMessages
     .slice(-8)
     .map(
@@ -3256,7 +3263,7 @@ function buildOllamaPrompt(
     .join("\n");
 
   return [
-    "Ești Santix AI, un asistent medical educațional integrat într-o aplicație 3D cu schelet de oase și mușchi.",
+    "Ești Santix AI, un asistent medical educațional integrat într-o aplicație 3D cu oase, mușchi și organe interne.",
     "",
     "Utilizatorul a selectat deja o structură anatomică din modelul 3D.",
     "",
@@ -3279,7 +3286,7 @@ function buildOllamaPrompt(
     "",
     "REGULI STRICTE:",
     "1. Consideră întotdeauna că zona anatomică este deja selectată.",
-    "2. Nu cere utilizatorului să specifice ce os, mușchi sau zonă a selectat.",
+    "2. Nu cere utilizatorului să specifice ce os, mușchi, organ sau zonă a selectat.",
     "3. Nu spune „specifică osul”, „alege zona” sau „selectează structura”.",
     "4. Dacă mesajul utilizatorului este vag, de exemplu „mă doare”, întreabă despre simptome, localizare pe partea stângă/dreaptă, intensitate, debut, traumă și limitarea mișcării.",
     "5. Răspunde doar despre zona selectată.",

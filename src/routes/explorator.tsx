@@ -65,14 +65,14 @@ function ExploratorPage() {
 
       setPreserveAiStateOnSelectionChange(true);
       setContextSwitchCount(0);
-      setLayerMode(tissue === "muschi" ? "muscles" : "skeleton");
+      setLayerMode(tissue === "organ" ? "complete" : tissue === "muschi" ? "muscles" : "skeleton");
       setOpenConversationId(conversation.id);
       setSelection({
         id: targetBone?.id ?? structureId,
         side: "male",
         tissue,
-        regionId: tissue === "muschi" ? structureId : undefined,
-        regionLabel: tissue === "muschi" ? label : undefined,
+        regionId: tissue === "muschi" || tissue === "organ" ? structureId : undefined,
+        regionLabel: tissue === "muschi" || tissue === "organ" ? label : undefined,
         label,
       });
       window.setTimeout(() => setPreserveAiStateOnSelectionChange(false), 0);
@@ -141,7 +141,7 @@ function ExploratorPage() {
         <div className="absolute left-6 top-6 flex items-center gap-2.5 rounded-2xl px-4 py-3 glass fade-up">
           <MousePointerClick className="size-4 text-primary" />
           <span className="text-xs tracking-tight text-muted-foreground">
-            Apasă pe un os sau mușchi pentru detalii
+            Apasă pe un os, mușchi sau organ pentru detalii
           </span>
         </div>
       )}
