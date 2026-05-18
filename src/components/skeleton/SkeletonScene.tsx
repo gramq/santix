@@ -7,8 +7,8 @@ import type { LayerMode } from "./LayersToggle";
 import {
   internalOrgans,
   type InternalOrgan,
+  type OrganInteractionZone,
   type OrganModelPart,
-  type OrganVisualPrimitive,
 } from "@/data/internalOrgans";
 
 // Map submesh node names → bone IDs from src/data/bones.ts (used by FEMALE simple model)
@@ -36,6 +36,10 @@ const MESH_TO_BONE: Record<string, string> = {
 
 const MALE_COMPLEX_URL = "/anatomy/z-anatomy-musculoskeletal.glb?v=20260502-selection-2";
 const FALLBACK_URL = "/skeleton.glb";
+const HRA_ORGAN_TRANSFORM = {
+  position: new THREE.Vector3(0, -0.44, -0.02),
+  scale: new THREE.Vector3(3.15, 3.4, 2.65),
+};
 const BODY_REFERENCE = {
   height: 5.8,
   thoraxTop: 1.82,
@@ -71,6 +75,11 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function resolveAnatomicalPosition(model: OrganModelPart) {
+  if (model.preserveScenePosition) {
+    const offset = model.offset ? new THREE.Vector3(...model.offset) : new THREE.Vector3();
+    return HRA_ORGAN_TRANSFORM.position.clone().add(offset);
+  }
+
   const anchor = ANATOMICAL_ANCHORS[model.anchor].clone();
   const offset = model.offset ? new THREE.Vector3(...model.offset) : new THREE.Vector3();
   const position = anchor.add(offset);
@@ -84,6 +93,10 @@ function resolveAnatomicalPosition(model: OrganModelPart) {
 }
 
 function resolveAnatomicalScale(model: OrganModelPart, rawSize: THREE.Vector3) {
+  if (model.preserveScenePosition) {
+    return HRA_ORGAN_TRANSFORM.scale.clone();
+  }
+
   const target = new THREE.Vector3(...model.targetSize);
   const safeSize = new THREE.Vector3(
     rawSize.x || 1,
@@ -143,17 +156,19 @@ function isTissueLayerActive(tissue: TissueType | undefined, layerMode: LayerMod
   if (layerMode === "complete") return tissue === "os" || tissue === "muschi" || tissue === "tendon" || tissue === "organ";
   if (layerMode === "skeleton") return tissue === "os";
   if (layerMode === "muscles") return tissue === "muschi";
+  if (layerMode === "organs") return tissue === "organ";
   return false;
 }
 
 function isTissueInteractive(tissue: TissueType | undefined, layerMode: LayerMode) {
-  if (layerMode === "complete") return tissue === "organ";
+  if (layerMode === "complete") return false;
   return isTissueLayerActive(tissue, layerMode);
 }
 
 function tissuePriority(tissue: TissueType | undefined, layerMode: LayerMode) {
   if (layerMode === "skeleton") return tissue === "os" ? 0 : 3;
   if (layerMode === "muscles") return tissue === "muschi" ? 0 : 3;
+  if (layerMode === "organs") return tissue === "organ" ? 0 : 3;
   if (tissue === "organ") return 0;
   if (tissue === "muschi") return 0;
   if (tissue === "os") return 1;
@@ -732,7 +747,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       mat.userData.baseOpacity = mat.opacity;
       mesh.material = mat;
       if (tissue === "organ") {
-        mesh.visible = false;
+        mesh.raycast = () => null;
       }
       layerMeshes[tissue].push(mesh);
     });
@@ -902,15 +917,17 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       labelEn,
     });
   };
+  const isComplexModelInteractive = layerMode !== "organs" && layerMode !== "complete";
 
   return (
     <group
       ref={groupRef}
       position={[xOffset, 0, 0]}
       scale={scale}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
-      onClick={handleClick}
+      visible={layerMode !== "organs"}
+      onPointerOver={isComplexModelInteractive ? handlePointerOver : undefined}
+      onPointerOut={isComplexModelInteractive ? handlePointerOut : undefined}
+      onClick={isComplexModelInteractive ? handleClick : undefined}
     >
       <primitive object={cloned} position={offset} />
     </group>
@@ -922,15 +939,23 @@ function AnatomyGlbModel({
   model,
   selected = false,
   hovered = false,
-  opacity = 0.7,
+  dimmed = false,
+  opacity = 0.42,
   interactive = true,
+  onPointerOver,
+  onPointerOut,
+  onClick,
 }: {
   organ?: InternalOrgan;
   model: OrganModelPart;
   selected?: boolean;
   hovered?: boolean;
+  dimmed?: boolean;
   opacity?: number;
   interactive?: boolean;
+  onPointerOver?: (event: ThreeEvent<PointerEvent>) => void;
+  onPointerOut?: (event: ThreeEvent<PointerEvent>) => void;
+  onClick?: (event: ThreeEvent<MouseEvent>) => void;
 }) {
   const gltf = useGLTF(model.url);
   const groupRef = useRef<THREE.Group>(null);
@@ -952,13 +977,15 @@ function AnatomyGlbModel({
         clonedMaterial.transparent = true;
         clonedMaterial.opacity = opacity;
         clonedMaterial.depthTest = true;
-        clonedMaterial.depthWrite = true;
+        clonedMaterial.depthWrite = false;
         clonedMaterial.side = THREE.DoubleSide;
         clonedMaterial.toneMapped = false;
 
         const standardMaterial = clonedMaterial as THREE.MeshStandardMaterial;
         if ("color" in standardMaterial) {
-          standardMaterial.color = baseColor.clone().lerp(new THREE.Color("#d8ffff"), 0.18);
+          standardMaterial.color = baseColor.clone();
+          standardMaterial.roughness = Math.max(standardMaterial.roughness ?? 0.4, 0.48);
+          standardMaterial.metalness = 0;
         }
         if ("map" in standardMaterial) {
           standardMaterial.map = null;
@@ -966,7 +993,7 @@ function AnatomyGlbModel({
         }
         if ("emissive" in standardMaterial) {
           standardMaterial.emissive = glowColor.clone();
-          standardMaterial.emissiveIntensity = organ ? 0.24 : 0.08;
+          standardMaterial.emissiveIntensity = organ ? 0.08 : 0.04;
         }
 
         materials.push(clonedMaterial);
@@ -983,7 +1010,9 @@ function AnatomyGlbModel({
     materialsRef.current = materials;
 
     const box = new THREE.Box3().setFromObject(cloned);
-    const center = box.getCenter(new THREE.Vector3()).multiplyScalar(-1);
+    const center = model.preserveScenePosition
+      ? new THREE.Vector3()
+      : box.getCenter(new THREE.Vector3()).multiplyScalar(-1);
     const size = box.getSize(new THREE.Vector3());
     const scale = resolveAnatomicalScale(model, size);
     if (model.mirrorX) scale.x *= -1;
@@ -1025,13 +1054,15 @@ function AnatomyGlbModel({
     }
 
     materialsRef.current.forEach((material) => {
-      material.opacity += ((selected ? 0.9 : hovered ? 0.78 : opacity) - material.opacity) * 0.18;
+      const targetOpacity = selected ? 0.82 : hovered ? 0.72 : dimmed ? 0.18 : opacity;
+      material.opacity += (targetOpacity - material.opacity) * 0.18;
 
       const standardMaterial = material as THREE.MeshStandardMaterial;
       if ("emissive" in standardMaterial) {
+        standardMaterial.color.lerp(selected || hovered ? baseColor.clone().lerp(new THREE.Color("#ffffff"), 0.18) : baseColor, 0.08);
         standardMaterial.emissive.lerp(selected || hovered ? glowColor : baseColor, 0.08);
         standardMaterial.emissiveIntensity +=
-          ((selected ? 0.75 : hovered ? 0.45 : organ ? 0.24 : 0.08) - standardMaterial.emissiveIntensity) *
+          ((selected ? 0.46 : hovered ? 0.28 : dimmed ? 0.02 : organ ? 0.08 : 0.04) - standardMaterial.emissiveIntensity) *
           0.18;
       }
     });
@@ -1044,65 +1075,48 @@ function AnatomyGlbModel({
       scale={initialScale}
       rotation={model.rotation ?? [0, 0, 0]}
       renderOrder={organ ? 34 : 18}
+      onPointerOver={interactive ? onPointerOver : undefined}
+      onPointerOut={interactive ? onPointerOut : undefined}
+      onClick={interactive ? onClick : undefined}
     >
       <primitive object={scene} position={centerOffset} />
     </group>
   );
 }
 
-function OrganPrimitive({
-  organ,
-  part,
+function OrganInteractionZoneMesh({
+  zone,
   selected,
   hovered,
+  onPointerOver,
+  onPointerOut,
+  onClick,
 }: {
-  organ: InternalOrgan;
-  part: OrganVisualPrimitive;
+  zone: OrganInteractionZone;
   selected: boolean;
   hovered: boolean;
+  onPointerOver: (event: ThreeEvent<PointerEvent>) => void;
+  onPointerOut: (event: ThreeEvent<PointerEvent>) => void;
+  onClick: (event: ThreeEvent<MouseEvent>) => void;
 }) {
-  const color = organ.color;
-  const emissive = organ.emissiveColor;
-  const material = (
-    <meshPhysicalMaterial
-      color={color}
-      emissive={emissive}
-      emissiveIntensity={selected ? 0.75 : hovered ? 0.45 : 0.24}
-      transparent
-      opacity={selected ? 0.9 : hovered ? 0.78 : 0.7}
-      roughness={0.32}
-      metalness={0.04}
-      transmission={0.16}
-      thickness={0.18}
-      clearcoat={0.35}
-      depthWrite
-      depthTest
-    />
-  );
+  const rotation = zone.rotation ?? [0, 0, 0];
 
-  if (part.kind === "tube") {
-    const curve = new THREE.CatmullRomCurve3(
-      part.points.map((point) => new THREE.Vector3(...point)),
-      part.closed ?? false,
-      "catmullrom",
-      0.5,
-    );
-    return (
-      <mesh renderOrder={35}>
-        <tubeGeometry args={[curve, part.segments ?? 32, part.radius, 12, part.closed ?? false]} />
-        {material}
-      </mesh>
-    );
-  }
-
-  const rotation = part.rotation ?? [0, 0, 0];
   return (
-    <mesh position={part.position} scale={part.scale} rotation={rotation} renderOrder={35}>
-      {part.kind === "sphere" && <sphereGeometry args={[1, 36, 28]} />}
-      {part.kind === "capsule" && <capsuleGeometry args={[1, 1.8, 16, 32]} />}
-      {part.kind === "cylinder" && <cylinderGeometry args={[1, 1, 2, 32]} />}
-      {part.kind === "torus" && <torusGeometry args={[1, 0.18, 18, 48]} />}
-      {material}
+    <mesh
+      position={zone.position}
+      rotation={rotation}
+      scale={zone.kind === "ellipsoid" ? [zone.size[0] / 2, zone.size[1] / 2, zone.size[2] / 2] : [1, 1, 1]}
+      renderOrder={selected || hovered ? 80 : 10}
+      onPointerOver={onPointerOver}
+      onPointerOut={onPointerOut}
+      onClick={onClick}
+    >
+      {zone.kind === "ellipsoid" ? (
+        <sphereGeometry args={[1, 24, 16]} />
+      ) : (
+        <boxGeometry args={zone.size} />
+      )}
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
     </mesh>
   );
 }
@@ -1118,38 +1132,49 @@ function InternalOrgansLayer({
 }) {
   const [hoveredOrganId, setHoveredOrganId] = useState<string | null>(null);
 
-  if (layerMode !== "complete") return null;
+  if (layerMode !== "organs" && layerMode !== "complete") return null;
 
   return (
-    <group renderOrder={50} position={[0, 0.02, -0.02]} scale={[0.98, 0.99, 0.84]}>
-      {internalOrgans.map((organ) => {
+    <group renderOrder={50}>
+      {internalOrgans.filter((organ) => organ.modelParts?.length).map((organ) => {
         const selected = selection?.tissue === "organ" && selection.id === organ.id;
         const hovered = hoveredOrganId === organ.id;
+        const isInteractive = layerMode === "organs";
+        const hasFocusedOrgan = isInteractive && Boolean(hoveredOrganId || selection?.tissue === "organ");
+        const dimmed = hasFocusedOrgan && !selected && !hovered;
+        const organOpacity = layerMode === "complete" ? 0.24 : 0.42;
+        const selectOrgan = () =>
+          onSelect({
+            id: organ.id,
+            side: "male",
+            tissue: "organ",
+            regionId: organ.bodyRegion,
+            regionLabel: organ.category,
+            label: organ.name,
+            labelEn: organ.latinName,
+          });
+        const handleOrganPointerOver = (event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation();
+          if (isInteractive) {
+            setHoveredOrganId(organ.id);
+            document.body.style.cursor = "pointer";
+          }
+        };
+        const handleOrganPointerOut = (event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation();
+          setHoveredOrganId((current) => (current === organ.id ? null : current));
+          document.body.style.cursor = "auto";
+        };
+        const handleOrganClick = (event: ThreeEvent<MouseEvent>) => {
+          event.stopPropagation();
+          if (isInteractive) selectOrgan();
+        };
         return (
           <group
             key={organ.id}
-            onPointerOver={(event) => {
-              event.stopPropagation();
-              setHoveredOrganId(organ.id);
-              document.body.style.cursor = "pointer";
-            }}
-            onPointerOut={(event) => {
-              event.stopPropagation();
-              setHoveredOrganId((current) => (current === organ.id ? null : current));
-              document.body.style.cursor = "auto";
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect({
-                id: organ.id,
-                side: "male",
-                tissue: "organ",
-                regionId: organ.bodyRegion,
-                regionLabel: organ.category,
-                label: organ.name,
-                labelEn: organ.latinName,
-              });
-            }}
+            onPointerOver={handleOrganPointerOver}
+            onPointerOut={handleOrganPointerOut}
+            onClick={handleOrganClick}
           >
             {organ.modelParts?.map((model, index) => (
               <AnatomyGlbModel
@@ -1158,16 +1183,24 @@ function InternalOrgansLayer({
                 model={model}
                 selected={selected}
                 hovered={hovered}
+                dimmed={dimmed}
+                opacity={organOpacity}
+                interactive={isInteractive}
+                onPointerOver={handleOrganPointerOver}
+                onPointerOut={handleOrganPointerOut}
+                onClick={handleOrganClick}
               />
             ))}
-            {organ.renderVisualParts &&
-              organ.visualParts.map((part, index) => (
-                <OrganPrimitive
-                  key={`${organ.id}-visual-${index}`}
-                  organ={organ}
-                  part={part}
+            {isInteractive &&
+              organ.interactionZones?.map((zone, index) => (
+                <OrganInteractionZoneMesh
+                  key={`${organ.id}-hit-${index}`}
+                  zone={zone}
                   selected={selected}
                   hovered={hovered}
+                  onPointerOver={handleOrganPointerOver}
+                  onPointerOut={handleOrganPointerOut}
+                  onClick={handleOrganClick}
                 />
               ))}
           </group>

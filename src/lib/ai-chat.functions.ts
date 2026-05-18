@@ -19,8 +19,8 @@ const InputSchema = z.object({
   structureSlug: z.string().min(1).max(160).optional(),
   modelSelectionId: z.string().min(1).max(160).optional(),
   bodyRegion: z.string().min(1).max(160).optional(),
-  visualLayer: z.enum(["skeleton", "muscular", "complete"]).optional(),
-  aiLayer: z.enum(["skeleton", "muscular"]).optional(),
+  visualLayer: z.enum(["skeleton", "muscular", "organs", "complete"]).optional(),
+  aiLayer: z.enum(["skeleton", "muscular", "organs"]).optional(),
   conversationId: z.string().uuid().optional(),
 });
 
@@ -37,12 +37,13 @@ type SelectionScope = {
 
 type AiMode = "3D_SELECTION_MODE" | "GENERAL_MEDICAL_MODE";
 
-type TargetLayer = "skeleton" | "muscular";
+type TargetLayer = "skeleton" | "muscular" | "organs";
 
 type SelectedContextFit =
   | "correct_context"
   | "likely_muscular_but_bone_selected"
   | "likely_bone_joint_but_muscle_selected"
+  | "likely_organ_but_other_selected"
   | "different_body_region_detected"
   | "unclear_need_more_questions"
   | "red_flag_priority"
@@ -91,7 +92,7 @@ type ContextSwitchAction = {
   should_switch_context: boolean;
   target_layer: TargetLayer | null;
   target_structure_slug: string | null;
-  target_structure_type: "bone" | "muscle" | "body_region" | "muscle_group" | null;
+  target_structure_type: "bone" | "muscle" | "body_region" | "muscle_group" | "organ" | null;
   target_body_region: string | null;
   switch_reason: string | null;
   confidence: ContextSwitchConfidence;
@@ -126,7 +127,7 @@ type SymptomState = {
   selected_structure_type: string;
   selected_region: string | null;
   selected_body_region: string | null;
-  visual_layer: "skeleton" | "muscular" | "complete";
+  visual_layer: "skeleton" | "muscular" | "organs" | "complete";
   ai_layer: TargetLayer;
   current_topic: "anatomy" | "pain" | "injury" | "symptom" | "out_of_scope";
   pain_present: boolean;
@@ -483,10 +484,37 @@ const RED_FLAG_TERMS: Array<{ key: string; terms: string[] }> = [
   { key: "slăbiciune bruscă", terms: ["slabiciune brusca", "nu am forta", "pierdere de forta"] },
   {
     key: "dificultăți de respirație",
-    terms: ["dificultate de respiratie", "nu pot respira", "respir greu"],
+    terms: ["dificultate de respiratie", "dificultati de respiratie", "nu pot respira", "respir greu"],
   },
   { key: "durere toracică", terms: ["durere toracica", "durere in piept", "ma doare pieptul"] },
   { key: "febră mare", terms: ["febra mare", "febra"] },
+  {
+    key: "durere abdominală severă",
+    terms: ["durere abdominala severa", "abdomen foarte dureros", "burta foarte tare", "abdomen rigid"],
+  },
+  {
+    key: "sânge în urină/scaun/vărsături",
+    terms: [
+      "sange in urina",
+      "sange in scaun",
+      "scaun cu sange",
+      "urina cu sange",
+      "varsaturi cu sange",
+      "vomit sange",
+    ],
+  },
+  {
+    key: "leșin sau confuzie",
+    terms: ["lesin", "am lesinat", "confuz", "confuzie", "ameteli puternice", "foarte slabit"],
+  },
+  {
+    key: "durere puternică în partea dreaptă jos",
+    terms: ["dreapta jos", "partea dreapta jos", "durere dreapta jos"],
+  },
+  {
+    key: "simptome neurologice bruște",
+    terms: ["nu pot vorbi", "fata cazuta", "paralizie brusca", "slabiciune pe o parte"],
+  },
   {
     key: "control urinar/fecal afectat",
     terms: ["urina", "scaun", "control urinar", "control fecal", "incontinenta"],
@@ -540,6 +568,16 @@ const SELECTION_TERMS = [
   "osul",
   "muschiul",
   "muschi",
+  "organ",
+  "organe",
+  "rinichi",
+  "stomac",
+  "inima",
+  "plamani",
+  "ficat",
+  "pancreas",
+  "vezica",
+  "intestin",
   "unde se afla",
   "la ce foloseste",
 ];
@@ -559,6 +597,16 @@ const MEDICAL_GENERAL_TERMS = [
   "muschi",
   "os",
   "articulatie",
+  "organ",
+  "organe",
+  "rinichi",
+  "stomac",
+  "inima",
+  "plamani",
+  "ficat",
+  "pancreas",
+  "vezica",
+  "intestin",
 ];
 
 const PAIN_STARTER_TERMS = [
@@ -860,6 +908,93 @@ function regionTarget(regionKey: string | null | undefined) {
   return REGION_CONTEXT_TARGETS[regionKey] ?? null;
 }
 
+const ORGAN_CONTEXT_TARGETS = [
+  {
+    slug: "organ:rinichi",
+    label: "Rinichi",
+    bodyRegion: "abdomen",
+    terms: ["rinichi", "rinichii", "renal", "lombar", "urina", "urinare"],
+  },
+  {
+    slug: "organ:stomac",
+    label: "Stomac",
+    bodyRegion: "abdomen",
+    terms: ["stomac", "stomacul", "gastric", "greață", "greata", "varsaturi", "voma"],
+  },
+  {
+    slug: "organ:inima",
+    label: "Inimă",
+    bodyRegion: "torace",
+    terms: ["inima", "inimă", "cardiac", "piept", "durere in piept", "toracic"],
+  },
+  {
+    slug: "organ:plamani",
+    label: "Plămâni",
+    bodyRegion: "torace",
+    terms: ["plamani", "plămâni", "respir", "respiratie", "tuse", "aer"],
+  },
+  {
+    slug: "organ:ficat",
+    label: "Ficat",
+    bodyRegion: "abdomen",
+    terms: ["ficat", "hepatic", "dreapta sus", "bila", "bilă"],
+  },
+  {
+    slug: "organ:pancreas",
+    label: "Pancreas",
+    bodyRegion: "abdomen",
+    terms: ["pancreas", "pancreatic", "glicemie", "insulina"],
+  },
+  {
+    slug: "organ:vezica-urinara",
+    label: "Vezică urinară",
+    bodyRegion: "pelvis",
+    terms: ["vezica", "vezică", "urinara", "urinară", "urinare", "pelvis"],
+  },
+  {
+    slug: "organ:intestine",
+    label: "Intestine",
+    bodyRegion: "abdomen",
+    terms: ["intestin", "intestine", "colon", "scaun", "diaree", "constipatie"],
+  },
+  {
+    slug: "organ:splina",
+    label: "Splină",
+    bodyRegion: "abdomen",
+    terms: ["splina", "splină", "stanga sus", "stânga sus"],
+  },
+];
+
+function organTargetFromText(value: string | undefined) {
+  const text = normalizeText(value);
+  return ORGAN_CONTEXT_TARGETS.find((target) =>
+    target.terms.some((term) => text.includes(normalizeText(term))),
+  ) ?? null;
+}
+
+function directMuscleTargetFromText(value: string | undefined) {
+  const text = normalizeText(value);
+  if (hasAny(text, ["biceps", "triceps", "brat"])) return REGION_CONTEXT_TARGETS.brat;
+  if (hasAny(text, ["cvadriceps", "coapsa"])) return REGION_CONTEXT_TARGETS.genunchi;
+  if (hasAny(text, ["gamba", "gambei"])) return REGION_CONTEXT_TARGETS.glezna;
+  if (hasAny(text, ["spate", "lombar"])) return REGION_CONTEXT_TARGETS.spate;
+  if (hasAny(text, ["umar", "deltoid"])) return REGION_CONTEXT_TARGETS.umar;
+  return null;
+}
+
+function directBoneTargetFromText(value: string | undefined) {
+  const text = normalizeText(value);
+  if (hasAny(text, ["humerus"])) return { slug: "humerus", bodyRegion: "brat", label: "Humerus" };
+  if (hasAny(text, ["femur"])) return { slug: "femur", bodyRegion: "coapsa", label: "Femur" };
+  if (hasAny(text, ["tibia"])) return { slug: "tibia", bodyRegion: "gamba", label: "Tibia" };
+  if (hasAny(text, ["radius"])) return { slug: "radius", bodyRegion: "antebrat", label: "Radius" };
+  if (hasAny(text, ["coaste", "coasta", "stern"])) return { slug: "coaste", bodyRegion: "torace", label: "Coaste" };
+  if (hasAny(text, ["coloana", "vertebre", "vertebra"])) {
+    return { slug: "vert-lombare", bodyRegion: "spate", label: "Vertebre lombare" };
+  }
+  return null;
+}
+
 function muscularTargetForSelection(input: z.infer<typeof InputSchema>, route: AiRoute) {
   const selectedRegion = inferSelectedRegionKey(input);
   const target = regionTarget(route.entities.bodyRegionKey ?? selectedRegion);
@@ -891,6 +1026,54 @@ export function evaluateSelectedContextFit(
   const text = normalizeColloquialAddressing(input.question);
 
   if (route.category === "out_of_scope") return makeNoSwitch("out_of_scope");
+
+  const organTarget = organTargetFromText([input.question, route.entities.bodyRegionLabel].filter(Boolean).join(" "));
+  if (organTarget && input.tissue !== "organ") {
+    return {
+      selected_context_fit: "likely_organ_but_other_selected",
+      should_switch_context: true,
+      target_layer: "organs",
+      target_structure_slug: organTarget.slug,
+      target_structure_type: "organ",
+      target_body_region: organTarget.bodyRegion,
+      switch_reason: `Întrebarea pare despre ${organTarget.label}, deci modul Organe este mai potrivit.`,
+      confidence: "high",
+      switch_locked_until_clarification: false,
+    };
+  }
+
+  if (input.tissue === "organ") {
+    const directMuscleTarget = directMuscleTargetFromText(input.question);
+    if (directMuscleTarget) {
+      return {
+        selected_context_fit: "likely_muscular_but_bone_selected",
+        should_switch_context: true,
+        target_layer: "muscular",
+        target_structure_slug: directMuscleTarget.muscularSlug,
+        target_structure_type: "muscle_group",
+        target_body_region: directMuscleTarget.bodyRegion,
+        switch_reason: "Întrebarea menționează o grupă musculară, deci Sistemul Muscular este mai potrivit.",
+        confidence: "high",
+        switch_locked_until_clarification: false,
+      };
+    }
+
+    const directBoneTarget = directBoneTargetFromText(input.question);
+    if (directBoneTarget) {
+      return {
+        selected_context_fit: "likely_bone_joint_but_muscle_selected",
+        should_switch_context: true,
+        target_layer: "skeleton",
+        target_structure_slug: directBoneTarget.slug,
+        target_structure_type: "bone",
+        target_body_region: directBoneTarget.bodyRegion,
+        switch_reason: `Întrebarea menționează ${directBoneTarget.label}, deci modul Schelet este mai potrivit.`,
+        confidence: "high",
+        switch_locked_until_clarification: false,
+      };
+    }
+  }
+
   if (route.category === "red_flag_or_urgent" || symptomState.red_flags_detected) {
     const target = regionTarget(route.entities.bodyRegionKey ?? inferSelectedRegionKey(input));
     return {
@@ -999,8 +1182,8 @@ function emptySymptomState(input: z.infer<typeof InputSchema>): SymptomState {
     selected_structure_type: input.tissue,
     selected_region: input.bodyRegion ?? null,
     selected_body_region: input.bodyRegion ?? null,
-    visual_layer: input.visualLayer ?? (input.tissue === "organ" ? "complete" : input.tissue === "muschi" ? "muscular" : "skeleton"),
-    ai_layer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
+    visual_layer: input.visualLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
+    ai_layer: input.aiLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
     current_topic: "anatomy",
     pain_present: false,
     pain_quality: "unknown",
@@ -2043,6 +2226,20 @@ const BONE_REGION_SCOPES: Array<{
 ];
 
 function inferSelectionScope(input: z.infer<typeof InputSchema>): SelectionScope {
+  if (input.tissue === "organ") {
+    const modelSelectionId = input.modelSelectionId ?? input.structureSlug ?? null;
+    const rawSlug = input.structureSlug ?? input.modelSelectionId ?? null;
+    const structureSlug = rawSlug?.startsWith("organ:")
+      ? rawSlug.replace("organ:", "organ-")
+      : rawSlug;
+
+    return {
+      structureSlug,
+      modelSelectionId,
+      bodyRegion: input.bodyRegion ?? null,
+    };
+  }
+
   const explicitStructureSlug = input.structureSlug?.includes(":")
     ? input.structureSlug.split(":").pop()
     : input.structureSlug;
@@ -2573,7 +2770,7 @@ async function getGeneralMedicalContext(
     ].map(normalizeForScope),
   );
   const ragFilters: RetrievalFilters = {
-    aiLayer: input.aiLayer ?? (input.tissue === "muschi" ? "muscular" : "skeleton"),
+    aiLayer: input.aiLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
     tissue: input.tissue,
     bodyRegion: route.entities.bodyRegion ?? input.bodyRegion ?? null,
     structureSlug: route.selectedSubjectMentioned
@@ -2654,10 +2851,11 @@ async function getGeneralMedicalContext(
       supabase.from("pain_classifications").select("*").limit(60),
     ),
     safeSelect<Record<string, unknown>>(supabase.from("muscles").select("*").limit(80)),
+    safeSelect<Record<string, unknown>>(supabase.from("organs").select("*").limit(80)),
   ]);
 
   const optionalContext = optionalTables.flatMap((rows, tableIndex) => {
-    const tableNames = ["body_regions", "movement_patterns", "pain_classifications", "muscles"];
+    const tableNames = ["body_regions", "movement_patterns", "pain_classifications", "muscles", "organs"];
     return rows.map((row, index) => {
       const values = Object.entries(row)
         .filter(
@@ -2837,6 +3035,13 @@ function buildContextSwitchAnswer(
     return "Din ce descrii, pare mai util să verificăm și zona musculară. Te mut pe Sistem Muscular. A apărut după efort sau sport?";
   }
 
+  if (contextSwitch.should_switch_context && contextSwitch.target_layer === "organs") {
+    const organLabel =
+      ORGAN_CONTEXT_TARGETS.find((target) => target.slug === contextSwitch.target_structure_slug)
+        ?.label ?? "organul menționat";
+    return `Întrebarea pare despre ${organLabel}. Te mut pe Organe. Unde simți durerea, cât de severă este și a apărut brusc sau treptat?`;
+  }
+
   if (contextSwitch.should_switch_context && contextSwitch.target_layer === "skeleton") {
     const urgentPrefix =
       contextSwitch.selected_context_fit === "red_flag_priority"
@@ -2860,6 +3065,43 @@ export function buildClarifyingAnswer(
   input: z.infer<typeof InputSchema>,
   symptomState: SymptomState,
 ) {
+  if (input.tissue === "organ") {
+    if (symptomState.next_step === "urgent" || symptomState.red_flags_detected) {
+      const reasons = symptomState.red_flag_reasons.length
+        ? ` (${symptomState.red_flag_reasons.join(", ")})`
+        : "";
+      return `Ce descrii poate fi un semn de alarmă${reasons}. Este recomandat consult medical urgent, iar dacă simptomele sunt intense, apar dificultăți de respirație, durere în piept, leșin, confuzie sau sânge în urină/scaun/vărsături, mergi la urgență.`;
+    }
+
+    if (symptomState.last_question_intent === "organ_associated_signs") {
+      const normalized = stripPunctuation(input.question);
+      if (isContextualAffirmative(normalized) || isContextualNegative(normalized)) {
+        return `Când spui „${input.question.trim()}”, te referi la febră, greață/vărsături, dificultăți de respirație, durere în piept sau sânge în urină/scaun?`;
+      }
+    }
+
+    if (!isAnswered(symptomState, "severity")) {
+      symptomState.last_question_intent = "organ_severity";
+      return "Îmi pare rău că te doare. Durerea este ușoară, moderată sau severă?";
+    }
+
+    if (!isAnswered(symptomState, "onset")) {
+      symptomState.last_question_intent = "organ_onset";
+      return "A apărut brusc sau treptat?";
+    }
+
+    if (!isAnswered(symptomState, "associated_signs")) {
+      symptomState.last_question_intent = "organ_associated_signs";
+      return "Ai febră, greață, vărsături, dificultăți de respirație, durere în piept sau sânge în urină/scaun?";
+    }
+
+    return [
+      "Pot continua orientarea educațională despre organul selectat, fără diagnostic.",
+      "Urmărește dacă durerea se agravează, devine severă sau apar febră, vărsături persistente, durere în piept, dificultăți de respirație ori sânge în urină/scaun.",
+      "Pentru simptome severe, bruște sau în agravare, consultă un medic.",
+    ].join("\n");
+  }
+
   const region = normalizeForScope(input.bodyRegion);
   const urgentRegion = region.includes("brat")
     ? "brațul pare deformat, nu îl poți mișca"
@@ -2952,7 +3194,9 @@ function buildFollowUpAnswer(input: z.infer<typeof InputSchema>, context: Knowle
 
   return formatSixSectionAnswer({
     summary: severe
-      ? `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă au apărut după traumatism sau nu poți folosi zona.`
+      ? input.tissue === "organ"
+        ? `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă sunt bruște, severe sau asociate cu respirație dificilă, durere în piept ori sânge în urină/scaun.`
+        : `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă au apărut după traumatism sau nu poți folosi zona.`
       : `Pentru ${input.structureName}, pot orienta educațional răspunsul pe baza datelor Santix, fără diagnostic final.`,
     causes,
     aggravators: symptoms.length
@@ -2965,7 +3209,11 @@ function buildFollowUpAnswer(input: z.infer<typeof InputSchema>, context: Knowle
       : ["Evită solicitarea zonei dureroase și urmărește evoluția simptomelor."],
     consult: redFlags.length
       ? redFlags
-      : [
+      : input.tissue === "organ"
+        ? [
+          "Consultă urgent un medic pentru durere în piept, dificultăți de respirație, durere abdominală severă, leșin, confuzie sau sânge în urină/scaun/vărsături.",
+        ]
+        : [
           "Consultă un medic pentru durere severă, deformare, amorțeală, slăbiciune sau imposibilitate de folosire.",
         ],
   });
@@ -2991,7 +3239,11 @@ function buildSelectionSpecificAnswer(
       : ["Datele Santix nu indică factori agravanți specifici pentru această structură."],
     safeActions: recommendations.length
       ? recommendations
-      : [
+      : input.tissue === "organ"
+        ? [
+          "Folosește informația ca orientare educațională și urmărește simptomele generale asociate, fără autodiagnostic.",
+        ]
+        : [
           "Folosește informația ca orientare educațională și evită suprasolicitarea zonei dacă apare durere.",
         ],
     consult: [
@@ -3036,7 +3288,13 @@ function buildGeneralMedicalFallback(
   const hasMovementPain =
     route.entities.symptoms.includes("limitare de mișcare") ||
     hasAny(input.question, ["miscare", "misc", "ridic", "indoi", "alerg", "merg"]);
-  const questions = hasTraumaContext
+  const questions = input.tissue === "organ"
+    ? [
+        "Unde simți durerea sau disconfortul?",
+        "Este ușoară, moderată sau severă și a apărut brusc sau treptat?",
+        "Ai febră, greață, vărsături, dificultăți de respirație, durere în piept sau sânge în urină/scaun?",
+      ]
+    : hasTraumaContext
     ? [
         "Cât de severă este durerea: ușoară, moderată sau severă?",
         "Ai deformare, amorțeală, slăbiciune sau nu poți mișca zona normal?",
@@ -3047,8 +3305,12 @@ function buildGeneralMedicalFallback(
 
   const urgentIntro =
     route.category === "red_flag_or_urgent"
-      ? "Ce descrii poate include semne de alarmă. Este recomandat consult medical rapid, iar dacă durerea este severă, există deformare, amorțeală, dificultăți de respirație sau nu poți folosi zona, mergi la urgență."
-      : "Pot să te orientez educațional, fără diagnostic. Durerea după efort, căzătură sau lovitură poate avea cauze diferite, de la contuzie/suprasolicitare până la entorsă, luxație sau fractură, în funcție de context.";
+      ? input.tissue === "organ"
+        ? "Ce descrii poate include semne de alarmă. Este recomandat consult medical rapid, iar pentru durere în piept, dificultăți de respirație, durere abdominală severă, leșin, confuzie sau sânge în urină/scaun/vărsături, mergi la urgență."
+        : "Ce descrii poate include semne de alarmă. Este recomandat consult medical rapid, iar dacă durerea este severă, există deformare, amorțeală, dificultăți de respirație sau nu poți folosi zona, mergi la urgență."
+      : input.tissue === "organ"
+        ? "Pot să te orientez educațional, fără diagnostic. Simptomele legate de organe au nevoie de clarificări despre localizare, intensitate, debut și semne asociate."
+        : "Pot să te orientez educațional, fără diagnostic. Durerea după efort, căzătură sau lovitură poate avea cauze diferite, de la contuzie/suprasolicitare până la entorsă, luxație sau fractură, în funcție de context.";
 
   return formatSixSectionAnswer({
     summary: [route.conflictNote, urgentIntro].filter(Boolean).join(" "),
@@ -3288,7 +3550,7 @@ function buildOllamaPrompt(
     "1. Consideră întotdeauna că zona anatomică este deja selectată.",
     "2. Nu cere utilizatorului să specifice ce os, mușchi, organ sau zonă a selectat.",
     "3. Nu spune „specifică osul”, „alege zona” sau „selectează structura”.",
-    "4. Dacă mesajul utilizatorului este vag, de exemplu „mă doare”, întreabă despre simptome, localizare pe partea stângă/dreaptă, intensitate, debut, traumă și limitarea mișcării.",
+    "4. Dacă mesajul utilizatorului este vag, de exemplu „mă doare”, întreabă despre simptome, localizare pe partea stângă/dreaptă, intensitate și debut. Pentru organe întreabă despre febră, greață/vărsături, dificultăți de respirație, durere în piept și sânge în urină/scaun; nu întreba despre încordare musculară sau mișcarea zonei.",
     "5. Răspunde doar despre zona selectată.",
     "6. Răspunde doar pe baza contextului din baza de date Santix.",
     "7. Nu inventa diagnostice sau tratamente.",

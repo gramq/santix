@@ -54,9 +54,18 @@ export type OrganModelPart = {
     | "spine-reference";
   targetSize: [number, number, number];
   scaleMode?: "uniform" | "fit-box";
+  preserveScenePosition?: boolean;
   offset?: [number, number, number];
   rotation?: [number, number, number];
   mirrorX?: boolean;
+  nodeNames?: string[];
+};
+
+export type OrganInteractionZone = {
+  kind: "ellipsoid" | "box";
+  position: [number, number, number];
+  size: [number, number, number];
+  rotation?: [number, number, number];
 };
 
 export type InternalOrgan = {
@@ -79,7 +88,10 @@ export type InternalOrgan = {
   quiz: OrganQuizQuestion[];
   color: string;
   emissiveColor: string;
+  aiEnabled?: boolean;
+  positionStatus?: "valid" | "approximate" | "missing";
   modelParts?: OrganModelPart[];
+  interactionZones?: OrganInteractionZone[];
   renderVisualParts?: boolean;
   visualParts: OrganVisualPrimitive[];
 };
@@ -116,16 +128,25 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Inima se află în torace, între cei doi plămâni.",
       },
     ],
-    color: "#3be7ef",
-    emissiveColor: "#00f2fe",
+    color: "#b96b73",
+    emissiveColor: "#ff7280",
+    aiEnabled: true,
+    positionStatus: "valid",
     modelParts: [
       {
-        url: "/anatomy/organs/realistic_human_heart.glb",
+        url: "/anatomy/hra/VH_M_Heart.glb",
         anchor: "heart-mediastinum",
-        targetSize: [0.22, 0.33, 0.18],
-        offset: [-0.01, -0.02, 0.02],
-        rotation: [0.03, -0.03, -0.12],
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: [
+          "VH_M_heart_right_ventricle",
+          "VH_M_heart_left_ventricle",
+          "VH_M_papillary_muscle_of_heart_anterior",
+        ],
       },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [0.09, 1.14, 0.55], size: [0.42, 0.48, 0.24] },
     ],
     visualParts: [
       { kind: "sphere", position: [0.04, 0.75, 0.08], scale: [0.09, 0.14, 0.06], rotation: [0.25, 0, -0.3] },
@@ -163,17 +184,28 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Plămânii sunt organe respiratorii.",
       },
     ],
-    color: "#55f2ff",
-    emissiveColor: "#00f2fe",
+    color: "#7aa8bd",
+    emissiveColor: "#8cd7e8",
+    aiEnabled: true,
+    positionStatus: "valid",
     modelParts: [
       {
-        url: "/anatomy/organs/realistic_human_lungs.glb",
+        url: "/anatomy/hra/VH_M_Lung.glb",
         anchor: "thoracic-cavity",
-        targetSize: [0.72, 1.08, 0.28],
-        scaleMode: "fit-box",
-        offset: [0, 0.08, 0],
-        rotation: [0, 0, 0],
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: [
+          "VH_M_left_lingula_superior_bronchopulmonary_segment",
+          "VH_M_left_anterior_bronchopulmonary_segment",
+          "VH_M_right_apical_bronchopulmonary_segment",
+          "VH_M_right_anterior_bronchopulmonary_segment",
+          "VH_M_trachea",
+        ],
       },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [0.28, 1.12, 0.36], size: [0.52, 1, 0.24] },
+      { kind: "ellipsoid", position: [-0.28, 1.1, 0.36], size: [0.52, 1, 0.24] },
     ],
     visualParts: [
       { kind: "sphere", position: [-0.16, 0.99, 0.04], scale: [0.13, 0.24, 0.06], rotation: [0, 0, 0.08] },
@@ -213,17 +245,21 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Ficatul este situat sub diafragmă, mai ales în dreapta.",
       },
     ],
-    color: "#23c8d8",
-    emissiveColor: "#00f2fe",
+    color: "#9f7a55",
+    emissiveColor: "#d6a05c",
+    aiEnabled: true,
+    positionStatus: "valid",
     modelParts: [
       {
-        url: "/anatomy/organs/human_liver_and_gallbladder.glb",
+        url: "/anatomy/hra/VH_M_Liver.glb",
         anchor: "right-upper-abdomen",
-        targetSize: [0.44, 0.24, 0.18],
-        scaleMode: "fit-box",
-        offset: [-0.02, -0.02, -0.02],
-        rotation: [0.02, 0, 0.04],
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: ["VH_M_liver_capsule", "VH_M_caudate_lobe_of_liver", "VH_M_quadrate_lobe_of_liver"],
       },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [-0.18, 0.76, 0.38], size: [0.58, 0.44, 0.24], rotation: [0.05, 0, 0.05] },
     ],
     visualParts: [
       { kind: "sphere", position: [-0.13, 0.32, 0.07], scale: [0.24, 0.095, 0.055], rotation: [0.05, 0, 0.06] },
@@ -261,8 +297,10 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Stomacul este un organ digestiv.",
       },
     ],
-    color: "#6fe9ef",
-    emissiveColor: "#00f2fe",
+    color: "#c89676",
+    emissiveColor: "#e8ad82",
+    aiEnabled: false,
+    positionStatus: "missing",
     visualParts: [
       { kind: "sphere", position: [0.13, 0.17, 0.08], scale: [0.105, 0.14, 0.05], rotation: [0, 0, 0.45] },
     ],
@@ -298,17 +336,29 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Omul are doi rinichi.",
       },
     ],
-    color: "#3bd0e6",
-    emissiveColor: "#00f2fe",
+    color: "#9b6f91",
+    emissiveColor: "#d28abd",
+    aiEnabled: true,
+    positionStatus: "valid",
     modelParts: [
       {
-        url: "/anatomy/organs/human_kidney.glb",
-        anchor: "retroperitoneal-pair",
-        targetSize: [0.42, 0.34, 0.14],
-        scaleMode: "fit-box",
-        offset: [0, -0.03, -0.03],
-        rotation: [0, 0, 0],
+        url: "/anatomy/hra/VH_M_Kidney_R.glb",
+        anchor: "retroperitoneal-right",
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: ["VH_M_kidney_capsule_R", "VH_M_hilum_of_kidney_R", "VH_M_outer_cortex_of_kidney_R"],
       },
+      {
+        url: "/anatomy/hra/VH_M_Kidney_L.glb",
+        anchor: "retroperitoneal-left",
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: ["VH_M_kidney_capsule_L", "VH_M_hilum_of_kidney_L", "VH_M_outer_cortex_of_kidney_L"],
+      },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [-0.34, 0.48, 0.58], size: [0.38, 0.54, 0.28], rotation: [0, 0, -0.12] },
+      { kind: "ellipsoid", position: [0.4, 0.5, 0.58], size: [0.38, 0.54, 0.28], rotation: [0, 0, 0.12] },
     ],
     visualParts: [
       { kind: "sphere", position: [-0.19, 0.08, -0.01], scale: [0.055, 0.105, 0.034], rotation: [0, 0, 0.14] },
@@ -346,8 +396,35 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Intestinele ocupă mare parte din cavitatea abdominală.",
       },
     ],
-    color: "#4ee6e8",
-    emissiveColor: "#00f2fe",
+    color: "#b98c72",
+    emissiveColor: "#e5a27e",
+    aiEnabled: true,
+    positionStatus: "valid",
+    modelParts: [
+      {
+        url: "/anatomy/hra/VH_M_Small_Intestine.glb",
+        anchor: "upper-abdomen-center",
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: ["VH_M_duodenum", "VH_M_jejunum", "VH_M_ileum"],
+      },
+      {
+        url: "/anatomy/hra/SBU_M_Intestine_Large.glb",
+        anchor: "upper-abdomen-center",
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: [
+          "VH_M_ascending_colon",
+          "VH_M_descending_colon",
+          "VH_M_transverse_colon",
+          "VH_M_sigmoid_colon",
+        ],
+      },
+    ],
+    interactionZones: [
+      { kind: "box", position: [0.04, 0.16, 0.42], size: [0.62, 0.76, 0.2] },
+      { kind: "box", position: [0.1, 0.36, 0.36], size: [0.42, 0.34, 0.18] },
+    ],
     visualParts: [
       {
         kind: "tube",
@@ -414,9 +491,10 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Splina filtrează sângele și participă la apărarea imună.",
       },
     ],
-    color: "#5fe7ed",
-    emissiveColor: "#00f2fe",
-    renderVisualParts: true,
+    color: "#8d6ea8",
+    emissiveColor: "#ba8edb",
+    aiEnabled: false,
+    positionStatus: "missing",
     visualParts: [
       {
         kind: "sphere",
@@ -457,17 +535,26 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Pancreasul se află posterior de stomac.",
       },
     ],
-    color: "#74e8ee",
-    emissiveColor: "#00f2fe",
+    color: "#c8a86f",
+    emissiveColor: "#e4bf7c",
+    aiEnabled: true,
+    positionStatus: "valid",
     modelParts: [
       {
-        url: "/anatomy/organs/human_pancreas_cross_section.glb",
+        url: "/anatomy/hra/VH_M_Pancreas.glb",
         anchor: "upper-abdomen-center",
-        targetSize: [0.36, 0.09, 0.08],
-        scaleMode: "fit-box",
-        offset: [0.06, -0.04, -0.02],
-        rotation: [0, 0, 0],
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: [
+          "VH_M_body_of_pancreas",
+          "VH_M_tail_of_pancreas",
+          "VH_M_head_of_pancreas",
+          "VH_M_neck_of_pancreas",
+        ],
       },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [0.08, 0.72, 0.48], size: [0.44, 0.24, 0.18], rotation: [0, 0, -0.08] },
     ],
     visualParts: [
       { kind: "capsule", position: [0.02, 0.1, 0.1], scale: [0.014, 0.16, 0.014], rotation: [0, 0, Math.PI / 2] },
@@ -504,8 +591,26 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Vezica este parte a aparatului urinar.",
       },
     ],
-    color: "#7df6ff",
-    emissiveColor: "#00f2fe",
+    color: "#789fc0",
+    emissiveColor: "#8ebfe6",
+    aiEnabled: true,
+    positionStatus: "valid",
+    modelParts: [
+      {
+        url: "/anatomy/hra/VH_M_Urinary_Bladder.glb",
+        anchor: "upper-abdomen-center",
+        targetSize: [1, 1, 1],
+        preserveScenePosition: true,
+        nodeNames: [
+          "VH_M_fundus_of_urinary_bladder_dome",
+          "VH_M_fundus_of_urinary_bladder_base1",
+          "VH_M_trigone_of_urinary_bladder",
+        ],
+      },
+    ],
+    interactionZones: [
+      { kind: "ellipsoid", position: [-0.02, -0.34, 0.5], size: [0.24, 0.22, 0.18] },
+    ],
     visualParts: [
       { kind: "sphere", position: [0, -0.57, 0.08], scale: [0.055, 0.065, 0.04] },
     ],
@@ -541,8 +646,10 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Esofagul aparține aparatului digestiv.",
       },
     ],
-    color: "#65f2ff",
-    emissiveColor: "#00f2fe",
+    color: "#8fb5b8",
+    emissiveColor: "#9bd5d9",
+    aiEnabled: false,
+    positionStatus: "missing",
     visualParts: [
       {
         kind: "tube",
@@ -588,8 +695,10 @@ export const internalOrgans: InternalOrgan[] = [
         explanation: "Traheea este un conduct respirator.",
       },
     ],
-    color: "#65f2ff",
-    emissiveColor: "#00f2fe",
+    color: "#8fb5b8",
+    emissiveColor: "#9bd5d9",
+    aiEnabled: false,
+    positionStatus: "missing",
     visualParts: [
       {
         kind: "tube",

@@ -13,7 +13,7 @@ export function buildSantixAnswerPrompt(input: {
     "Ești asistentul educațional Santix. Răspunde în română, clar și scurt.",
     "Nu pune întrebări despre câmpuri deja completate în state.",
     `Structură: ${input.state.selected_structure_name ?? "necunoscută"}`,
-    `Layer AI: ${input.state.ai_layer}`,
+    `Mod intern: ${input.state.ai_layer}`,
     snippets ? `Context disponibil:\n${snippets}` : "Context disponibil: limitat.",
     `Mesaj utilizator: ${input.userMessage}`,
   ].join("\n\n");

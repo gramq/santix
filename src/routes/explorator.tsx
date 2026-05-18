@@ -4,6 +4,7 @@ import { SkeletonScene, type BoneSelection } from "@/components/skeleton/Skeleto
 import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
 import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
 import { bones } from "@/data/bones";
+import { getInternalOrgan } from "@/data/internalOrgans";
 import { MousePointerClick } from "lucide-react";
 import type { AiContextSwitchAction } from "@/lib/ai-chat.functions";
 import {
@@ -19,12 +20,12 @@ export const Route = createFileRoute("/explorator")({
       {
         name: "description",
         content:
-          "Explorează anatomia umană în 3D — schelet, mușchi și tendoane. Click pe orice structură pentru detalii și asistent AI de simptome.",
+          "Explorează anatomia umană în 3D — schelet, mușchi, tendoane și organe. Click pe orice structură pentru detalii și asistent AI de simptome.",
       },
       { property: "og:title", content: "Explorator Anatomie 3D — Santix" },
       {
         property: "og:description",
-        content: "Vizualizare interactivă 3D a oaselor și sistemului muscular.",
+        content: "Vizualizare interactivă 3D a oaselor, sistemului muscular și organelor.",
       },
     ],
   }),
@@ -65,7 +66,7 @@ function ExploratorPage() {
 
       setPreserveAiStateOnSelectionChange(true);
       setContextSwitchCount(0);
-      setLayerMode(tissue === "organ" ? "complete" : tissue === "muschi" ? "muscles" : "skeleton");
+      setLayerMode(tissue === "organ" ? "organs" : tissue === "muschi" ? "muscles" : "skeleton");
       setOpenConversationId(conversation.id);
       setSelection({
         id: targetBone?.id ?? structureId,
@@ -86,9 +87,16 @@ function ExploratorPage() {
     if (!action.should_switch_context || contextSwitchCount > 0 || !action.target_structure_slug)
       return;
 
-    const nextLayer: LayerMode = action.target_layer === "muscular" ? "muscles" : "skeleton";
+    const nextLayer: LayerMode =
+      action.target_layer === "organs"
+        ? "organs"
+        : action.target_layer === "muscular"
+          ? "muscles"
+          : "skeleton";
     const nextTissue: BoneSelection["tissue"] =
-      action.target_structure_type === "muscle" || action.target_structure_type === "muscle_group"
+      action.target_layer === "organs" || action.target_structure_type === "organ"
+        ? "organ"
+        : action.target_structure_type === "muscle" || action.target_structure_type === "muscle_group"
         ? "muschi"
         : "os";
     const targetBone =
@@ -106,6 +114,7 @@ function ExploratorPage() {
       "muschi:muschii-capului-gatului": "Mușchii capului și gâtului",
       "muschi:muschii-toracelui": "Mușchii toracelui",
     };
+    const organ = nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
 
     setPreserveAiStateOnSelectionChange(true);
     setContextSwitchCount((count) => count + 1);
@@ -114,12 +123,15 @@ function ExploratorPage() {
       id: action.target_structure_slug,
       side: "male",
       tissue: nextTissue,
-      regionId: nextTissue === "muschi" ? action.target_structure_slug : undefined,
+      regionId: nextTissue === "muschi" || nextTissue === "organ" ? action.target_structure_slug : undefined,
       regionLabel:
         nextTissue === "muschi"
           ? muscleLabels[action.target_structure_slug]
+          : nextTissue === "organ"
+            ? (organ?.category ?? action.target_body_region ?? undefined)
           : (action.target_body_region ?? undefined),
       label:
+        organ?.name ??
         targetBone?.name ??
         muscleLabels[action.target_structure_slug] ??
         action.target_body_region ??

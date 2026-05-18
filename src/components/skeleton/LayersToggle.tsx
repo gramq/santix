@@ -1,6 +1,6 @@
-import { Bone, Activity, Layers as LayersIcon } from "lucide-react";
+import { Bone, Activity, HeartPulse, Layers as LayersIcon } from "lucide-react";
 
-export type LayerMode = "skeleton" | "muscles" | "complete";
+export type LayerMode = "skeleton" | "muscles" | "organs" | "complete";
 
 interface Props {
   mode: LayerMode;
@@ -13,8 +13,9 @@ const ITEMS: Array<{
   hint: string;
   Icon: typeof Bone;
 }> = [
-  { key: "skeleton", label: "Schelet", hint: "Context osos", Icon: Bone },
-  { key: "muscles", label: "Sistem Muscular", hint: "Context muscular", Icon: Activity },
+  { key: "skeleton", label: "Schelet", hint: "Oase", Icon: Bone },
+  { key: "muscles", label: "Sistem Muscular", hint: "Mușchi", Icon: Activity },
+  { key: "organs", label: "Organe", hint: "Organe interne", Icon: HeartPulse },
   { key: "complete", label: "Anatomie Completă", hint: "Mod avansat", Icon: LayersIcon },
 ];
 

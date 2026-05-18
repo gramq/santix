@@ -71,6 +71,7 @@ function shouldShowContextSuggestion(action: AiContextSwitchAction | undefined) 
     action.target_structure_slug &&
     (action.selected_context_fit === "likely_muscular_but_bone_selected" ||
       action.selected_context_fit === "likely_bone_joint_but_muscle_selected" ||
+      action.selected_context_fit === "likely_organ_but_other_selected" ||
       action.selected_context_fit === "different_body_region_detected" ||
       action.selected_context_fit === "red_flag_priority"),
   );
@@ -349,12 +350,13 @@ export function BoneInfoPanel({
 
   const tissue = selection.tissue;
   const selectedOrgan = tissue === "organ" ? getInternalOrgan(selection.id) : undefined;
-  const aiLayer = tissue === "muschi" ? "muscular" : "skeleton";
-  const aiLayerLabel = tissue === "organ" ? "organe interne" : aiLayer === "muscular" ? "muscular" : "schelet";
-  const serverVisualLayer = visualLayer === "muscles" ? "muscular" : visualLayer;
+  const aiLayer = tissue === "organ" ? "organs" : tissue === "muschi" ? "muscular" : "skeleton";
+  const aiLayerLabel = tissue === "organ" ? "Organe" : aiLayer === "muscular" ? "Sistem Muscular" : "Schelet";
+  const serverVisualLayer =
+    visualLayer === "muscles" ? "muscular" : visualLayer === "organs" ? "organs" : visualLayer;
   const completeLayerNote =
     visualLayer === "complete"
-      ? "Anatomie completă este o vizualizare combinată. AI-ul folosește contextul osos sau muscular în funcție de structura selectată."
+      ? "Anatomie Completă este o vizualizare combinată. Pentru întrebări AI, folosește Schelet, Sistem Muscular sau Organe."
       : null;
   const debugAiEnabled =
     import.meta.env.DEV &&
@@ -389,7 +391,7 @@ export function BoneInfoPanel({
   const funcText = selectedOrgan?.function ?? bone?.funcție ?? curriculum.functionHint;
   const isCompleteAnatomyMode = visualLayer === "complete";
   const isOrganSelection = tissue === "organ";
-  const hideAssistantInComplete = isCompleteAnatomyMode && !isOrganSelection;
+  const hideAssistantInComplete = isCompleteAnatomyMode;
   const technicalDetails = getTechnicalDetails({
     bone,
     selection,
@@ -435,8 +437,8 @@ export function BoneInfoPanel({
         structureSlug: string;
         modelSelectionId: string;
         bodyRegion?: string;
-        visualLayer: "skeleton" | "muscular" | "complete";
-        aiLayer: "skeleton" | "muscular";
+        visualLayer: "skeleton" | "muscular" | "organs" | "complete";
+        aiLayer: "skeleton" | "muscular" | "organs";
       };
     } = {},
   ) => {
@@ -526,13 +528,16 @@ export function BoneInfoPanel({
   const handleAcceptContextSuggestion = async () => {
     if (!contextSuggestion) return;
 
-    const { action, prompt, conversationId } = contextSuggestion;
+    const { action, prompt } = contextSuggestion;
     if (!action.target_layer || !action.target_structure_slug) return;
 
-    const nextTissue: TissueType = action.target_layer === "muscular" ? "muschi" : "os";
-    const nextLayer = action.target_layer;
+    const nextTissue: TissueType =
+      action.target_layer === "organs" ? "organ" : action.target_layer === "muscular" ? "muschi" : "os";
+    const nextLayer =
+      action.target_layer === "organs" ? "organs" : action.target_layer === "muscular" ? "muscular" : "skeleton";
+    const nextOrgan = nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
     const targetName =
-      action.target_body_region ?? action.target_structure_slug.replace(/^muschi:/, "");
+      nextOrgan?.name ?? action.target_body_region ?? action.target_structure_slug.replace(/^muschi:/, "");
 
     setContextSuggestion(null);
     onContextSwitch?.(action);
@@ -540,7 +545,6 @@ export function BoneInfoPanel({
     await submitAiPrompt(prompt, {
       appendUser: false,
       suppressSuggestion: true,
-      conversationIdOverride: conversationId,
       overrideContext: {
         tissue: nextTissue,
         structureName: targetName,
@@ -612,7 +616,12 @@ export function BoneInfoPanel({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
             >
-              <TechnicalDetails details={technicalDetails} />
+            {completeLayerNote && (
+              <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/5 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+                {completeLayerNote}
+              </div>
+            )}
+            <TechnicalDetails details={technicalDetails} />
               {selectedOrgan && <OrganQuizSummary organ={selectedOrgan} />}
             </motion.div>
           )}
@@ -659,8 +668,17 @@ export function BoneInfoPanel({
                 </div>
               )}
               <div className="mb-3 rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-                Poți întreba despre <strong>{displayName}</strong>, durere în zonă sau mișcările în
-                care este implicată.
+                  {tissue === "organ" ? (
+                    <>
+                      Poți întreba despre <strong>{displayName}</strong>, rolul organului,
+                      localizare sau simptome generale asociate.
+                    </>
+                  ) : (
+                    <>
+                      Poți întreba despre <strong>{displayName}</strong>, durere în zonă sau mișcările în
+                      care este implicată.
+                    </>
+                  )}
               </div>
 
               {debugAiEnabled && (
@@ -669,7 +687,7 @@ export function BoneInfoPanel({
                     Debug AI
                   </summary>
                   <div className="mt-2 grid grid-cols-2 gap-2">
-                    <InfoChip label="Context AI" value={aiLayerLabel} />
+                    <InfoChip label="Mod" value={aiLayerLabel} />
                     <InfoChip
                       label="Context"
                       value={selection.label ?? selection.regionLabel ?? selection.id}
@@ -692,8 +710,9 @@ export function BoneInfoPanel({
               <div className="max-h-[250px] space-y-2 overflow-y-auto pr-1">
                 {aiMessages.length === 0 ? (
                   <div className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                    Exemplu: „Mă doare această zonă când o folosesc. Ce informații educaționale
-                    există?”
+                    {tissue === "organ"
+                      ? "Exemplu: „Mă doare aici. Ce întrebări sunt importante?”"
+                      : "Exemplu: „Mă doare această zonă când o folosesc. Ce informații educaționale există?”"}
                   </div>
                 ) : (
                   aiMessages.map((message, index) => (
@@ -1024,14 +1043,23 @@ function ContextSwitchCard({
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  const isOrganTarget = action.target_layer === "organs";
   const isMuscularTarget = action.target_layer === "muscular";
-  const title = isMuscularTarget
+  const title = isOrganTarget
+    ? "Problema pare legată de un organ"
+    : isMuscularTarget
     ? "Problema pare musculară"
     : "Problema pare osoasă sau articulară";
-  const description = isMuscularTarget
+  const description = isOrganTarget
+    ? "Descrierea menționează un organ intern. Modul Organe poate oferi întrebări și informații mai potrivite."
+    : isMuscularTarget
     ? "Descrierea menționează efort, încordare sau mișcare musculară. Sistemul Muscular poate oferi rezultate mai relevante."
     : "Descrierea menționează lovitură, articulație, os sau durere profundă. Modul Schelet poate fi mai potrivit.";
-  const buttonLabel = isMuscularTarget ? "Mergi la Sistem Muscular" : "Mergi la Schelet";
+  const buttonLabel = isOrganTarget
+    ? "Mergi la Organe"
+    : isMuscularTarget
+      ? "Mergi la Sistem Muscular"
+      : "Mergi la Schelet";
 
   return (
     <div className="mb-3 fade-up rounded-2xl border border-primary/25 bg-primary/[0.075] p-3 shadow-[0_0_28px_-18px_oklch(0.62_0.20_255_/_0.9)]">

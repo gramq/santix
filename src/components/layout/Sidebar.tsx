@@ -3,7 +3,7 @@ import { Boxes, BookOpen, Brain } from "lucide-react";
 import { AiHistorySidebarBlock } from "@/components/layout/AiHistorySidebarBlock";
 
 const nav = [
-  { to: "/explorator", label: "Explorator Schelet", icon: Boxes },
+  { to: "/explorator", label: "Explorator Anatomie", icon: Boxes },
   { to: "/glosar", label: "Ghid de utilizare", icon: BookOpen },
   { to: "/quiz", label: "Test Rapid", icon: Brain },
 ] as const;

@@ -1,5 +1,5 @@
 export type YesNoUnknown = "yes" | "no" | "unknown";
-export type AiLayer = "skeleton" | "muscular";
+export type AiLayer = "skeleton" | "muscular" | "organs";
 export type VisualLayer = AiLayer | "complete";
 export type Confidence = "low" | "medium" | "high";
 

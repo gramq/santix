@@ -7,7 +7,7 @@ export type SantixStructuredAiOutput = {
   red_flags_detected: boolean;
   next_question_intent: string | null;
   should_switch_context: boolean;
-  target_layer: "skeleton" | "muscular" | null;
+  target_layer: "skeleton" | "muscular" | "organs" | null;
   target_structure_slug: string | null;
   confidence: SantixAiConfidence;
   needs_medical_attention: boolean;
@@ -37,7 +37,9 @@ export function validateStructuredAiOutput(value: unknown): SantixStructuredAiOu
     next_question_intent: candidate.next_question_intent ?? null,
     should_switch_context: candidate.should_switch_context,
     target_layer:
-      candidate.target_layer === "skeleton" || candidate.target_layer === "muscular"
+      candidate.target_layer === "skeleton" ||
+      candidate.target_layer === "muscular" ||
+      candidate.target_layer === "organs"
         ? candidate.target_layer
         : null,
     target_structure_slug: candidate.target_structure_slug ?? null,
