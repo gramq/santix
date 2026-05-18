@@ -65,4 +65,4 @@ tests/               # Teste Playwright E2E
 
 ## Note
 
-Proiectul este în dezvoltare activă. Lucrăm la extinderea bazei de cunoștințe anatomice, îmbunătățirea triajului pentru structuri mici (falange, articulații mici) și optimizări de performanță pentru dispozitive mobile.
+Proiectul este în dezvoltare activă. 
