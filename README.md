@@ -46,20 +46,6 @@ Abordarea deterministică reduce riscul de halucinații și permite un control p
 
 Schema include tabele pentru structuri anatomice (cu aliasuri pentru căutare și legături la modelul 3D), baza de cunoștințe segmentată pe țesuturi, conversații și mesaje utilizator cu stare persistentă, și rate limiting per utilizator. Modificările de schemă sunt versionare prin 27 de migrații SQL păstrate în `supabase/migrations/`.
 
-## Rulare locală
-
-```bash
-# Instalare dependențe
-bun install
-
-# Configurare variabile de mediu
-cp .env.example .env
-# Completează SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY etc.
-
-# Dev server
-bun run dev
-```
-
 Pentru funcționalitatea AI locală este necesar [Ollama](https://ollama.ai) cu modelul `llama3.2:3b`.
 
 ## Structura proiectului
