@@ -1,4 +1,5 @@
 import { Bone, Activity, HeartPulse, Layers as LayersIcon } from "lucide-react";
+import { useLanguage } from "@/lib/useLanguage";
 
 export type LayerMode = "skeleton" | "muscles" | "organs" | "complete";
 
@@ -7,25 +8,22 @@ interface Props {
   onChange: (next: LayerMode) => void;
 }
 
-const ITEMS: Array<{
-  key: LayerMode;
-  label: string;
-  hint: string;
-  Icon: typeof Bone;
-}> = [
-  { key: "skeleton", label: "Schelet", hint: "Oase", Icon: Bone },
-  { key: "muscles", label: "Sistem Muscular", hint: "Mușchi", Icon: Activity },
-  { key: "organs", label: "Organe", hint: "Organe interne", Icon: HeartPulse },
-  { key: "complete", label: "Anatomie Completă", hint: "Mod avansat", Icon: LayersIcon },
-];
-
 export function LayersToggle({ mode, onChange }: Props) {
+  const { t } = useLanguage();
+
+  const ITEMS: Array<{ key: LayerMode; label: string; hint: string; Icon: typeof Bone }> = [
+    { key: "skeleton", label: t.layers_skeleton, hint: t.layers_skeleton_sub, Icon: Bone },
+    { key: "muscles", label: t.layers_muscles, hint: t.layers_muscles_sub, Icon: Activity },
+    { key: "organs", label: t.layers_organs, hint: t.layers_organs_sub, Icon: HeartPulse },
+    { key: "complete", label: t.layers_full, hint: t.layers_full_sub, Icon: LayersIcon },
+  ];
+
   return (
     <div className="absolute left-6 bottom-6 glass-strong rounded-3xl p-3.5 w-[260px] fade-up">
       <div className="flex items-center gap-2 px-1.5 pb-2.5 mb-2 border-b border-primary/10">
         <LayersIcon className="size-3.5 text-primary" />
         <span className="text-[10px] tracking-[0.22em] uppercase font-bold text-primary">
-          Vizualizare Straturi
+          {t.layers_title}
         </span>
       </div>
       <div className="space-y-1">
@@ -53,9 +51,7 @@ export function LayersToggle({ mode, onChange }: Props) {
                 <Icon className="size-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-semibold tracking-tight leading-tight">
-                  {label}
-                </div>
+                <div className="text-[12.5px] font-semibold tracking-tight leading-tight">{label}</div>
                 <div className="text-[10.5px] text-muted-foreground leading-tight">{hint}</div>
               </div>
               <span

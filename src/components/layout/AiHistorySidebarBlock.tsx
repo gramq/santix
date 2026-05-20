@@ -14,12 +14,14 @@ import {
   getConversationStructureLabel,
   type AiConversationSummary,
 } from "@/lib/aiHistory";
+import { useLanguage } from "@/lib/useLanguage";
 
 const SIDEBAR_VISIBLE_COUNT = 3;
 
 export function AiHistorySidebarBlock() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const { t } = useLanguage();
   const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
   const [allConversations, setAllConversations] = useState<AiConversationSummary[]>([]);
   const [allHistoryOpen, setAllHistoryOpen] = useState(false);
@@ -144,32 +146,32 @@ export function AiHistorySidebarBlock() {
       <div className="mb-3 flex items-center gap-2">
         <History className="size-4 text-medical" />
         <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          Conversații recente
+          {t.hist_title}
         </span>
       </div>
 
       {loading ? (
         <StatusMessage
           icon={<Loader2 className="size-4 animate-spin text-primary" />}
-          title="Se verifică sesiunea..."
+          title={t.hist_loading_session}
         />
       ) : !user ? (
         <StatusMessage
           icon={<Bot className="size-4 text-primary" />}
-          title="Autentifică-te pentru a vedea istoricul AI."
+          title={t.hist_login_prompt}
         />
       ) : isLoading && conversations.length === 0 ? (
         <StatusMessage
           icon={<Loader2 className="size-4 animate-spin text-primary" />}
-          title="Se încarcă istoricul..."
+          title={t.hist_loading}
         />
       ) : error && conversations.length === 0 ? (
         <StatusMessage icon={<Bot className="size-4 text-destructive" />} title={error} />
       ) : conversations.length === 0 ? (
         <StatusMessage
           icon={<Bot className="size-4 text-primary" />}
-          title="Nu ai conversații recente."
-          description="Selectează un os sau un mușchi pentru a începe."
+          title={t.hist_empty}
+          description={t.hist_start_prompt}
         />
       ) : (
         <div className="space-y-1.5">
@@ -191,7 +193,7 @@ export function AiHistorySidebarBlock() {
           onClick={() => setAllHistoryOpen(true)}
           className="mt-2.5 w-full rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:border-primary/35 hover:bg-primary/10"
         >
-          Vezi toate
+          {t.hist_see_all}
         </button>
       )}
 
@@ -241,15 +243,14 @@ function HistoryModal({
   onDelete: (conversation: AiConversationSummary) => void;
   onDeleteAll: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-md">
       <div className="glass-strong flex max-h-[78vh] w-full max-w-xl flex-col rounded-3xl border border-primary/15 p-5 shadow-[0_24px_80px_-32px_oklch(0.62_0.20_255_/_0.65)]">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-black tracking-tight">Toate conversațiile</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Istoricul tău AI Santix, vizibil doar în contul tău.
-            </p>
+            <h2 className="text-lg font-black tracking-tight">{t.hist_all_title}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t.hist_subtitle}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {conversations.length > 0 && (
@@ -257,8 +258,8 @@ function HistoryModal({
                 type="button"
                 onClick={onDeleteAll}
                 className="group flex size-8 items-center justify-center rounded-full border border-destructive/20 bg-destructive/5 text-destructive/80 transition-all hover:border-destructive/35 hover:bg-destructive/10 hover:text-destructive"
-                aria-label="Șterge tot istoricul"
-                title="Șterge tot istoricul"
+                aria-label={t.hist_delete_all}
+                title={t.hist_delete_all}
               >
                 <Trash2 className="size-3.5 transition-transform group-hover:scale-110" />
               </button>
@@ -267,7 +268,7 @@ function HistoryModal({
               type="button"
               onClick={onClose}
               className="flex size-8 items-center justify-center rounded-full bg-muted transition-colors hover:bg-muted/70"
-              aria-label="Închide istoricul"
+              aria-label={t.hist_close}
             >
               <X className="size-4" />
             </button>
@@ -278,13 +279,13 @@ function HistoryModal({
           {isLoading ? (
             <StatusMessage
               icon={<Loader2 className="size-4 animate-spin text-primary" />}
-              title="Se încarcă istoricul..."
+              title={t.hist_loading}
             />
           ) : conversations.length === 0 ? (
             <StatusMessage
               icon={<Bot className="size-4 text-primary" />}
-              title="Nu ai conversații recente."
-              description="Selectează un os sau un mușchi pentru a începe."
+              title={t.hist_empty}
+              description={t.hist_start_prompt}
             />
           ) : (
             <div className="space-y-2">
@@ -315,6 +316,7 @@ function ConversationRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLanguage();
   const Icon = conversation.tissue === "organ" ? HeartPulse : conversation.tissue === "muschi" ? Dumbbell : Bone;
   const formattedTitle = formatConversationTitle(conversation.title);
   const title =
@@ -363,7 +365,7 @@ function ConversationRow({
           "flex size-7 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive",
           compact ? "opacity-0 group-hover:opacity-100 focus:opacity-100" : "",
         ].join(" ")}
-        aria-label="Șterge conversația"
+        aria-label={t.hist_delete_conv}
       >
         <Trash2 className="size-3.5" />
       </button>
@@ -382,12 +384,13 @@ function ConfirmDeleteDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/75 px-4 backdrop-blur-md">
       <div className="glass-strong w-full max-w-sm rounded-3xl border border-destructive/25 p-5">
-        <h2 className="text-base font-black tracking-tight">Ștergi această conversație?</h2>
+        <h2 className="text-base font-black tracking-tight">{t.hist_confirm_delete}</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          „{formatConversationTitle(conversation.title)}” va fi eliminată din istoricul tău AI.
+          „{formatConversationTitle(conversation.title)}" {t.hist_will_be_removed}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -396,7 +399,7 @@ function ConfirmDeleteDialog({
             disabled={deleting}
             className="rounded-2xl border border-primary/15 bg-background/35 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
-            Anulează
+            {t.hist_cancel}
           </button>
           <button
             type="button"
@@ -404,7 +407,7 @@ function ConfirmDeleteDialog({
             disabled={deleting}
             className="rounded-2xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition-all hover:brightness-110 disabled:opacity-60"
           >
-            {deleting ? "Se șterge..." : "Șterge"}
+            {deleting ? t.hist_deleting : t.hist_delete}
           </button>
         </div>
       </div>
@@ -421,12 +424,13 @@ function ConfirmDeleteAllDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/75 px-4 backdrop-blur-md">
       <div className="glass-strong w-full max-w-sm rounded-3xl border border-destructive/25 p-5">
-        <h2 className="text-base font-black tracking-tight">Ștergi tot istoricul AI?</h2>
+        <h2 className="text-base font-black tracking-tight">{t.hist_confirm_delete_all}</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Această acțiune va șterge toate conversațiile tale AI. Continuăm?
+          {t.hist_confirm_delete_all_desc}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -435,7 +439,7 @@ function ConfirmDeleteAllDialog({
             disabled={deleting}
             className="rounded-2xl border border-primary/15 bg-background/35 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
-            Anulează
+            {t.hist_cancel}
           </button>
           <button
             type="button"
@@ -443,7 +447,7 @@ function ConfirmDeleteAllDialog({
             disabled={deleting}
             className="rounded-2xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition-all hover:brightness-110 disabled:opacity-60"
           >
-            {deleting ? "Se șterge..." : "Șterge tot"}
+            {deleting ? t.hist_deleting : t.hist_delete_all_btn}
           </button>
         </div>
       </div>

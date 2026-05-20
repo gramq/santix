@@ -9,9 +9,6 @@ const ADDRESS_TERMS = [
   "sefu",
   "șefu",
   "unchiule",
-  "coaie",
-  "coae",
-  "coaje",
   "ba",
   "bă",
 ];

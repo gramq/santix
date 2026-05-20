@@ -5,24 +5,20 @@ import { AuthDialog } from "@/components/auth/AuthDialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { ThemeToggle } from "./ThemeToggle";
-
-const links = [
-  { to: "/explorator", label: "Explorator" },
-  { to: "/glosar", label: "Ghid Santix" },
-  { to: "/quiz", label: "Quiz" },
-] as const;
+import { LanguageToggle } from "./LanguageToggle";
+import { useLanguage } from "@/lib/useLanguage";
 
 export function Header() {
   const location = useLocation();
-  const {
-    user,
-    loading,
-    authNotice,
-    clearAuthNotice,
-    passwordRecovery,
-    clearPasswordRecovery,
-  } = useAuth();
+  const { user, loading, authNotice, clearAuthNotice, passwordRecovery, clearPasswordRecovery } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
+  const { t } = useLanguage();
+
+  const links = [
+    { to: "/explorator", label: t.nav_explorator },
+    { to: "/glosar", label: t.nav_ghid },
+    { to: "/quiz", label: t.nav_quiz },
+  ] as const;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -58,6 +54,7 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <LanguageToggle />
           <ThemeToggle />
           {user ? (
             <>
@@ -71,7 +68,7 @@ export function Header() {
                 className="flex h-9 items-center gap-2 rounded-2xl border border-primary/15 bg-primary/10 px-3 text-xs font-semibold text-primary transition-all hover:border-primary/35 hover:bg-primary/15"
               >
                 <LogOut className="size-4" />
-                Ieși
+                {t.nav_logout}
               </button>
             </>
           ) : (
@@ -82,7 +79,7 @@ export function Header() {
               className="flex h-9 items-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent px-4 text-xs font-semibold text-primary-foreground shadow-[0_8px_22px_-12px_rgba(0,242,254,0.85)] transition-all hover:-translate-y-[1px] hover:shadow-[0_0_28px_rgba(0,242,254,0.22)] disabled:translate-y-0 disabled:opacity-60"
             >
               <UserCircle className="size-4" />
-              Login
+              {t.nav_login}
             </button>
           )}
         </div>

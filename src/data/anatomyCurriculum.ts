@@ -632,3 +632,223 @@ export function classifyAnatomyStructure(input: {
 
   return withAspect(muscleInfo(name), name);
 }
+
+// ─── Translation maps (RO → EN) ───────────────────────────────────────────────
+
+const systemMapEn: Record<string, string> = {
+  "Sistem osos": "Skeletal system",
+  "Sistem muscular": "Muscular system",
+  "Organe interne": "Internal organs",
+  "Tendoane si tesut conjunctiv": "Tendons and connective tissue",
+};
+
+const segmentMapEn: Record<string, string> = {
+  "Cap si gat": "Head and neck",
+  "Cap": "Head",
+  "Gat": "Neck",
+  "Trunchi": "Trunk",
+  "Torace": "Thorax",
+  "Abdomen": "Abdomen",
+  "Abdomen si pelvis": "Abdomen and pelvis",
+  "Gat si torace": "Neck and thorax",
+  "Membru superior": "Upper limb",
+  "Membru inferior": "Lower limb",
+  "Corp": "Body",
+};
+
+const groupMapEn: Record<string, string> = {
+  // Muscle groups
+  "Muschii cefei": "Nape muscles",
+  "Muschii capului": "Head muscles",
+  "Muschii gatului": "Neck muscles",
+  "Muschii spatelui si ai cefei": "Back and neck muscles",
+  "Muschii anterolaterali ai toracelui": "Anterolateral thoracic muscles",
+  "Muschii anterolaterali ai abdomenului": "Anterolateral abdominal muscles",
+  "Muschii umarului": "Shoulder muscles",
+  "Muschii bratului": "Arm muscles",
+  "Muschii antebratului": "Forearm muscles",
+  "Muschii mainii": "Hand muscles",
+  "Muschii bazinului": "Pelvic muscles",
+  "Muschii coapsei": "Thigh muscles",
+  "Muschii gambei": "Leg muscles",
+  "Muschii piciorului": "Foot muscles",
+  "Muschii scheletici": "Skeletal muscles",
+  // Bone groups
+  "Scheletul capului": "Skull",
+  "Coloana vertebrala": "Vertebral column",
+  "Scheletul toracelui": "Thoracic skeleton",
+  "Centura pelvina": "Pelvic girdle",
+  "Centura scapulara": "Shoulder girdle",
+  "Scheletul bratului": "Arm skeleton",
+  "Scheletul antebratului": "Forearm skeleton",
+  "Scheletul mainii": "Hand skeleton",
+  "Scheletul coapsei": "Thigh skeleton",
+  "Scheletul gambei": "Leg skeleton",
+  "Scheletul piciorului": "Foot skeleton",
+  "Schelet": "Skeleton",
+  // Organ groups
+  "Aparat cardiovascular": "Cardiovascular system",
+  "Aparat respirator": "Respiratory system",
+  "Aparat digestiv": "Digestive system",
+  "Aparat urinar": "Urinary system",
+};
+
+const subgroupMapEn: Record<string, string> = {
+  "Plan posterior": "Posterior plane",
+  "Muschii masticatori": "Masticatory muscles",
+  "Muschii mimicii": "Facial expression muscles",
+  "Regiunea anterolaterala si planurile profunde": "Anterolateral region and deep planes",
+  "Plan superficial si planuri profunde": "Superficial and deep planes",
+  "Muschii respiratori": "Respiratory muscles",
+  "Muschii peretelui toracic": "Thoracic wall muscles",
+  "Peretele abdominal": "Abdominal wall",
+  "Umar anterior": "Anterior shoulder",
+  "Umar posterior": "Posterior shoulder",
+  "Umar lateral/superior": "Lateral / superior shoulder",
+  "Centura scapulara si articulatia umarului": "Shoulder girdle and joint",
+  "Loja posterioara": "Posterior compartment",
+  "Loja anterioara": "Anterior compartment",
+  "Loja mediala": "Medial compartment",
+  "Loja anterolaterala": "Anterolateral compartment",
+  "Grup anterior": "Anterior group",
+  "Grup posterior/lateral": "Posterior / lateral group",
+  "Fata palmara si spatiile interosoase": "Palmar face and interosseous spaces",
+  "Fata dorsala si fata plantara": "Dorsal and plantar face",
+  "Regiunea soldului": "Hip region",
+  "Incadrare generala": "General classification",
+  // Skull subgroups
+  "Neurocraniu - regiunea posterioara": "Neurocranium – posterior region",
+  "Neurocraniu - regiunea anterioara": "Neurocranium – anterior region",
+  "Neurocraniu - regiunea superolaterala": "Neurocranium – superolateral region",
+  "Neurocraniu - regiunea laterala": "Neurocranium – lateral region",
+  "Viscerocraniu": "Viscerocranium",
+  "Neurocraniu": "Neurocranium",
+  // Vertebral
+  "Regiunea cervicala": "Cervical region",
+  "Regiunea toracala": "Thoracic region",
+  "Regiunea lombara": "Lumbar region",
+  "Regiunea sacrala/coccigiana": "Sacral / coccygeal region",
+  // Thoracic
+  "Coaste": "Ribs",
+  "Stern": "Sternum",
+  // Pelvic
+  "Os coxal si bazin osos": "Hip bone and bony pelvis",
+  // Shoulder girdle
+  "Clavicula si scapula": "Clavicle and scapula",
+  // Upper limb
+  "Humerus": "Humerus",
+  "Radius si ulna": "Radius and ulna",
+  "Carpiene, metacarpiene si falange": "Carpals, metacarpals and phalanges",
+  // Lower limb
+  "Rotula": "Patella",
+  "Femur": "Femur",
+  "Tibia si fibula": "Tibia and fibula",
+  "Tarsiene, metatarsiene si falange": "Tarsals, metatarsals and phalanges",
+  // Organs
+  "Inima": "Heart",
+  "Plamani": "Lungs",
+  "Organe digestive": "Digestive organs",
+  "Organe urinare": "Urinary organs",
+  "Cai respiratorii": "Airway",
+  "Organe interne": "Internal organs",
+};
+
+const aspectMapEn: Record<string, string> = {
+  "Fata anterioara": "Anterior face",
+  "Fata posterioara": "Posterior face",
+  "Fata laterala": "Lateral face",
+  "Fata mediala": "Medial face",
+  "Plan profund": "Deep plane",
+  "Plan general": "General plane",
+};
+
+const functionHintMapEn: Record<string, string> = {
+  "Participa la extensia, rotatia si stabilizarea capului si gatului.":
+    "Participates in extension, rotation and stabilisation of the head and neck.",
+  "Participa la mimica fetei sau la masticatie.":
+    "Participates in facial expressions or mastication.",
+  "Ajuta la miscarile capului, gatului si la stabilizarea regiunii cervicale.":
+    "Assists with head and neck movements and stabilises the cervical region.",
+  "Sustin postura si participa la miscarile trunchiului, capului si centurii scapulare.":
+    "Supports posture and participates in movements of the trunk, head and shoulder girdle.",
+  "Contribuie la miscarile toracelui, respiratie si stabilizarea umarului.":
+    "Contributes to thoracic movements, respiration and shoulder stabilisation.",
+  "Sustin peretele abdominal si participa la flexia, rotatia si stabilizarea trunchiului.":
+    "Supports the abdominal wall and participates in flexion, rotation and trunk stabilisation.",
+  "Mobilizeaza si stabilizeaza umarul.": "Mobilises and stabilises the shoulder.",
+  "Realizeaza miscari ale bratului si antebratului, mai ales flexie sau extensie.":
+    "Performs arm and forearm movements, especially flexion or extension.",
+  "Controleaza miscarile antebratului, mainii si degetelor.":
+    "Controls forearm, hand and finger movements.",
+  "Permit miscari fine ale degetelor si prizei mainii.":
+    "Enables fine finger movements and hand grip.",
+  "Stabilizeaza soldul si participa la miscarile coapsei.":
+    "Stabilises the hip and participates in thigh movements.",
+  "Participa la miscarile coapsei, genunchiului si la locomotie.":
+    "Participates in thigh and knee movements and locomotion.",
+  "Controleaza miscarile gambei, labei piciorului si degetelor.":
+    "Controls movements of the leg, foot and toes.",
+  "Sustin bolta plantara si miscarile degetelor piciorului.":
+    "Supports the plantar arch and toe movements.",
+  "Muschii scheletici sunt componenta activa a miscarii.":
+    "Skeletal muscles are the active component of movement.",
+  "Protejeaza encefalul si formeaza suportul fetei.":
+    "Protects the brain and forms the facial support.",
+  "Sustine corpul, protejeaza maduva spinarii si permite miscari ale trunchiului.":
+    "Supports the body, protects the spinal cord and allows trunk movements.",
+  "Protejeaza inima si plamanii si participa la mecanica respiratiei.":
+    "Protects the heart and lungs and participates in the mechanics of respiration.",
+  "Leaga membrul inferior de trunchi si preia greutatea corpului.":
+    "Connects the lower limb to the trunk and bears body weight.",
+  "Leaga membrul superior de torace.": "Connects the upper limb to the thorax.",
+  "Actioneaza ca parghie pentru miscarile membrului superior.":
+    "Acts as a lever for upper limb movements.",
+  "Sustine miscarile antebratului si mainii.": "Supports forearm and hand movements.",
+  "Asigura suportul pentru miscarile fine ale mainii.":
+    "Provides support for fine hand movements.",
+  "Preia greutatea corpului si participa la locomotie.":
+    "Bears body weight and participates in locomotion.",
+  "Sustine greutatea si miscarile gambei.": "Supports the weight and movements of the leg.",
+  "Sustine statica, mersul si echilibrul.": "Supports static posture, walking and balance.",
+  "Oasele formeaza componenta pasiva a aparatului locomotor.":
+    "Bones form the passive component of the locomotor system.",
+  "Pompeaza sangele catre plamani si catre restul corpului.":
+    "Pumps blood to the lungs and to the rest of the body.",
+  "Realizeaza schimbul de oxigen si dioxid de carbon.":
+    "Performs the exchange of oxygen and carbon dioxide.",
+  "Participa la digestie, absorbtie sau procesarea substantelor nutritive.":
+    "Participates in digestion, absorption or processing of nutrients.",
+  "Participa la filtrarea, stocarea si eliminarea urinei.":
+    "Participates in filtration, storage and elimination of urine.",
+  "Permite trecerea aerului catre plamani.": "Allows air passage to the lungs.",
+  "Organ intern implicat in functionarea organismului.":
+    "Internal organ involved in the functioning of the organism.",
+  "Leaga, stabilizeaza sau transmit forta dintre muschi, oase si articulatii.":
+    "Connects, stabilises or transmits force between muscles, bones and joints.",
+};
+
+function translateGroup(group: string): string {
+  // Tendon groups are built dynamically: "Tendoanele/fasciile asociate muschilor X"
+  const tendonPrefix = "Tendoanele/fasciile asociate muschilor ";
+  if (group.startsWith(tendonPrefix)) {
+    const muscleGroup = "Muschii " + group.slice(tendonPrefix.length);
+    const translatedMuscle = groupMapEn[muscleGroup] ?? muscleGroup;
+    return `Tendons / fascia of: ${translatedMuscle}`;
+  }
+  return groupMapEn[group] ?? group;
+}
+
+export function translateCurriculumInfo(
+  info: AnatomyCurriculumInfo,
+  lang: "ro" | "en",
+): AnatomyCurriculumInfo {
+  if (lang !== "en") return info;
+  return {
+    system: systemMapEn[info.system] ?? info.system,
+    segment: segmentMapEn[info.segment] ?? info.segment,
+    group: translateGroup(info.group),
+    subgroup: info.subgroup ? (subgroupMapEn[info.subgroup] ?? info.subgroup) : undefined,
+    aspect: info.aspect ? (aspectMapEn[info.aspect] ?? info.aspect) : undefined,
+    functionHint: functionHintMapEn[info.functionHint] ?? info.functionHint,
+  };
+}

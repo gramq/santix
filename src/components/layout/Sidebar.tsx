@@ -1,18 +1,20 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Boxes, BookOpen, Brain } from "lucide-react";
 import { AiHistorySidebarBlock } from "@/components/layout/AiHistorySidebarBlock";
-
-const nav = [
-  { to: "/explorator", label: "Explorator Anatomie", icon: Boxes },
-  { to: "/glosar", label: "Ghid de utilizare", icon: BookOpen },
-  { to: "/quiz", label: "Test Rapid", icon: Brain },
-] as const;
+import { useLanguage } from "@/lib/useLanguage";
 
 export function Sidebar() {
   const location = useLocation();
+  const { t } = useLanguage();
+
+  const nav = [
+    { to: "/explorator", label: t.sidebar_explorator, icon: Boxes },
+    { to: "/glosar", label: t.sidebar_ghid, icon: BookOpen },
+    { to: "/quiz", label: t.sidebar_quiz, icon: Brain },
+  ] as const;
+
   return (
     <aside className="hidden lg:flex w-72 shrink-0 flex-col p-4 gap-4">
-      {/* Brand */}
       <Link to="/" aria-label="Santix" className="glass rounded-3xl p-5 fade-up">
         <div className="group flex items-center justify-center rounded-2xl border border-primary/10 bg-white/[0.035] px-5 py-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
           <h1 className="text-2xl font-black leading-none tracking-[0.18em] text-foreground transition-colors group-hover:text-primary">
@@ -21,7 +23,6 @@ export function Sidebar() {
         </div>
       </Link>
 
-      {/* Nav */}
       <nav
         className="glass rounded-3xl p-3 fade-up flex flex-col gap-1"
         style={{ animationDelay: "60ms" }}

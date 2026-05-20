@@ -10,27 +10,42 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { LanguageToggle } from "@/components/layout/LanguageToggle";
+import { useLanguage } from "@/lib/useLanguage";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Santix — Înțelege-ți corpul" },
-      {
-        name: "description",
-        content:
-          "Santix este introducerea către exploratorul anatomic 3D cu schelet, mușchi, tendoane, bibliotecă și quiz.",
-      },
+      { name: "description", content: "Santix este introducerea către exploratorul anatomic 3D cu schelet, mușchi, tendoane, bibliotecă și quiz." },
       { property: "og:title", content: "Santix — Înțelege-ți corpul" },
-      {
-        property: "og:description",
-        content: "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă.",
-      },
+      { property: "og:description", content: "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă." },
     ],
   }),
   component: SantixLanding,
 });
 
+const skeletonZonesRo = [
+  { id: "skull", label: "Craniu", description: "Protecție cerebrală și punct de pornire pentru simptome precum cefalee sau amețeală.", x: 170, y: 62 },
+  { id: "chest", label: "Torace", description: "Coaste, stern și respirație. Ideal pentru explorarea durerilor toracice educaționale.", x: 170, y: 142 },
+  { id: "arm", label: "Braț", description: "Umăr, humerus, cot și antebraț, cu accent pe mobilitate și traumatisme.", x: 114, y: 198 },
+  { id: "pelvis", label: "Bazin", description: "Centura pelviană conectează coloana cu membrele inferioare.", x: 170, y: 272 },
+  { id: "knee", label: "Genunchi", description: "Articulație complexă pentru stabilitate, mers și testarea durerilor mecanice.", x: 142, y: 350 },
+  { id: "ankle", label: "Gleznă", description: "Stabilitate, propulsie și entorse frecvente în mișcare.", x: 198, y: 408 },
+] as const;
+
+const skeletonZonesEn = [
+  { id: "skull", label: "Skull", description: "Brain protection and starting point for symptoms such as headache or dizziness.", x: 170, y: 62 },
+  { id: "chest", label: "Thorax", description: "Ribs, sternum and breathing. Ideal for exploring educational chest pain.", x: 170, y: 142 },
+  { id: "arm", label: "Arm", description: "Shoulder, humerus, elbow and forearm, with a focus on mobility and injuries.", x: 114, y: 198 },
+  { id: "pelvis", label: "Pelvis", description: "The pelvic girdle connects the spine to the lower limbs.", x: 170, y: 272 },
+  { id: "knee", label: "Knee", description: "Complex joint for stability, walking and testing mechanical pain.", x: 142, y: 350 },
+  { id: "ankle", label: "Ankle", description: "Stability, propulsion and frequent sprains during movement.", x: 198, y: 408 },
+] as const;
+
 function SantixLanding() {
+  const { lang, t } = useLanguage();
+
   return (
     <div className="santix-intro min-h-screen overflow-hidden bg-[#050709] text-white">
       <div className="pointer-events-none absolute inset-0 santix-grid" />
@@ -45,21 +60,18 @@ function SantixLanding() {
         </Link>
 
         <nav className="ml-auto hidden items-center gap-8 text-sm text-slate-400 md:flex">
-          <Link to="/glosar" className="transition hover:text-white">
-            Ghid Santix
-          </Link>
-          <Link to="/quiz" className="transition hover:text-white">
-            Quiz
-          </Link>
+          <Link to="/glosar" className="transition hover:text-white">{t.nav_ghid}</Link>
+          <Link to="/quiz" className="transition hover:text-white">{t.nav_quiz}</Link>
         </nav>
 
         <Link
           to="/explorator"
           className="ml-auto inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_30px_rgba(0,242,254,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_0_44px_rgba(0,242,254,0.42)] md:ml-0"
         >
-          Începe acum
+          {t.landing_start}
           <ArrowRight className="size-4" />
         </Link>
+        <LanguageToggle />
         <ThemeToggle />
       </header>
 
@@ -68,74 +80,56 @@ function SantixLanding() {
           <div className="max-w-3xl">
             <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-300">
               <span className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(0,242,254,0.9)]" />
-              Platformă medicală 3D interactivă
+              {t.landing_hero_title}
             </div>
 
             <h1 className="max-w-4xl text-5xl font-black leading-[0.96] tracking-tight text-white md:text-7xl lg:text-8xl">
               San<span className="santix-title-gradient">tix</span>
             </h1>
 
-            <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">
-              Creează-ți cont pentru a folosi Santix complet: explorezi corpul
-              în 3D, păstrezi conversațiile recente și poți întreba asistentul AI
-              despre zona selectată, într-un mod educațional.
-            </p>
+            <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">{t.landing_account_desc}</p>
 
             <div className="mt-10 flex flex-wrap gap-3">
               <Link
                 to="/explorator"
                 className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] transition hover:-translate-y-1 hover:shadow-[0_0_54px_rgba(0,242,254,0.45)]"
               >
-                Începe acum
+                {t.landing_start}
                 <MousePointerClick className="size-4" />
               </Link>
               <a
                 href="#flux"
                 className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-white/[0.02] px-7 py-4 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/55 hover:bg-cyan-300/5 hover:text-white"
               >
-                Cum funcționează
+                {t.landing_how}
                 <Sparkles className="size-4 text-cyan-300" />
               </a>
             </div>
 
             <div className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
-              <IntroStat value="3" label="Straturi anatomice" />
-              <IntroStat value="AI" label="Întrebări ghidate" />
-              <IntroStat value="Istoric" label="Conversații salvate" />
+              <IntroStat value={t.landing_stat1_val} label={t.landing_stat1_label} />
+              <IntroStat value={t.landing_stat2_val} label={t.landing_stat2_label} />
+              <IntroStat value={t.landing_stat3_val} label={t.landing_stat3_label} />
             </div>
           </div>
 
           <div className="relative hidden min-h-[620px] items-center justify-center md:flex">
-            <NeonSkeletonPreview />
+            <NeonSkeletonPreview lang={lang} selectedZoneLabel={t.landing_selected_zone} />
           </div>
         </section>
 
         <section id="anatomie" className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
           <div className="mx-auto mb-10 max-w-7xl">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-              Ce poți face
-            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_features_title}</p>
             <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
-              Explorezi corpul, alegi zona care te interesează și înveți pas cu pas.
+              {t.landing_feature1_desc}
             </h2>
           </div>
 
           <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
-            <Feature
-              icon={Layers}
-              title="Corp 3D pe straturi"
-              text="Comuți între schelet, mușchi și anatomie completă pentru a vedea zona mai clar."
-            />
-            <Feature
-              icon={Brain}
-              title="Întrebări despre zona aleasă"
-              text="Poți întreba despre durere, mișcare sau rolul unei structuri, într-un limbaj simplu."
-            />
-            <Feature
-              icon={ShieldCheck}
-              title="Istoric personal"
-              text="Dacă ești autentificat, poți reveni la conversațiile tale recente cu asistentul."
-            />
+            <Feature icon={Layers} title={t.landing_feature1_title} text={t.landing_feature2_desc} />
+            <Feature icon={Brain} title={t.landing_feature2_title} text={t.landing_feature3_desc} />
+            <Feature icon={ShieldCheck} title={t.landing_feature3_title} text={t.landing_feature4_desc} />
           </div>
         </section>
 
@@ -143,26 +137,24 @@ function SantixLanding() {
           <div className="mx-auto max-w-7xl">
             <div className="mb-10 flex items-end justify-between gap-6">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-                  Cum funcționează
-                </p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_how_title}</p>
                 <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
-                  De la o zonă aleasă la o explicație mai clară.
+                  {t.landing_how_subtitle}
                 </h2>
               </div>
               <Link
                 to="/explorator"
                 className="hidden items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-black transition hover:-translate-y-0.5 md:inline-flex"
               >
-                Începe acum
+                {t.landing_start}
                 <ArrowRight className="size-4" />
               </Link>
             </div>
 
             <div className="grid gap-5 md:grid-cols-3">
-              <Step number="01" title="Alegi zona" text="Pornești de la modelul 3D și apeși pe osul sau mușchiul care te interesează." />
-              <Step number="02" title="Citești explicația" text="Panoul de detalii îți arată numele pe înțelesul tău și informațiile importante." />
-              <Step number="03" title="Întrebi mai departe" text="Asistentul te poate ghida cu întrebări despre durere, mișcare sau situația descrisă." />
+              <Step number={t.landing_step1_num} title={t.landing_step1_title} text={t.landing_step1_desc} />
+              <Step number={t.landing_step2_num} title={t.landing_step2_title} text={t.landing_step2_desc} />
+              <Step number={t.landing_step3_num} title={t.landing_step3_title} text={t.landing_step3_desc} />
             </div>
           </div>
         </section>
@@ -175,22 +167,12 @@ function IntroStat({ value, label }: { value: string; label: string }) {
   return (
     <div>
       <div className="text-3xl font-black text-white">{value}</div>
-      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-        {label}
-      </div>
+      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>
     </div>
   );
 }
 
-function Feature({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: typeof Activity;
-  title: string;
-  text: string;
-}) {
+function Feature({ icon: Icon, title, text }: { icon: typeof Activity; title: string; text: string }) {
   return (
     <article className="group rounded-3xl border border-cyan-300/10 bg-white/[0.035] p-7 shadow-[0_18px_70px_rgba(0,0,0,0.28)] transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/35 hover:bg-cyan-300/[0.055] hover:shadow-[0_26px_90px_rgba(0,242,254,0.16)]">
       <div className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300 transition-all duration-300 group-hover:scale-110 group-hover:border-cyan-300/45 group-hover:bg-cyan-300/15 group-hover:shadow-[0_0_34px_rgba(0,242,254,0.28)]">
@@ -205,62 +187,16 @@ function Feature({
 function Step({ number, title, text }: { number: string; title: string; text: string }) {
   return (
     <article className="group rounded-3xl border border-white/10 bg-white/[0.03] p-7 transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/30 hover:bg-white/[0.055] hover:shadow-[0_24px_80px_rgba(0,242,254,0.12)]">
-      <div className="text-5xl font-black text-cyan-300/15 transition-all duration-300 group-hover:text-cyan-300/35">
-        {number}
-      </div>
+      <div className="text-5xl font-black text-cyan-300/15 transition-all duration-300 group-hover:text-cyan-300/35">{number}</div>
       <h3 className="mt-5 text-xl font-black text-white transition-colors group-hover:text-cyan-100">{title}</h3>
       <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
     </article>
   );
 }
 
-const skeletonZones = [
-  {
-    id: "skull",
-    label: "Craniu",
-    description: "Protecție cerebrală și punct de pornire pentru simptome precum cefalee sau amețeală.",
-    x: 170,
-    y: 62,
-  },
-  {
-    id: "chest",
-    label: "Torace",
-    description: "Coaste, stern și respirație. Ideal pentru explorarea durerilor toracice educaționale.",
-    x: 170,
-    y: 142,
-  },
-  {
-    id: "arm",
-    label: "Braț",
-    description: "Umăr, humerus, cot și antebraț, cu accent pe mobilitate și traumatisme.",
-    x: 114,
-    y: 198,
-  },
-  {
-    id: "pelvis",
-    label: "Bazin",
-    description: "Centura pelviană conectează coloana cu membrele inferioare.",
-    x: 170,
-    y: 272,
-  },
-  {
-    id: "knee",
-    label: "Genunchi",
-    description: "Articulație complexă pentru stabilitate, mers și testarea durerilor mecanice.",
-    x: 142,
-    y: 350,
-  },
-  {
-    id: "ankle",
-    label: "Gleznă",
-    description: "Stabilitate, propulsie și entorse frecvente în mișcare.",
-    x: 198,
-    y: 408,
-  },
-] as const;
-
-function NeonSkeletonPreview() {
-  const [activeZone, setActiveZone] = useState<(typeof skeletonZones)[number]>(skeletonZones[0]);
+function NeonSkeletonPreview({ lang, selectedZoneLabel }: { lang: "ro" | "en"; selectedZoneLabel: string }) {
+  const zones = lang === "en" ? skeletonZonesEn : skeletonZonesRo;
+  const [activeZone, setActiveZone] = useState<(typeof zones)[number]>(zones[0]);
 
   return (
     <div className="relative h-[620px] w-[390px]">
@@ -273,16 +209,12 @@ function NeonSkeletonPreview() {
           className="absolute inset-x-0 top-0 h-[500px] w-full santix-neon-skeleton"
           viewBox="0 0 340 560"
           role="img"
-          aria-label="Schelet Santix interactiv"
+          aria-label="Santix interactive skeleton"
         >
           <defs>
             <filter id="santix-neon-glow" x="-70%" y="-70%" width="240%" height="240%">
               <feGaussianBlur stdDeviation="4" result="blur" />
-              <feColorMatrix
-                in="blur"
-                type="matrix"
-                values="0 0 0 0 0  0 0 0 0 0.95  0 0 0 0 1  0 0 0 0.8 0"
-              />
+              <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0.95  0 0 0 0 1  0 0 0 0.8 0" />
               <feMerge>
                 <feMergeNode />
                 <feMergeNode in="SourceGraphic" />
@@ -311,16 +243,13 @@ function NeonSkeletonPreview() {
           </g>
         </svg>
 
-        {skeletonZones.map((zone) => (
+        {zones.map((zone) => (
           <button
             key={zone.id}
             type="button"
-            onClick={() => setActiveZone(zone)}
-            onMouseEnter={() => setActiveZone(zone)}
-            className={[
-              "santix-zone-button",
-              activeZone.id === zone.id ? "is-active" : "",
-            ].join(" ")}
+            onClick={() => setActiveZone(zone as typeof zones[number])}
+            onMouseEnter={() => setActiveZone(zone as typeof zones[number])}
+            className={["santix-zone-button", activeZone.id === zone.id ? "is-active" : ""].join(" ")}
             style={{ left: `${zone.x}px`, top: `${zone.y}px` }}
             aria-pressed={activeZone.id === zone.id}
           >
@@ -331,9 +260,7 @@ function NeonSkeletonPreview() {
         ))}
 
         <div className="santix-selection-panel absolute bottom-5 left-5 right-5 rounded-2xl border border-cyan-300/15 bg-black/55 p-4 backdrop-blur-xl">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">
-            Zonă selectată
-          </div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">{selectedZoneLabel}</div>
           <div className="santix-selection-title mt-2 text-lg font-black text-white">{activeZone.label}</div>
           <p className="santix-selection-copy mt-1 text-xs leading-5 text-slate-400">{activeZone.description}</p>
         </div>

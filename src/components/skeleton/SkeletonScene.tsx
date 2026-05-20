@@ -146,7 +146,7 @@ export interface BoneSelection {
 
 const HOVER_COLOR_BONE = new THREE.Color("#7b5cff");
 const HOVER_COLOR_MUSCLE = new THREE.Color("#d91f7b");
-const HOVER_COLOR_ORGAN = new THREE.Color("#00f2fe");
+const HOVER_COLOR_ORGAN = new THREE.Color("#9b59d6");
 const SELECT_COLOR = new THREE.Color("#4a2fb7");
 const SELECT_EMISSIVE = new THREE.Color("#c01874");
 const DIM_COLOR = new THREE.Color("#e7ddf3");
@@ -1059,11 +1059,14 @@ function AnatomyGlbModel({
 
       const standardMaterial = material as THREE.MeshStandardMaterial;
       if ("emissive" in standardMaterial) {
-        standardMaterial.color.lerp(selected || hovered ? baseColor.clone().lerp(new THREE.Color("#ffffff"), 0.18) : baseColor, 0.08);
-        standardMaterial.emissive.lerp(selected || hovered ? glowColor : baseColor, 0.08);
+        standardMaterial.color.lerp(selected || hovered ? baseColor.clone().lerp(new THREE.Color("#ffffff"), 0.22) : baseColor, 0.15);
+        standardMaterial.emissive.lerp(
+          selected ? glowColor : hovered ? HOVER_COLOR_ORGAN : baseColor,
+          0.15,
+        );
         standardMaterial.emissiveIntensity +=
-          ((selected ? 0.46 : hovered ? 0.28 : dimmed ? 0.02 : organ ? 0.08 : 0.04) - standardMaterial.emissiveIntensity) *
-          0.18;
+          ((selected ? 0.52 : hovered ? 0.55 : dimmed ? 0.02 : organ ? 0.08 : 0.04) - standardMaterial.emissiveIntensity) *
+          0.22;
       }
     });
   });
@@ -1139,7 +1142,7 @@ function InternalOrgansLayer({
       {internalOrgans.filter((organ) => organ.modelParts?.length).map((organ) => {
         const selected = selection?.tissue === "organ" && selection.id === organ.id;
         const hovered = hoveredOrganId === organ.id;
-        const isInteractive = layerMode === "organs";
+        const isInteractive = layerMode === "organs" || layerMode === "complete";
         const hasFocusedOrgan = isInteractive && Boolean(hoveredOrganId || selection?.tissue === "organ");
         const dimmed = hasFocusedOrgan && !selected && !hovered;
         const organOpacity = layerMode === "complete" ? 0.24 : 0.42;

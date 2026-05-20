@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { type Bone, categoryLabels } from "@/data/bones";
+import { type Bone, categoryLabels, categoryLabelsEn } from "@/data/bones";
 import {
   X,
   BookMarked,
@@ -19,12 +19,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { askSelectionAi, type AiContextSwitchAction } from "@/lib/ai-chat.functions";
 import {
   analyzePainLocally,
+  getPainLevelLabel,
   getPainQuestions,
   painLevels,
   validateAnswerConsistency,
   type SymptomAnalysis,
 } from "@/data/painKnowledge";
-import { classifyAnatomyStructure } from "@/data/anatomyCurriculum";
+import { classifyAnatomyStructure, translateCurriculumInfo } from "@/data/anatomyCurriculum";
 import { getAnatomyDisplayName } from "@/data/anatomyDisplayNames";
 import {
   fetchAnatomyStructureName,
@@ -38,6 +39,7 @@ import {
 import type { BoneSelection, TissueType } from "./SkeletonScene";
 import type { LayerMode } from "./LayersToggle";
 import { getInternalOrgan, type InternalOrgan } from "@/data/internalOrgans";
+import { useLanguage } from "@/lib/useLanguage";
 
 interface Props {
   bone: Bone | null;
@@ -57,7 +59,7 @@ type ContextSwitchSuggestion = {
 };
 
 type TechnicalDetail = {
-  label: "Origine" | "Inserție" | "Inervație" | "Acțiune";
+  label: string;
   value: string;
 };
 
@@ -90,6 +92,8 @@ function getTechnicalDetails(input: {
   dbStructure: AnatomyStructureNameRow | null;
   curriculum: ReturnType<typeof classifyAnatomyStructure>;
   functionText: string;
+  labels: { origin: string; insertion: string; innervation: string; action: string };
+  lang: "ro" | "en";
 }): TechnicalDetail[] {
   const selectionSource = input.selection as unknown as AnatomyDetailSource;
   const boneSource = (input.bone ?? {}) as AnatomyDetailSource;
@@ -103,118 +107,68 @@ function getTechnicalDetails(input: {
     ? `${input.curriculum.group}, ${input.curriculum.segment}, ${aspect}`
     : `${input.curriculum.group}, ${input.curriculum.segment}`;
 
+  const isEn = input.lang === "en";
+
   const origin =
     firstString(
-      selectionSource.origine,
-      selectionSource.origin,
-      selectionSource.origin_ro,
-      dbSource.origine,
-      dbSource.origin,
-      dbSource.origin_ro,
-      boneSource.origine,
-      boneSource.origin,
-      boneSource.origin_ro,
+      selectionSource.origine, selectionSource.origin, selectionSource.origin_ro,
+      dbSource.origine, dbSource.origin, dbSource.origin_ro,
+      boneSource.origine, boneSource.origin, boneSource.origin_ro,
       organ?.technical.origin,
     ) ??
     (input.selection.tissue === "os"
-      ? `Parte a ${input.curriculum.group.toLowerCase()}, în segmentul ${input.curriculum.segment.toLowerCase()}.`
-      : `Repere de pornire încadrate în ${placementText}.`);
+      ? isEn
+        ? `Part of ${input.curriculum.group.toLowerCase()}, in the ${input.curriculum.segment.toLowerCase()} segment.`
+        : `Parte a ${input.curriculum.group.toLowerCase()}, în segmentul ${input.curriculum.segment.toLowerCase()}.`
+      : isEn
+        ? `Starting landmarks within ${placementText}.`
+        : `Repere de pornire încadrate în ${placementText}.`);
 
   const insertion =
     firstString(
-      selectionSource.inserție,
-      selectionSource.insertie,
-      selectionSource.insertion,
-      selectionSource.insertion_ro,
-      dbSource.inserție,
-      dbSource.insertie,
-      dbSource.insertion,
-      dbSource.insertion_ro,
-      boneSource.inserție,
-      boneSource.insertie,
-      boneSource.insertion,
-      boneSource.insertion_ro,
+      selectionSource.inserție, selectionSource.insertie, selectionSource.insertion, selectionSource.insertion_ro,
+      dbSource.inserție, dbSource.insertie, dbSource.insertion, dbSource.insertion_ro,
+      boneSource.inserție, boneSource.insertie, boneSource.insertion, boneSource.insertion_ro,
       organ?.technical.insertion,
     ) ??
     (input.selection.tissue === "tendon"
-      ? `Asociată cu zona ${region.toLowerCase()} și transmiterea forței către structurile vecine.`
-      : `Se continuă către structurile vecine din zona ${region.toLowerCase()}, contribuind la mișcarea segmentului ${segment}.`);
+      ? isEn
+        ? `Associated with the ${region.toLowerCase()} area and force transmission to adjacent structures.`
+        : `Asociată cu zona ${region.toLowerCase()} și transmiterea forței către structurile vecine.`
+      : isEn
+        ? `Continues to adjacent structures in the ${region.toLowerCase()} area, contributing to ${segment} segment movement.`
+        : `Se continuă către structurile vecine din zona ${region.toLowerCase()}, contribuind la mișcarea segmentului ${segment}.`);
 
   const innervation =
     firstString(
-      selectionSource.inervație,
-      selectionSource.inervatie,
-      selectionSource.innervation,
-      selectionSource.innervation_ro,
-      dbSource.inervație,
-      dbSource.inervatie,
-      dbSource.innervation,
-      dbSource.innervation_ro,
-      boneSource.inervație,
-      boneSource.inervatie,
-      boneSource.innervation,
-      boneSource.innervation_ro,
+      selectionSource.inervație, selectionSource.inervatie, selectionSource.innervation, selectionSource.innervation_ro,
+      dbSource.inervație, dbSource.inervatie, dbSource.innervation, dbSource.innervation_ro,
+      boneSource.inervație, boneSource.inervatie, boneSource.innervation, boneSource.innervation_ro,
       organ?.technical.innervation,
     ) ??
     (input.selection.tissue === "os"
-      ? "Nu se aplică direct ca la mușchi; sensibilitatea este legată de periost și structurile vecine."
-      : `Controlată de nervii care deservesc grupa ${group}; detaliul exact poate varia în funcție de fasciculul selectat.`);
+      ? isEn
+        ? "Not directly applicable as in muscles; sensitivity is related to the periosteum and adjacent structures."
+        : "Nu se aplică direct ca la mușchi; sensibilitatea este legată de periost și structurile vecine."
+      : isEn
+        ? `Controlled by nerves serving the ${group} group; exact detail may vary depending on the selected fascicle.`
+        : `Controlată de nervii care deservesc grupa ${group}; detaliul exact poate varia în funcție de fasciculul selectat.`);
 
   const action =
     firstString(
-      selectionSource.acțiune,
-      selectionSource.actiune,
-      selectionSource.action,
-      selectionSource.action_ro,
-      dbSource.acțiune,
-      dbSource.actiune,
-      dbSource.action,
-      dbSource.action_ro,
-      boneSource.acțiune,
-      boneSource.actiune,
-      boneSource.action,
-      boneSource.action_ro,
-      boneSource.funcție,
-      organ?.technical.action,
+      selectionSource.acțiune, selectionSource.actiune, selectionSource.action, selectionSource.action_ro,
+      dbSource.acțiune, dbSource.actiune, dbSource.action, dbSource.action_ro,
+      boneSource.acțiune, boneSource.actiune, boneSource.action, boneSource.action_ro,
+      boneSource.funcție, organ?.technical.action,
     ) ?? input.functionText;
 
   return [
-    { label: "Origine", value: origin },
-    { label: "Inserție", value: insertion },
-    { label: "Inervație", value: innervation },
-    { label: "Acțiune", value: action },
+    { label: input.labels.origin, value: origin },
+    { label: input.labels.insertion, value: insertion },
+    { label: input.labels.innervation, value: innervation },
+    { label: input.labels.action, value: action },
   ];
 }
-
-const TISSUE_META: Record<
-  TissueType,
-  { label: string; Icon: typeof BookMarked; tagBg: string; tagText: string }
-> = {
-  os: {
-    label: "Țesut osos",
-    Icon: BookMarked,
-    tagBg: "bg-primary/15 border-primary/25",
-    tagText: "text-primary",
-  },
-  muschi: {
-    label: "Țesut muscular",
-    Icon: Activity,
-    tagBg: "bg-medical/15 border-medical/30",
-    tagText: "text-medical",
-  },
-  tendon: {
-    label: "Tendon / țesut conjunctiv",
-    Icon: Layers,
-    tagBg: "bg-accent/15 border-accent/30",
-    tagText: "text-accent-foreground",
-  },
-  organ: {
-    label: "Organ intern",
-    Icon: HeartPulse,
-    tagBg: "bg-primary/15 border-primary/30",
-    tagText: "text-primary",
-  },
-};
 
 export function BoneInfoPanel({
   bone,
@@ -226,6 +180,7 @@ export function BoneInfoPanel({
   openConversationId = null,
 }: Props) {
   const { session, user } = useAuth();
+  const { lang, t } = useLanguage();
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [result, setResult] = useState<SymptomAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +196,62 @@ export function BoneInfoPanel({
   const previousSelectionKeyRef = useRef<string | null>(null);
   const missingNameLogKeyRef = useRef<string | null>(null);
   const shownSuggestionKeysRef = useRef<Set<string>>(new Set());
+
+  // Resizable panel
+  const MIN_WIDTH = 300;
+  const MAX_WIDTH = 700;
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("bonePanelWidth") : null;
+    return saved ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Number(saved))) : 360;
+  });
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = panelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [panelWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      // Panel is on the right; dragging left increases width
+      const delta = dragStartX.current - e.clientX;
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidth.current + delta));
+      setPanelWidth(next);
+    };
+    const onMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setPanelWidth((w) => {
+        localStorage.setItem("bonePanelWidth", String(w));
+        return w;
+      });
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  const TISSUE_META: Record<
+    TissueType,
+    { label: string; Icon: typeof BookMarked; tagBg: string; tagText: string }
+  > = {
+    os: { label: t.bone_tissue_bone, Icon: BookMarked, tagBg: "bg-primary/15 border-primary/25", tagText: "text-primary" },
+    muschi: { label: t.bone_tissue_muscle, Icon: Activity, tagBg: "bg-medical/15 border-medical/30", tagText: "text-medical" },
+    tendon: { label: t.bone_tissue_tendon, Icon: Layers, tagBg: "bg-accent/15 border-accent/30", tagText: "text-accent-foreground" },
+    organ: { label: t.bone_tissue_organ, Icon: HeartPulse, tagBg: "bg-primary/15 border-primary/30", tagText: "text-primary" },
+  };
 
   useEffect(() => {
     const selectionKey = selection
@@ -261,11 +272,7 @@ export function BoneInfoPanel({
   }, [preserveAiStateOnSelectionChange, selection]);
 
   useEffect(() => {
-    if (!selection) {
-      setDbStructureName(null);
-      return;
-    }
-
+    if (!selection) { setDbStructureName(null); return; }
     let cancelled = false;
     fetchAnatomyStructureName({
       id: bone?.id ?? selection.id,
@@ -273,18 +280,12 @@ export function BoneInfoPanel({
       labelEn: selection.labelEn,
       regionId: selection.regionId,
       tissue: selection.tissue,
-    }).then((structure) => {
-      if (!cancelled) setDbStructureName(structure);
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    }).then((structure) => { if (!cancelled) setDbStructureName(structure); });
+    return () => { cancelled = true; };
   }, [bone?.id, selection]);
 
   useEffect(() => {
     if (!openConversationId) return;
-
     let cancelled = false;
     setAiLoading(true);
     setAiError(null);
@@ -294,30 +295,19 @@ export function BoneInfoPanel({
         setAiConversationId(openConversationId);
         setAiMessages(
           messages
-            .filter((message) => message.role === "assistant" || message.role === "user")
-            .map((message) => ({
-              role: message.role === "assistant" ? "assistant" : "user",
-              content: message.content_ro,
-            })),
+            .filter((m) => m.role === "assistant" || m.role === "user")
+            .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content_ro })),
         );
       })
-      .catch(() => {
-        if (!cancelled) setAiError("Nu am putut redeschide conversația.");
-      })
-      .finally(() => {
-        if (!cancelled) setAiLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [openConversationId]);
+      .catch(() => { if (!cancelled) setAiError(t.bone_err_reopen); })
+      .finally(() => { if (!cancelled) setAiLoading(false); });
+    return () => { cancelled = true; };
+  }, [openConversationId, t.bone_err_reopen]);
 
   useEffect(() => {
     const handleDeletedConversation = (event: Event) => {
-      const deletedConversationId = (event as CustomEvent<string>).detail;
-      if (!deletedConversationId || deletedConversationId !== aiConversationId) return;
-
+      const deletedId = (event as CustomEvent<string>).detail;
+      if (!deletedId || deletedId !== aiConversationId) return;
       setAiConversationId(undefined);
       setAiMessages([]);
       setAiInput("");
@@ -325,10 +315,8 @@ export function BoneInfoPanel({
       setAiLoading(false);
       setContextSuggestion(null);
     };
-
     window.addEventListener(AI_CONVERSATION_DELETED_EVENT, handleDeletedConversation);
-    return () =>
-      window.removeEventListener(AI_CONVERSATION_DELETED_EVENT, handleDeletedConversation);
+    return () => window.removeEventListener(AI_CONVERSATION_DELETED_EVENT, handleDeletedConversation);
   }, [aiConversationId]);
 
   useEffect(() => {
@@ -339,10 +327,7 @@ export function BoneInfoPanel({
     if (missingNameLogKeyRef.current === key) return;
     missingNameLogKeyRef.current = key;
     console.warn("[Santix anatomy names] Missing Romanian display name", {
-      id: selection.id,
-      label: selection.label,
-      labelEn: selection.labelEn,
-      source: display.source,
+      id: selection.id, label: selection.label, labelEn: selection.labelEn, source: display.source,
     });
   }, [bone, dbStructureName, selection]);
 
@@ -351,78 +336,79 @@ export function BoneInfoPanel({
   const tissue = selection.tissue;
   const selectedOrgan = tissue === "organ" ? getInternalOrgan(selection.id) : undefined;
   const aiLayer = tissue === "organ" ? "organs" : tissue === "muschi" ? "muscular" : "skeleton";
-  const aiLayerLabel = tissue === "organ" ? "Organe" : aiLayer === "muscular" ? "Sistem Muscular" : "Schelet";
+  const aiLayerLabel =
+    tissue === "organ" ? t.layers_organs : aiLayer === "muscular" ? t.layers_muscles : t.layers_skeleton;
   const serverVisualLayer =
     visualLayer === "muscles" ? "muscular" : visualLayer === "organs" ? "organs" : visualLayer;
-  const completeLayerNote =
-    visualLayer === "complete"
-      ? "Anatomie Completă este o vizualizare combinată. Pentru întrebări AI, folosește Schelet, Sistem Muscular sau Organe."
-      : null;
+  const completeLayerNote = visualLayer === "complete" ? t.bone_full_mode_notice : null;
   const debugAiEnabled =
     import.meta.env.DEV &&
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("debugAi") === "1";
   const meta = TISSUE_META[tissue];
   const Icon = meta.Icon;
-  const curriculum = classifyAnatomyStructure({
-    tissue,
-    label: selection.label,
-    labelEn: selection.labelEn,
-    id: selection.id,
+  const curriculumRaw = classifyAnatomyStructure({
+    tissue, label: selection.label, labelEn: selection.labelEn, id: selection.id,
   });
+  const curriculum = translateCurriculumInfo(curriculumRaw, lang);
 
-  const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName });
+  const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName, lang });
   const displayName = selectedOrgan?.name ?? displayInfo.display_name;
   const displayTitle = selectedOrgan?.name ?? displayInfo.title;
   const displaySubtitle = selectedOrgan?.latinName ?? displayInfo.subtitle;
   const aiStructureName = displayTitle;
   const displayLatin = selectedOrgan?.latinName ?? displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
-  const categoryText = selectedOrgan?.category ?? (bone ? categoryLabels[bone.category] : curriculum.group);
+  const categoryLabelsLang = lang === "en" ? categoryLabelsEn : categoryLabels;
+  const categoryText = selectedOrgan?.category ?? (bone ? categoryLabelsLang[bone.category] : curriculum.group);
+
+  const isEn = lang === "en";
   const description =
     selectedOrgan?.description ??
-    bone?.description ??
+    (isEn ? bone?.description_en ?? bone?.description : bone?.description) ??
     (tissue === "organ"
-      ? "Organ intern inclus în vizualizarea completă Santix."
+      ? isEn ? "Internal organ included in the complete Santix visualization." : "Organ intern inclus în vizualizarea completă Santix."
       : tissue === "muschi"
-      ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Mușchii produc mișcare prin contracție și se atașează de oase prin tendoane.`
+      ? isEn
+        ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Muscles produce movement through contraction and attach to bones via tendons.`
+        : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Mușchii produc mișcare prin contracție și se atașează de oase prin tendoane.`
       : tissue === "tendon"
-        ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Țesut conjunctiv fibros care stabilizează sau transmite forța musculară.`
-        : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Structură osoasă organizată după regiunile aparatului locomotor.`);
-  const funcText = selectedOrgan?.function ?? bone?.funcție ?? curriculum.functionHint;
+        ? isEn
+          ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Fibrous connective tissue that stabilises or transmits muscular force.`
+          : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Țesut conjunctiv fibros care stabilizează sau transmite forța musculară.`
+        : isEn
+          ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Bone structure organised by locomotor system regions.`
+          : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Structură osoasă organizată după regiunile aparatului locomotor.`);
+
+  const funcText = selectedOrgan?.function ?? (isEn ? bone?.functie_en ?? bone?.funcție : bone?.funcție) ?? curriculum.functionHint;
   const isCompleteAnatomyMode = visualLayer === "complete";
   const isOrganSelection = tissue === "organ";
   const hideAssistantInComplete = isCompleteAnatomyMode;
+
   const technicalDetails = getTechnicalDetails({
-    bone,
-    selection,
-    dbStructure: dbStructureName,
-    curriculum,
-    functionText: funcText,
+    bone, selection, dbStructure: dbStructureName, curriculum, functionText: funcText,
+    labels: {
+      origin: t.bone_origin,
+      insertion: t.bone_insertion,
+      innervation: t.bone_innervation,
+      action: t.bone_action,
+    },
+    lang,
   });
 
-  const questions = tissue === "organ" ? [] : getPainQuestions(tissue);
-  const answeredCount = questions.filter((question) => answers[question.id] !== undefined).length;
+  const questions = tissue === "organ" ? [] : getPainQuestions(tissue, lang);
+  const answeredCount = questions.filter((q) => answers[q.id] !== undefined).length;
   const canSubmit = answeredCount === questions.length;
 
   const handleAnalyze = () => {
-    if (!canSubmit) return;
-    if (tissue === "organ") return;
+    if (!canSubmit || tissue === "organ") return;
     setError(null);
     setResult(null);
-    const consistency = validateAnswerConsistency(answers);
+    const consistency = validateAnswerConsistency(answers, lang);
     if (!consistency.ok) {
-      setError(consistency.message ?? "Răspunsurile se contrazic. Revizuiește selecțiile.");
+      setError(consistency.message ?? (isEn ? "Answers are contradictory. Review your selections." : "Răspunsurile se contrazic. Revizuiește selecțiile."));
       return;
     }
-    setResult(
-      analyzePainLocally({
-        tissueType: tissue,
-        selectedName: displayName,
-        answers,
-        segment: curriculum.segment,
-        group: curriculum.group,
-      }),
-    );
+    setResult(analyzePainLocally({ tissueType: tissue, selectedName: displayName, answers, segment: curriculum.segment, group: curriculum.group, lang }));
   };
 
   const submitAiPrompt = async (
@@ -445,7 +431,7 @@ export function BoneInfoPanel({
     if (!prompt || aiLoading) return;
 
     if (!session?.access_token) {
-      setAiError("Trebuie să fii logat pentru a folosi asistentul AI.");
+      setAiError(t.bone_login_required);
       return;
     }
 
@@ -457,13 +443,11 @@ export function BoneInfoPanel({
     setAiLoading(true);
 
     const requestContext = options.overrideContext ?? {
-      tissue,
-      structureName: aiStructureName,
+      tissue, structureName: aiStructureName,
       structureSlug: bone?.id ?? selection.id,
       modelSelectionId: bone?.id ?? selection.id,
       bodyRegion: curriculum.segment,
-      visualLayer: serverVisualLayer,
-      aiLayer,
+      visualLayer: serverVisualLayer, aiLayer,
     };
 
     try {
@@ -473,6 +457,7 @@ export function BoneInfoPanel({
           question: prompt,
           ...requestContext,
           conversationId: options.conversationIdOverride ?? aiConversationId,
+          lang,
         },
       });
 
@@ -481,40 +466,18 @@ export function BoneInfoPanel({
       setAiMessages((current) => [...current, { role: "assistant", content: response.answer }]);
 
       const contextSwitch = response.contextSwitch;
-      if (
-        !options.suppressSuggestion &&
-        contextSwitch &&
-        shouldShowContextSuggestion(contextSwitch)
-      ) {
-        const suggestionKey = [
-          contextSwitch.target_layer,
-          contextSwitch.target_structure_slug,
-          contextSwitch.selected_context_fit,
-        ].join(":");
+      if (!options.suppressSuggestion && contextSwitch && shouldShowContextSuggestion(contextSwitch)) {
+        const suggestionKey = [contextSwitch.target_layer, contextSwitch.target_structure_slug, contextSwitch.selected_context_fit].join(":");
         if (!shownSuggestionKeysRef.current.has(suggestionKey)) {
           shownSuggestionKeysRef.current.add(suggestionKey);
-          setContextSuggestion({
-            action: contextSwitch,
-            prompt,
-            conversationId: response.conversationId,
-            key: suggestionKey,
-          });
+          setContextSuggestion({ action: contextSwitch, prompt, conversationId: response.conversationId, key: suggestionKey });
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Asistentul AI nu a putut răspunde.";
+      const message = err instanceof Error ? err.message : t.bone_err_ai;
       setAiError(message);
-      setAiMessages((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content:
-            "Nu am putut porni conversația momentan. Reîncearcă în câteva secunde.",
-        },
-      ]);
-      if (import.meta.env.DEV) {
-        console.error("Santix AI conversation error", err);
-      }
+      setAiMessages((current) => [...current, { role: "assistant", content: t.bone_err_start }]);
+      if (import.meta.env.DEV) console.error("Santix AI conversation error", err);
     } finally {
       setAiLoading(false);
     }
@@ -527,7 +490,6 @@ export function BoneInfoPanel({
 
   const handleAcceptContextSuggestion = async () => {
     if (!contextSuggestion) return;
-
     const { action, prompt } = contextSuggestion;
     if (!action.target_layer || !action.target_structure_slug) return;
 
@@ -536,23 +498,19 @@ export function BoneInfoPanel({
     const nextLayer =
       action.target_layer === "organs" ? "organs" : action.target_layer === "muscular" ? "muscular" : "skeleton";
     const nextOrgan = nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
-    const targetName =
-      nextOrgan?.name ?? action.target_body_region ?? action.target_structure_slug.replace(/^muschi:/, "");
+    const targetName = nextOrgan?.name ?? action.target_body_region ?? action.target_structure_slug.replace(/^muschi:/, "");
 
     setContextSuggestion(null);
     onContextSwitch?.(action);
 
     await submitAiPrompt(prompt, {
-      appendUser: false,
-      suppressSuggestion: true,
+      appendUser: false, suppressSuggestion: true,
       overrideContext: {
-        tissue: nextTissue,
-        structureName: targetName,
+        tissue: nextTissue, structureName: targetName,
         structureSlug: action.target_structure_slug,
         modelSelectionId: action.target_structure_slug,
         bodyRegion: action.target_body_region ?? curriculum.segment,
-        visualLayer: nextLayer,
-        aiLayer: nextLayer,
+        visualLayer: nextLayer, aiLayer: nextLayer,
       },
     });
   };
@@ -560,19 +518,25 @@ export function BoneInfoPanel({
   return (
     <div
       key={`${selection.side}-${selection.id}`}
-      className="absolute right-6 top-6 bottom-24 w-[360px] glass-strong rounded-3xl p-6 flex flex-col fade-up overflow-hidden"
+      className="absolute right-6 top-6 bottom-24 glass-strong rounded-3xl flex flex-col fade-up overflow-hidden"
+      style={{ width: panelWidth }}
     >
+      {/* Resize handle */}
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group flex items-center justify-center"
+        title="Drag to resize"
+      >
+        <div className="w-[3px] h-12 rounded-full bg-white/10 group-hover:bg-primary/50 transition-colors duration-150" />
+      </div>
+      <div className="flex flex-col flex-1 overflow-hidden p-6">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">
-          <div
-            className={`size-10 rounded-2xl border flex items-center justify-center ${meta.tagBg}`}
-          >
+          <div className={`size-10 rounded-2xl border flex items-center justify-center ${meta.tagBg}`}>
             <Icon className={`size-4 ${meta.tagText}`} />
           </div>
           <div className="flex flex-col">
-            <span
-              className={`text-[10px] tracking-[0.22em] uppercase font-semibold ${meta.tagText}`}
-            >
+            <span className={`text-[10px] tracking-[0.22em] uppercase font-semibold ${meta.tagText}`}>
               {meta.label}
             </span>
             <span className="text-[10px] tracking-wide text-muted-foreground">{categoryText}</span>
@@ -580,7 +544,7 @@ export function BoneInfoPanel({
         </div>
         <button
           onClick={onClose}
-          aria-label="Închide"
+          aria-label={t.auth_close}
           className="size-8 rounded-full bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
         >
           <X className="size-4" />
@@ -589,24 +553,23 @@ export function BoneInfoPanel({
 
       <h2 className="text-3xl font-bold tracking-tight leading-tight mb-1">{displayTitle}</h2>
       {(displaySubtitle || displayLatin) && (
-        <p className="text-sm italic text-muted-foreground mb-5">
-          {displaySubtitle ?? displayLatin}
-        </p>
+        <p className="text-sm italic text-muted-foreground mb-5">{displaySubtitle ?? displayLatin}</p>
       )}
 
       {bone && (
         <div className="flex items-center gap-2 mb-5 px-3 py-2 rounded-2xl bg-bone-glow/10 border border-bone-glow/20 w-fit">
           <Sparkles className="size-3.5 text-primary" />
           <span className="text-xs font-semibold text-primary">
-            {bone.count} {bone.count === 1 ? "exemplar" : "exemplare"} în corp
+            {bone.count} {bone.count === 1 ? t.bone_count_singular : t.bone_count_plural} {isEn ? "in the body" : "în corp"}
           </span>
         </div>
       )}
 
       <div className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 -mr-1">
-        <Section title="Descriere">
+        <Section title={t.bone_description}>
           <p className="text-sm leading-relaxed text-foreground/90">{description}</p>
         </Section>
+
         <AnimatePresence mode="wait" initial={false}>
           {isCompleteAnatomyMode && (
             <motion.div
@@ -616,353 +579,293 @@ export function BoneInfoPanel({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
             >
-            {completeLayerNote && (
-              <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/5 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
-                {completeLayerNote}
-              </div>
-            )}
-            <TechnicalDetails details={technicalDetails} />
+              {completeLayerNote && (
+                <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/5 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+                  {completeLayerNote}
+                </div>
+              )}
+              <TechnicalDetails details={technicalDetails} title={t.bone_details_title} subtitle={t.bone_details_subtitle} />
               {selectedOrgan && <OrganQuizSummary organ={selectedOrgan} />}
             </motion.div>
           )}
         </AnimatePresence>
-        <Section title="Funcție">
+
+        <Section title={t.bone_function}>
           <p className="text-sm leading-relaxed text-foreground/90">{funcText}</p>
         </Section>
-        <Section title="Încadrare anatomică">
+
+        <Section title={t.bone_anatomical}>
           <div className="grid grid-cols-2 gap-2">
-            <InfoChip label="Sistem" value={curriculum.system} />
-            <InfoChip label="Segment" value={curriculum.segment} />
-            <InfoChip label="Grupă" value={curriculum.group} />
-            <InfoChip label="Subgrupă" value={curriculum.subgroup ?? "General"} />
-            <InfoChip label="Față / plan" value={curriculum.aspect ?? "Plan general"} />
+            <InfoChip label={t.bone_system} value={curriculum.system} />
+            <InfoChip label={t.bone_segment} value={curriculum.segment} />
+            <InfoChip label={t.bone_group} value={curriculum.group} />
+            <InfoChip label={t.bone_subgroup} value={curriculum.subgroup ?? t.bone_general} />
+            <InfoChip label={t.bone_face_plan} value={curriculum.aspect ?? t.bone_general_plan} />
           </div>
         </Section>
 
         <AnimatePresence mode="wait" initial={false}>
           {!hideAssistantInComplete ? (user ? (
-          <motion.div
-            key="ai-assistant"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="order-first pb-3 mb-1 border-b border-primary/10"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
-                <Bot className="size-4 text-primary-foreground" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold tracking-tight">Asistent AI Santix</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Întrebări educaționale despre zona selectată
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
-              {debugAiEnabled && completeLayerNote && (
-                <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                  {completeLayerNote}
-                </div>
-              )}
-              <div className="mb-3 rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-                  {tissue === "organ" ? (
-                    <>
-                      Poți întreba despre <strong>{displayName}</strong>, rolul organului,
-                      localizare sau simptome generale asociate.
-                    </>
-                  ) : (
-                    <>
-                      Poți întreba despre <strong>{displayName}</strong>, durere în zonă sau mișcările în
-                      care este implicată.
-                    </>
-                  )}
-              </div>
-
-              {debugAiEnabled && (
-                <details className="mb-3 rounded-xl border border-primary/15 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer font-semibold text-foreground/80">
-                    Debug AI
-                  </summary>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <InfoChip label="Mod" value={aiLayerLabel} />
-                    <InfoChip
-                      label="Context"
-                      value={selection.label ?? selection.regionLabel ?? selection.id}
-                    />
-                    <InfoChip label="Slug" value={bone?.id ?? selection.id} />
-                    <InfoChip label="Nume original" value={aiStructureName} />
-                  </div>
-                </details>
-              )}
-
-              {contextSuggestion && (
-                <ContextSwitchCard
-                  action={contextSuggestion.action}
-                  disabled={aiLoading}
-                  onAccept={handleAcceptContextSuggestion}
-                  onDismiss={() => setContextSuggestion(null)}
-                />
-              )}
-
-              <div className="max-h-[250px] space-y-2 overflow-y-auto pr-1">
-                {aiMessages.length === 0 ? (
-                  <div className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                    {tissue === "organ"
-                      ? "Exemplu: „Mă doare aici. Ce întrebări sunt importante?”"
-                      : "Exemplu: „Mă doare această zonă când o folosesc. Ce informații educaționale există?”"}
-                  </div>
-                ) : (
-                  aiMessages.map((message, index) => (
-                    <div
-                      key={`${message.role}-${index}`}
-                      className={[
-                        "flex gap-2 rounded-xl border px-3 py-2 text-xs leading-relaxed",
-                        message.role === "user"
-                          ? "border-primary/25 bg-primary/10 text-foreground"
-                          : "border-white/10 bg-background/45 text-foreground/90",
-                      ].join(" ")}
-                    >
-                      {message.role === "user" ? (
-                        <UserRound className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                      ) : (
-                        <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                      )}
-                      <span className="whitespace-pre-line">{message.content}</span>
-                    </div>
-                  ))
-                )}
-                {aiLoading && (
-                  <div className="flex gap-2 rounded-xl border border-white/10 bg-background/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                    <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                    <span>Citesc baza Santix pentru selecția curentă...</span>
-                  </div>
-                )}
-              </div>
-
-              {aiError && (
-                <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
-                  {aiError}
-                </div>
-              )}
-
-              <form onSubmit={handleAiSubmit} className="mt-3 flex gap-2">
-                <input
-                  value={aiInput}
-                  onChange={(event) => setAiInput(event.target.value)}
-                  disabled={aiLoading}
-                  placeholder={
-                    tissue === "organ"
-                      ? "Ex: Ce rol are acest organ?"
-                      : tissue === "os"
-                      ? "Ex: Mă doare după o lovitură"
-                      : "Ex: Mă doare când încordez zona"
-                  }
-                  className="min-w-0 flex-1 rounded-2xl border border-primary/20 bg-background/45 px-3 py-2 text-xs text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/15"
-                />
-                <button
-                  type="submit"
-                  disabled={aiLoading || !aiInput.trim()}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-all hover:-translate-y-[1px] hover:shadow-[0_0_22px_rgba(0,242,254,0.25)]"
-                  aria-label="Trimite întrebarea"
-                >
-                  <Send className="size-4" />
-                </button>
-              </form>
-            </div>
-
-            {!isCompleteAnatomyMode && (
-              <div className="mt-3 rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
-                <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
-                <p className="text-[11.5px] leading-snug text-destructive font-semibold">
-                  Asistentul va oferi informații educaționale, nu diagnostic medical.
-                </p>
-              </div>
-            )}
-          </motion.div>
-        ) : isOrganSelection ? (
-          <motion.div
-            key="organ-ai-locked"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="order-first pb-3 mb-1 border-b border-primary/10"
-          >
-            <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
-              <div className="flex items-center gap-2">
-                <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
+            <motion.div
+              key="ai-assistant"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="order-first pb-3 mb-1 border-b border-primary/10"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
                   <Bot className="size-4 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold tracking-tight">AI pentru organe</h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Intră în cont pentru întrebări despre organul selectat.
-                  </p>
+                  <h3 className="text-sm font-bold tracking-tight">{t.bone_ai_title}</h3>
+                  <p className="text-[11px] text-muted-foreground">{t.bone_ai_subtitle}</p>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="local-triage"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="order-first pb-3 mb-1 border-b border-primary/10"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
-                <Stethoscope className="size-4 text-primary-foreground" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold tracking-tight">Triaj rapid local</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Întrebări generale · {displayTitle.toLowerCase()}
-                </p>
-              </div>
-            </div>
 
-            <div className="mt-3 space-y-3">
-              {questions.map((question, questionIndex) => (
-                <div
-                  key={question.id}
-                  className="rounded-2xl bg-white/[0.04] border border-primary/15 p-3"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="shrink-0 size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">
-                      {questionIndex + 1}
-                    </span>
-                    <p className="text-xs font-semibold leading-snug text-foreground/90">
-                      {question.question}
-                    </p>
-                  </div>
-                  <div className="mt-2 grid gap-1.5">
-                    {question.options.map((option, optionIndex) => {
-                      const selected = answers[question.id] === optionIndex;
-                      return (
-                        <button
-                          key={option.label}
-                          type="button"
-                          onClick={() => {
-                            setAnswers((current) => ({ ...current, [question.id]: optionIndex }));
-                            setResult(null);
-                          }}
-                          className={[
-                            "rounded-xl border px-3 py-2 text-left text-xs leading-snug transition-all",
-                            selected
-                              ? "border-primary/35 bg-primary/10 text-primary font-semibold"
-                              : "border-primary/15 bg-white/[0.04] text-foreground/80 hover:border-primary/30 hover:bg-primary/10",
-                          ].join(" ")}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={!canSubmit}
-              className={[
-                "mt-2.5 w-full h-10 rounded-2xl font-semibold text-sm tracking-tight",
-                "bg-gradient-to-br from-primary to-accent text-primary-foreground",
-                "shadow-[0_4px_14px_-4px_oklch(0.62_0.20_255_/_0.5)]",
-                "transition-all duration-300",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                !canSubmit
-                  ? ""
-                  : "hover:shadow-[0_8px_24px_-6px_oklch(0.62_0.20_255_/_0.65)] hover:-translate-y-[1px]",
-                "flex items-center justify-center gap-2",
-              ].join(" ")}
-            >
-              <Sparkles className="size-4" />
-              Calculează triajul
-            </button>
-
-            {!canSubmit && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Răspunde la toate întrebările pentru a calcula nivelul de triaj.
-              </p>
-            )}
-
-            {error && (
-              <div className="mt-3 rounded-xl bg-destructive/10 border border-destructive/30 px-3 py-2 text-xs text-destructive">
-                {error}
-              </div>
-            )}
-
-            {result && (
-              <div className="mt-4 space-y-3 fade-up">
-                <div
-                  className={`rounded-2xl border px-3.5 py-2.5 ${painLevels[result.nivel].tone}`}
-                >
-                  <h4 className="text-[10px] tracking-[0.22em] uppercase font-semibold mb-1">
-                    Nivel durere
-                  </h4>
-                  <p className="text-sm font-bold">{result.title ?? painLevels[result.nivel].label}</p>
-                  <p className="mt-1 text-xs leading-snug opacity-85">{result.explicatieNivel}</p>
-                </div>
-                <div>
-                  <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">
-                    Posibile cauze
-                  </h4>
-                  <ul className="space-y-1.5">
-                    {result.cauze.map((c, i) => (
-                      <li
-                        key={i}
-                        className="text-sm leading-snug text-foreground/90 pl-3.5 relative before:content-[''] before:absolute before:left-0 before:top-[0.55em] before:size-1.5 before:rounded-full before:bg-primary"
-                      >
-                        {c}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">
-                    Recomandare
-                  </h4>
-                  <p className="text-sm leading-relaxed text-foreground/90 rounded-2xl bg-accent/15 border border-accent/30 px-3.5 py-2.5">
-                    {result.recomandare}
-                  </p>
-                </div>
-                {result.redFlags.length > 0 && (
-                  <div>
-                    <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">
-                      Semne importante
-                    </h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {result.redFlags.map((flag) => (
-                        <span
-                          key={flag}
-                          className="rounded-full bg-destructive/10 border border-destructive/25 px-2.5 py-1 text-[11px] font-semibold text-destructive"
-                        >
-                          {flag}
-                        </span>
-                      ))}
-                    </div>
+              <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
+                {debugAiEnabled && completeLayerNote && (
+                  <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                    {completeLayerNote}
                   </div>
                 )}
-                <div className="rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
+                <div className="mb-3 rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
+                  {tissue === "organ"
+                    ? <>{t.bone_ai_organ_prompt(displayName)}</>
+                    : <>{t.bone_ai_default_prompt(displayName)}</>}
+                </div>
+
+                {debugAiEnabled && (
+                  <details className="mb-3 rounded-xl border border-primary/15 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer font-semibold text-foreground/80">{t.bone_debug_ai}</summary>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <InfoChip label={t.bone_mode} value={aiLayerLabel} />
+                      <InfoChip label={t.bone_context} value={selection.label ?? selection.regionLabel ?? selection.id} />
+                      <InfoChip label={t.bone_slug} value={bone?.id ?? selection.id} />
+                      <InfoChip label={t.bone_original_name} value={aiStructureName} />
+                    </div>
+                  </details>
+                )}
+
+                {contextSuggestion && (
+                  <ContextSwitchCard
+                    action={contextSuggestion.action}
+                    disabled={aiLoading}
+                    onAccept={handleAcceptContextSuggestion}
+                    onDismiss={() => setContextSuggestion(null)}
+                  />
+                )}
+
+                <div className="max-h-[250px] space-y-2 overflow-y-auto pr-1">
+                  {aiMessages.length === 0 ? (
+                    <div className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                      {tissue === "organ" ? t.bone_placeholder_organ : tissue === "os" ? t.bone_placeholder_injury : t.bone_placeholder_movement}
+                    </div>
+                  ) : (
+                    aiMessages.map((message, index) => (
+                      <div
+                        key={`${message.role}-${index}`}
+                        className={[
+                          "flex gap-2 rounded-xl border px-3 py-2 text-xs leading-relaxed",
+                          message.role === "user"
+                            ? "border-primary/25 bg-primary/10 text-foreground"
+                            : "border-white/10 bg-background/45 text-foreground/90",
+                        ].join(" ")}
+                      >
+                        {message.role === "user" ? (
+                          <UserRound className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                        ) : (
+                          <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                        )}
+                        <span className="whitespace-pre-line">{message.content}</span>
+                      </div>
+                    ))
+                  )}
+                  {aiLoading && (
+                    <div className="flex gap-2 rounded-xl border border-white/10 bg-background/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                      <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                      <span>{t.bone_reading}</span>
+                    </div>
+                  )}
+                </div>
+
+                {aiError && (
+                  <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
+                    {aiError}
+                  </div>
+                )}
+
+                <form onSubmit={handleAiSubmit} className="mt-3 flex gap-2">
+                  <input
+                    value={aiInput}
+                    onChange={(event) => setAiInput(event.target.value)}
+                    disabled={aiLoading}
+                    placeholder={tissue === "organ" ? t.bone_placeholder_organ : tissue === "os" ? t.bone_placeholder_injury : t.bone_placeholder_movement}
+                    className="min-w-0 flex-1 rounded-2xl border border-primary/20 bg-background/45 px-3 py-2 text-xs text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/55 focus:ring-2 focus:ring-primary/15"
+                  />
+                  <button
+                    type="submit"
+                    disabled={aiLoading || !aiInput.trim()}
+                    className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-all hover:-translate-y-[1px] hover:shadow-[0_0_22px_rgba(0,242,254,0.25)]"
+                    aria-label={isEn ? "Send question" : "Trimite întrebarea"}
+                  >
+                    <Send className="size-4" />
+                  </button>
+                </form>
+              </div>
+
+              {!isCompleteAnatomyMode && (
+                <div className="mt-3 rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
                   <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-[11.5px] leading-snug text-destructive font-semibold">
-                    Acesta este un triaj educațional, nu un diagnostic medical și nu înlocuiește
-                    consultul unui medic.
-                  </p>
+                  <p className="text-[11.5px] leading-snug text-destructive font-semibold">{t.bone_disclaimer}</p>
+                </div>
+              )}
+            </motion.div>
+          ) : isOrganSelection ? (
+            <motion.div
+              key="organ-ai-locked"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="order-first pb-3 mb-1 border-b border-primary/10"
+            >
+              <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
+                    <Bot className="size-4 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold tracking-tight">{t.bone_ai_organs_label}</h3>
+                    <p className="text-[11px] text-muted-foreground">{t.bone_login_organs}</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </motion.div>
-        )) : null}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="local-triage"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="order-first pb-3 mb-1 border-b border-primary/10"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
+                  <Stethoscope className="size-4 text-primary-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">{t.bone_triage_label}</h3>
+                  <p className="text-[11px] text-muted-foreground">{t.bone_triage_subtitle(displayTitle.toLowerCase())}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {questions.map((question, questionIndex) => (
+                  <div key={question.id} className="rounded-2xl bg-white/[0.04] border border-primary/15 p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">
+                        {questionIndex + 1}
+                      </span>
+                      <p className="text-xs font-semibold leading-snug text-foreground/90">{question.question}</p>
+                    </div>
+                    <div className="mt-2 grid gap-1.5">
+                      {question.options.map((option, optionIndex) => {
+                        const selected = answers[question.id] === optionIndex;
+                        return (
+                          <button
+                            key={option.label}
+                            type="button"
+                            onClick={() => { setAnswers((c) => ({ ...c, [question.id]: optionIndex })); setResult(null); }}
+                            className={[
+                              "rounded-xl border px-3 py-2 text-left text-xs leading-snug transition-all",
+                              selected
+                                ? "border-primary/35 bg-primary/10 text-primary font-semibold"
+                                : "border-primary/15 bg-white/[0.04] text-foreground/80 hover:border-primary/30 hover:bg-primary/10",
+                            ].join(" ")}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAnalyze}
+                disabled={!canSubmit}
+                className={[
+                  "mt-2.5 w-full h-10 rounded-2xl font-semibold text-sm tracking-tight",
+                  "bg-gradient-to-br from-primary to-accent text-primary-foreground",
+                  "shadow-[0_4px_14px_-4px_oklch(0.62_0.20_255_/_0.5)]",
+                  "transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+                  !canSubmit ? "" : "hover:shadow-[0_8px_24px_-6px_oklch(0.62_0.20_255_/_0.65)] hover:-translate-y-[1px]",
+                  "flex items-center justify-center gap-2",
+                ].join(" ")}
+              >
+                <Sparkles className="size-4" />
+                {t.bone_triage_calculate}
+              </button>
+
+              {!canSubmit && (
+                <p className="mt-2 text-[11px] text-muted-foreground">{t.bone_triage_answer_all}</p>
+              )}
+
+              {error && (
+                <div className="mt-3 rounded-xl bg-destructive/10 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+                  {error}
+                </div>
+              )}
+
+              {result && (
+                <div className="mt-4 space-y-3 fade-up">
+                  <div className={`rounded-2xl border px-3.5 py-2.5 ${painLevels[result.nivel].tone}`}>
+                    <h4 className="text-[10px] tracking-[0.22em] uppercase font-semibold mb-1">{t.bone_triage_pain_level}</h4>
+                    <p className="text-sm font-bold">{result.title ?? getPainLevelLabel(result.nivel, lang)}</p>
+                    <p className="mt-1 text-xs leading-snug opacity-85">{result.explicatieNivel}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">{t.bone_triage_causes}</h4>
+                    <ul className="space-y-1.5">
+                      {result.cauze.map((c, i) => (
+                        <li key={i} className="text-sm leading-snug text-foreground/90 pl-3.5 relative before:content-[''] before:absolute before:left-0 before:top-[0.55em] before:size-1.5 before:rounded-full before:bg-primary">
+                          {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">{t.bone_triage_recommendation}</h4>
+                    <p className="text-sm leading-relaxed text-foreground/90 rounded-2xl bg-accent/15 border border-accent/30 px-3.5 py-2.5">{result.recomandare}</p>
+                  </div>
+                  {result.redFlags.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-1.5">{t.bone_triage_signs}</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {result.redFlags.map((flag) => (
+                          <span key={flag} className="rounded-full bg-destructive/10 border border-destructive/25 px-2.5 py-1 text-[11px] font-semibold text-destructive">
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-2xl bg-destructive/8 border border-destructive/30 px-3.5 py-2.5 flex gap-2.5">
+                    <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+                    <p className="text-[11.5px] leading-snug text-destructive font-semibold">{t.bone_triage_disclaimer}</p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )) : null}
         </AnimatePresence>
       </div>
+      </div>{/* /inner p-6 wrapper */}
     </div>
   );
 }
@@ -970,15 +873,13 @@ export function BoneInfoPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-2">
-        {title}
-      </h3>
+      <h3 className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold mb-2">{title}</h3>
       {children}
     </div>
   );
 }
 
-function TechnicalDetails({ details }: { details: TechnicalDetail[] }) {
+function TechnicalDetails({ details, title, subtitle }: { details: TechnicalDetail[]; title: string; subtitle: string }) {
   return (
     <div className="rounded-2xl border border-primary/20 bg-white/[0.04] p-3 shadow-[0_0_30px_-24px_rgba(0,242,254,0.9)]">
       <div className="mb-3 flex items-center gap-2">
@@ -986,21 +887,14 @@ function TechnicalDetails({ details }: { details: TechnicalDetail[] }) {
           <Layers className="size-4" />
         </div>
         <div>
-          <h3 className="text-sm font-bold tracking-tight text-foreground">Detalii anatomice</h3>
-          <p className="text-[11px] text-muted-foreground">
-            Repere tehnice pentru vizualizarea completă
-          </p>
+          <h3 className="text-sm font-bold tracking-tight text-foreground">{title}</h3>
+          <p className="text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
       </div>
       <div className="grid gap-2">
         {details.map((detail) => (
-          <div
-            key={detail.label}
-            className="rounded-2xl border border-primary/15 bg-background/40 px-3 py-2.5"
-          >
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-              {detail.label}
-            </p>
+          <div key={detail.label} className="rounded-2xl border border-primary/15 bg-background/40 px-3 py-2.5">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">{detail.label}</p>
             <p className="text-xs leading-relaxed text-foreground/90">{detail.value}</p>
           </div>
         ))}
@@ -1010,21 +904,20 @@ function TechnicalDetails({ details }: { details: TechnicalDetail[] }) {
 }
 
 function OrganQuizSummary({ organ }: { organ: InternalOrgan }) {
+  const { t } = useLanguage();
   return (
     <div className="mt-3 rounded-2xl border border-primary/20 bg-white/[0.04] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold tracking-tight text-foreground">Întrebări rapide</h3>
+        <h3 className="text-sm font-bold tracking-tight text-foreground">{t.bone_quick_q}</h3>
         <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
-          {organ.difficulty === "incepator" ? "Începător" : "Mediu"}
+          {organ.difficulty === "incepator" ? t.bone_beginner : t.bone_medium}
         </span>
       </div>
       <div className="space-y-2">
         {organ.quiz.slice(0, 2).map((item) => (
           <div key={item.question} className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2">
             <p className="text-xs font-semibold leading-snug text-foreground/90">{item.question}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              {item.explanation}
-            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{item.explanation}</p>
           </div>
         ))}
       </div>
@@ -1033,33 +926,19 @@ function OrganQuizSummary({ organ }: { organ: InternalOrgan }) {
 }
 
 function ContextSwitchCard({
-  action,
-  disabled,
-  onAccept,
-  onDismiss,
+  action, disabled, onAccept, onDismiss,
 }: {
   action: AiContextSwitchAction;
   disabled: boolean;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useLanguage();
   const isOrganTarget = action.target_layer === "organs";
   const isMuscularTarget = action.target_layer === "muscular";
-  const title = isOrganTarget
-    ? "Problema pare legată de un organ"
-    : isMuscularTarget
-    ? "Problema pare musculară"
-    : "Problema pare osoasă sau articulară";
-  const description = isOrganTarget
-    ? "Descrierea menționează un organ intern. Modul Organe poate oferi întrebări și informații mai potrivite."
-    : isMuscularTarget
-    ? "Descrierea menționează efort, încordare sau mișcare musculară. Sistemul Muscular poate oferi rezultate mai relevante."
-    : "Descrierea menționează lovitură, articulație, os sau durere profundă. Modul Schelet poate fi mai potrivit.";
-  const buttonLabel = isOrganTarget
-    ? "Mergi la Organe"
-    : isMuscularTarget
-      ? "Mergi la Sistem Muscular"
-      : "Mergi la Schelet";
+  const title = isOrganTarget ? t.bone_ctx_organ_title : isMuscularTarget ? t.bone_ctx_muscle_title : t.bone_ctx_bone_title;
+  const description = isOrganTarget ? t.bone_ctx_organ_desc : isMuscularTarget ? t.bone_ctx_muscle_desc : t.bone_ctx_bone_desc;
+  const buttonLabel = isOrganTarget ? t.bone_ctx_organ_go : isMuscularTarget ? t.bone_ctx_muscle_go : t.bone_ctx_bone_go;
 
   return (
     <div className="mb-3 fade-up rounded-2xl border border-primary/25 bg-primary/[0.075] p-3 shadow-[0_0_28px_-18px_oklch(0.62_0.20_255_/_0.9)]">
@@ -1074,7 +953,7 @@ function ContextSwitchCard({
               type="button"
               onClick={onDismiss}
               className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
-              aria-label="Ascunde recomandarea"
+              aria-label={t.bone_hide_rec}
             >
               <X className="size-3.5" />
             </button>
@@ -1097,9 +976,7 @@ function ContextSwitchCard({
 function InfoChip({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-white/[0.04] border border-primary/15 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground font-semibold mb-1">
-        {label}
-      </p>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground font-semibold mb-1">{label}</p>
       <p className="text-xs font-semibold leading-snug text-foreground/90">{value}</p>
     </div>
   );

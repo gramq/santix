@@ -7,6 +7,7 @@ import { bones } from "@/data/bones";
 import { getInternalOrgan } from "@/data/internalOrgans";
 import { MousePointerClick } from "lucide-react";
 import type { AiContextSwitchAction } from "@/lib/ai-chat.functions";
+import { useLanguage } from "@/lib/useLanguage";
 import {
   AI_CONVERSATION_OPEN_EVENT,
   getConversationStructureLabel,
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/explorator")({
 });
 
 function ExploratorPage() {
+  const { t } = useLanguage();
   const [selection, setSelection] = useState<BoneSelection | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>("complete");
   const [contextSwitchCount, setContextSwitchCount] = useState(0);
@@ -153,7 +155,7 @@ function ExploratorPage() {
         <div className="absolute left-6 top-6 flex items-center gap-2.5 rounded-2xl px-4 py-3 glass fade-up">
           <MousePointerClick className="size-4 text-primary" />
           <span className="text-xs tracking-tight text-muted-foreground">
-            Apasă pe un os, mușchi sau organ pentru detalii
+            {t.exp_hint}
           </span>
         </div>
       )}

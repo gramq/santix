@@ -1,10 +1,12 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLanguage } from "@/lib/useLanguage";
 
 type Theme = "dark" | "light";
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("dark");
+  const { t } = useLanguage();
 
   useEffect(() => {
     const saved = window.localStorage.getItem("santix-theme");
@@ -28,11 +30,11 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      aria-label={isLight ? "Activează dark mode" : "Activează light mode"}
+      aria-label={isLight ? t.theme_activate_dark : t.theme_activate_light}
       className="inline-flex h-9 items-center gap-2 rounded-2xl border border-primary/15 bg-white/[0.04] px-3 text-xs font-semibold text-foreground transition-all hover:border-primary/35 hover:bg-primary/10"
     >
       <Icon className="size-4 text-primary" />
-      <span className="hidden sm:inline">{isLight ? "Dark" : "Light"}</span>
+      <span className="hidden sm:inline">{isLight ? t.theme_dark : t.theme_light}</span>
     </button>
   );
 }
