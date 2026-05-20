@@ -28,6 +28,7 @@ export interface AiConversationMessage {
 }
 
 export type OpenAiConversationDetail = AiConversationSummary;
+type UiLanguage = "ro" | "en";
 
 type AiConversationRow = {
   id: string;
@@ -47,6 +48,7 @@ type AiMessageRow = {
 
 export async function fetchAiConversationSummaries(
   limit?: number,
+  lang: UiLanguage = "ro",
 ): Promise<AiConversationSummary[]> {
   let query = supabase
     .from("ai_conversations")
@@ -76,7 +78,7 @@ export async function fetchAiConversationSummaries(
       ]);
 
       const latestMessage = (latestMessages?.[0] as AiMessageRow | undefined)?.content_ro;
-      const display = await fetchConversationDisplayName(conversation);
+      const display = await fetchConversationDisplayName(conversation, lang);
       return {
         ...conversation,
         structure_display_name: display?.title,
@@ -132,7 +134,7 @@ export function dispatchAiConversationDeleted(conversationId: string) {
   );
 }
 
-export function formatConversationRelativeTime(value: string) {
+export function formatConversationRelativeTime(value: string, lang: UiLanguage = "ro") {
   const date = new Date(value);
   const diffMs = Date.now() - date.getTime();
   const minute = 60 * 1000;
@@ -140,6 +142,18 @@ export function formatConversationRelativeTime(value: string) {
   const day = 24 * hour;
 
   if (Number.isNaN(date.getTime())) return "";
+  if (lang === "en") {
+    if (diffMs < minute) return "now";
+    if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))} min ago`;
+    if (diffMs < day) return `${Math.floor(diffMs / hour)} h ago`;
+    if (diffMs < 2 * day) return "yesterday";
+
+    return new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "short",
+    }).format(date);
+  }
+
   if (diffMs < minute) return "acum";
   if (diffMs < hour) return `acum ${Math.max(1, Math.floor(diffMs / minute))} min`;
   if (diffMs < day) return `acum ${Math.floor(diffMs / hour)} h`;
@@ -156,18 +170,20 @@ export function getConversationStructureLabel(
     AiConversationSummary,
     "model_selection_id" | "structure_slug" | "tissue" | "structure_display_name"
   >,
+  lang: UiLanguage = "ro",
 ) {
   if (conversation.structure_display_name) return conversation.structure_display_name;
-  if (conversation.model_selection_id) return humanizeStructureId(conversation.model_selection_id);
-  if (conversation.structure_slug) return humanizeStructureId(conversation.structure_slug);
-  if (conversation.tissue === "muschi") return "Mușchi";
-  if (conversation.tissue === "os") return "Os";
-  if (conversation.tissue === "organ") return "Organe";
-  return "Structură";
+  if (conversation.model_selection_id) return humanizeStructureId(conversation.model_selection_id, lang);
+  if (conversation.structure_slug) return humanizeStructureId(conversation.structure_slug, lang);
+  if (conversation.tissue === "muschi") return lang === "en" ? "Muscle" : "Mușchi";
+  if (conversation.tissue === "os") return lang === "en" ? "Bone" : "Os";
+  if (conversation.tissue === "organ") return lang === "en" ? "Organs" : "Organe";
+  return lang === "en" ? "Structure" : "Structură";
 }
 
 async function fetchConversationDisplayName(
   conversation: Pick<AiConversationSummary, "model_selection_id" | "structure_slug" | "tissue">,
+  lang: UiLanguage = "ro",
 ) {
   const structure = await fetchAnatomyStructureName({
     id: conversation.model_selection_id ?? conversation.structure_slug,
@@ -178,6 +194,7 @@ async function fetchConversationDisplayName(
   if (!structure) return null;
   return getAnatomyDisplayName({
     dbStructure: structure as AnatomyNameRecord,
+    lang,
     selection: {
       id: conversation.model_selection_id ?? conversation.structure_slug ?? "structura",
       side: "male",
@@ -188,16 +205,26 @@ async function fetchConversationDisplayName(
   });
 }
 
-export function formatConversationTitle(title: string) {
+export function formatConversationTitle(title: string, lang: UiLanguage = "ro") {
   const cleanTitle = title.replace(/\s+/g, " ").trim();
   if (cleanTitle.toLowerCase().startsWith("santix - ")) {
-    return `Conversație — ${cleanTitle.slice(9).trim()}`;
+    return `${lang === "en" ? "Conversation" : "Conversație"} — ${cleanTitle.slice(9).trim()}`;
   }
-  return cleanTitle || "Conversație AI";
+  if (!cleanTitle) return lang === "en" ? "AI conversation" : "Conversație AI";
+
+  const [prefix, ...rest] = cleanTitle.split("—");
+  const target = localizeKnownStructureLabel(rest.join("—").trim(), lang);
+  const normalizedPrefix = prefix.trim().toLowerCase();
+  const localizedPrefix =
+    lang === "en"
+      ? ({ anatomie: "Anatomy", durere: "Pain", "conversație": "Conversation", conversatie: "Conversation" }[normalizedPrefix] ?? prefix.trim())
+      : ({ anatomy: "Anatomie", pain: "Durere", conversation: "Conversație" }[normalizedPrefix] ?? prefix.trim());
+
+  return target ? `${localizedPrefix} — ${target}` : cleanTitle;
 }
 
-function humanizeStructureId(value: string) {
-  return value
+function humanizeStructureId(value: string, lang: UiLanguage = "ro") {
+  const label = value
     .replace(/^muschi:/, "")
     .replace(/^os:/, "")
     .replace(/^tendon:/, "")
@@ -207,6 +234,31 @@ function humanizeStructureId(value: string) {
     .trim()
     .replace(/\bmuschi\b/gi, "mușchi")
     .replace(/^./, (letter) => letter.toUpperCase());
+  return localizeKnownStructureLabel(label, lang);
+}
+
+function localizeKnownStructureLabel(value: string, lang: UiLanguage) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  const key = clean
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const enMap: Record<string, string> = {
+    inima: "Heart",
+    heart: "Heart",
+    plamani: "Lungs",
+    lungs: "Lungs",
+  };
+
+  const roMap: Record<string, string> = {
+    inima: "Inimă",
+    heart: "Inimă",
+    plamani: "Plămâni",
+    lungs: "Plămâni",
+  };
+
+  return (lang === "en" ? enMap[key] : roMap[key]) ?? clean;
 }
 
 function truncatePreview(value: string) {

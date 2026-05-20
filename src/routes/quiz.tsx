@@ -31,7 +31,7 @@ function buildQuestions(lang: "ro" | "en"): Question[] {
     return [
       {
         type: "mc",
-        question: "Which is the longest bone in the human body?",
+        question: "What is the longest bone in the human body?",
         options: ["Humerus", "Femur", "Tibia", "Sternum"],
         correctIndex: 1,
         explanation: `The ${find("femur").name} (${find("femur").latin}) is the longest and strongest bone in the body, supporting body weight during walking.`,
@@ -191,22 +191,22 @@ function QuizPage() {
   };
 
   return (
-    <div className="absolute inset-0 m-4 mt-2 rounded-3xl glass overflow-y-auto p-8 flex flex-col items-center">
+    <div className="absolute inset-0 m-4 mt-2 rounded-3xl glass overflow-y-auto p-8 flex flex-col items-center text-foreground">
       <div className="w-full max-w-2xl">
         <div className="flex items-center gap-3 mb-2 fade-up">
           <Brain className="size-5 text-primary" />
-          <span className="text-[10px] tracking-[0.22em] uppercase text-cyan-100/75 font-semibold">
+          <span className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground font-semibold">
             {t.quiz_title}
           </span>
         </div>
-        <h1 className="text-4xl font-bold tracking-tight text-white fade-up">
+        <h1 className="text-4xl font-bold tracking-tight text-foreground fade-up">
           {t.quiz_subtitle.split(" ").slice(0, -1).join(" ")}{" "}
           <span className="text-gradient-bone">{t.quiz_subtitle.split(" ").at(-1)}</span>
         </h1>
 
         {!done ? (
           <>
-            <div className="mt-8 flex items-center justify-between text-xs text-cyan-100/70 mb-2">
+            <div className="mt-8 flex items-center justify-between text-xs text-muted-foreground mb-2">
               <span>{t.quiz_question} {idx + 1} / {questions.length}</span>
               <span className="text-primary font-semibold">{t.quiz_score} {score}</span>
             </div>
@@ -229,7 +229,7 @@ function QuizPage() {
                   {q.type === "mc" ? t.quiz_multiple : t.quiz_identify}
                 </span>
               </div>
-              <h2 className="text-xl font-semibold tracking-tight leading-snug text-white">{q.question}</h2>
+              <h2 className="text-xl font-semibold tracking-tight leading-snug text-foreground">{q.question}</h2>
 
               <div className="mt-6 grid gap-3">
                 {q.options.map((opt, i) => {
@@ -244,11 +244,11 @@ function QuizPage() {
                       className={`group flex items-center gap-3 text-left rounded-2xl px-5 py-4 border transition-all duration-300 ${
                         showAnswer
                           ? isCorrect
-                            ? "bg-success/15 border-success/40 text-white"
+                            ? "bg-success/15 border-success/40 text-foreground"
                             : isPicked
-                              ? "bg-destructive/15 border-destructive/40 text-white"
-                              : "bg-primary/[0.03] border-primary/10 text-cyan-100/60 opacity-70"
-                          : "bg-primary/[0.055] border-primary/18 text-cyan-50 hover:bg-primary/[0.10] hover:border-primary/35 spring-hover"
+                              ? "bg-destructive/15 border-destructive/40 text-foreground"
+                              : "bg-primary/[0.03] border-primary/10 text-muted-foreground opacity-70"
+                          : "bg-primary/[0.055] border-primary/18 text-foreground hover:bg-primary/[0.10] hover:border-primary/35 spring-hover"
                       }`}
                     >
                       <span
@@ -257,7 +257,7 @@ function QuizPage() {
                             ? "bg-success text-white border-transparent"
                             : showAnswer && isPicked
                               ? "bg-destructive text-destructive-foreground border-transparent"
-                              : "border-primary/35 text-cyan-100/75"
+                              : "border-primary/35 text-primary"
                         }`}
                       >
                         {showAnswer && isCorrect ? (
@@ -282,7 +282,7 @@ function QuizPage() {
                       {t.quiz_explanation}
                     </span>
                   </div>
-                  <p className="text-sm text-cyan-50/90 leading-relaxed">{q.explanation}</p>
+                  <p className="text-sm text-foreground/90 leading-relaxed">{q.explanation}</p>
 
                   <button
                     onClick={next}
@@ -299,8 +299,8 @@ function QuizPage() {
             <div className="size-16 mx-auto rounded-3xl bg-gradient-to-br from-primary to-bone-glow flex items-center justify-center mb-5 shadow-[var(--shadow-glow)]">
               <Sparkles className="size-7 text-primary-foreground" />
             </div>
-            <h2 className="text-3xl font-bold tracking-tight text-white">{t.quiz_finished}</h2>
-            <p className="mt-2 text-cyan-100/75">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">{t.quiz_finished}</h2>
+            <p className="mt-2 text-muted-foreground">
               {t.quiz_correct_prefix} <span className="text-primary font-bold">{score}</span>{" "}
               {lang === "ro" ? "din" : "out of"}{" "}
               <span className="text-foreground font-bold">{questions.length}</span>{" "}

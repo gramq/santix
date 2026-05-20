@@ -34,7 +34,7 @@ export const Route = createFileRoute("/explorator")({
 });
 
 function ExploratorPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [selection, setSelection] = useState<BoneSelection | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>("complete");
   const [contextSwitchCount, setContextSwitchCount] = useState(0);
@@ -64,7 +64,7 @@ function ExploratorPage() {
         tissue === "os"
           ? bones.find((item) => item.id === structureId || item.id === conversation.structure_slug)
           : null;
-      const label = getConversationStructureLabel(conversation) ?? targetBone?.name;
+      const label = getConversationStructureLabel(conversation, lang) ?? targetBone?.name;
 
       setPreserveAiStateOnSelectionChange(true);
       setContextSwitchCount(0);
@@ -83,7 +83,7 @@ function ExploratorPage() {
 
     window.addEventListener(AI_CONVERSATION_OPEN_EVENT, handleOpenConversation);
     return () => window.removeEventListener(AI_CONVERSATION_OPEN_EVENT, handleOpenConversation);
-  }, []);
+  }, [lang]);
 
   const handleAiContextSwitch = (action: AiContextSwitchAction) => {
     if (!action.should_switch_context || contextSwitchCount > 0 || !action.target_structure_slug)

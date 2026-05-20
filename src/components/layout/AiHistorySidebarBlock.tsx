@@ -21,7 +21,7 @@ const SIDEBAR_VISIBLE_COUNT = 3;
 export function AiHistorySidebarBlock() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
   const [allConversations, setAllConversations] = useState<AiConversationSummary[]>([]);
   const [allHistoryOpen, setAllHistoryOpen] = useState(false);
@@ -47,7 +47,7 @@ export function AiHistorySidebarBlock() {
       setIsLoading(true);
       setError(null);
       try {
-        const summaries = await fetchAiConversationSummaries(SIDEBAR_VISIBLE_COUNT + 1);
+        const summaries = await fetchAiConversationSummaries(SIDEBAR_VISIBLE_COUNT + 1, lang);
         if (!cancelled) setConversations(summaries);
       } catch {
         if (!cancelled) setError("Nu am putut încărca istoricul.");
@@ -63,7 +63,7 @@ export function AiHistorySidebarBlock() {
       cancelled = true;
       window.removeEventListener(AI_HISTORY_REFRESH_EVENT, loadConversations);
     };
-  }, [user]);
+  }, [user, lang]);
 
   useEffect(() => {
     if (!allHistoryOpen || !user) return;
@@ -72,7 +72,7 @@ export function AiHistorySidebarBlock() {
     const loadAllConversations = async () => {
       setIsAllLoading(true);
       try {
-        const summaries = await fetchAiConversationSummaries();
+        const summaries = await fetchAiConversationSummaries(undefined, lang);
         if (!cancelled) setAllConversations(summaries);
       } catch {
         if (!cancelled) setError("Nu am putut încărca istoricul complet.");
@@ -88,7 +88,7 @@ export function AiHistorySidebarBlock() {
       cancelled = true;
       window.removeEventListener(AI_HISTORY_REFRESH_EVENT, loadAllConversations);
     };
-  }, [allHistoryOpen, user]);
+  }, [allHistoryOpen, user, lang]);
 
   const handleOpenConversation = async (conversation: AiConversationSummary) => {
     setAllHistoryOpen(false);
@@ -316,15 +316,15 @@ function ConversationRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const Icon = conversation.tissue === "organ" ? HeartPulse : conversation.tissue === "muschi" ? Dumbbell : Bone;
-  const formattedTitle = formatConversationTitle(conversation.title);
+  const formattedTitle = formatConversationTitle(conversation.title, lang);
   const title =
     conversation.structure_display_name && formattedTitle.includes("—")
       ? `${formattedTitle.split("—")[0].trim()} — ${conversation.structure_display_name}`
       : formattedTitle;
-  const structureLabel = getConversationStructureLabel(conversation);
-  const timeLabel = formatConversationRelativeTime(conversation.updated_at);
+  const structureLabel = getConversationStructureLabel(conversation, lang);
+  const timeLabel = formatConversationRelativeTime(conversation.updated_at, lang);
 
   return (
     <div
@@ -384,13 +384,13 @@ function ConfirmDeleteDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/75 px-4 backdrop-blur-md">
       <div className="glass-strong w-full max-w-sm rounded-3xl border border-destructive/25 p-5">
         <h2 className="text-base font-black tracking-tight">{t.hist_confirm_delete}</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          „{formatConversationTitle(conversation.title)}" {t.hist_will_be_removed}
+          „{formatConversationTitle(conversation.title, lang)}" {t.hist_will_be_removed}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button

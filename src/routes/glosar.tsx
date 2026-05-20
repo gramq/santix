@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  AlertTriangle,
   Bone,
   ChevronLeft,
   Brain,
@@ -99,31 +98,7 @@ function buildContent(lang: "ro" | "en") {
       },
     ];
 
-    const warningSigns = [
-      "severe pain after an accident",
-      "visible deformity",
-      "inability to move the area",
-      "numbness or loss of sensation",
-      "major swelling",
-      "worsening pain",
-      "pain persisting for several days",
-    ];
-
-    const flashCards = [
-      ...guideSections,
-      {
-        Icon: AlertTriangle,
-        eyebrow: "Warning signs",
-        title: "When to seek medical help quickly",
-        body: [
-          "Seek medical help quickly if signs appear that may indicate a serious problem.",
-          "Santix provides educational guidance, not medical diagnosis.",
-        ],
-        examples: warningSigns,
-      },
-    ];
-
-    return { guideSections, warningSigns, flashCards };
+    return { guideSections, flashCards: guideSections };
   }
 
   const guideSections = [
@@ -197,36 +172,12 @@ function buildContent(lang: "ro" | "en") {
     },
   ];
 
-  const warningSigns = [
-    "durere severă după accident",
-    "deformare vizibilă",
-    "imposibilitatea de a mișca zona",
-    "amorțeală sau pierderea sensibilității",
-    "umflare mare",
-    "durere care se agravează",
-    "durere care persistă mai multe zile",
-  ];
-
-  const flashCards = [
-    ...guideSections,
-    {
-      Icon: AlertTriangle,
-      eyebrow: "Semne de alarmă",
-      title: "Când ceri ajutor medical rapid",
-      body: [
-        "Cere ajutor medical rapid dacă apar semne care pot indica o problemă serioasă.",
-        "Santix oferă orientare educațională, nu diagnostic medical.",
-      ],
-      examples: warningSigns,
-    },
-  ];
-
-  return { guideSections, warningSigns, flashCards };
+  return { guideSections, flashCards: guideSections };
 }
 
 function GhidSantixPage() {
   const { lang, t } = useLanguage();
-  const { guideSections, warningSigns, flashCards } = buildContent(lang);
+  const { guideSections, flashCards } = buildContent(lang);
   const [activeCardIndex, setActiveCardIndex] = useState<number | null>(null);
   const activeCard = activeCardIndex === null ? null : flashCards[activeCardIndex];
 
@@ -306,31 +257,6 @@ function GhidSantixPage() {
             </button>
           ))}
 
-          <button
-            type="button"
-            onClick={() => openCard(flashCards.length - 1)}
-            className="santix-guide-card santix-guide-warning glass rounded-3xl border border-destructive/25 p-5 text-left fade-up lg:col-span-2"
-          >
-            <div className="mb-4 flex items-start gap-3">
-              <div className="santix-guide-icon flex size-10 shrink-0 items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/10">
-                <AlertTriangle className="size-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-destructive/80">{t.ghid_alarm_signs}</p>
-                <h2 className="mt-1 text-xl font-bold tracking-tight">{t.ghid_alarm_when}</h2>
-              </div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {warningSigns.map((sign) => (
-                <div key={sign} className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm">
-                  {sign}
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-5 text-sm leading-relaxed text-muted-foreground">{t.ghid_disclaimer}</p>
-          </button>
         </main>
       </div>
 
