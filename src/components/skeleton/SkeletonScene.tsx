@@ -36,8 +36,9 @@ const MESH_TO_BONE: Record<string, string> = {
 
 const MALE_COMPLEX_URL = "/anatomy/z-anatomy-musculoskeletal.glb?v=20260502-selection-2";
 const FALLBACK_URL = "/skeleton.glb";
+const ORGAN_VERTICAL_LIFT = 0.12;
 const HRA_ORGAN_TRANSFORM = {
-  position: new THREE.Vector3(0, -0.44, -0.02),
+  position: new THREE.Vector3(0, -0.44 + ORGAN_VERTICAL_LIFT, -0.02),
   scale: new THREE.Vector3(3.15, 3.4, 2.65),
 };
 const BODY_REFERENCE = {
@@ -72,6 +73,10 @@ function bodyHalfWidthAtY(y: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function liftOrganPosition(position: [number, number, number]) {
+  return [position[0], position[1] + ORGAN_VERTICAL_LIFT, position[2]] as [number, number, number];
 }
 
 function resolveAnatomicalPosition(model: OrganModelPart) {
@@ -1106,7 +1111,7 @@ function OrganInteractionZoneMesh({
 
   return (
     <mesh
-      position={zone.position}
+      position={liftOrganPosition(zone.position)}
       rotation={rotation}
       scale={zone.kind === "ellipsoid" ? [zone.size[0] / 2, zone.size[1] / 2, zone.size[2] / 2] : [1, 1, 1]}
       renderOrder={selected || hovered ? 80 : 10}
