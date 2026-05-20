@@ -84,6 +84,15 @@ export interface PainQuestion {
   options: PainQuestionOption[];
 }
 
+export type PainTissueType = "os" | "muschi" | "tendon" | "organ";
+
+type PainQuestionContext = {
+  structureId?: string;
+  selectedName?: string;
+  segment?: string;
+  group?: string;
+};
+
 // ─── Romanian questions ───────────────────────────────────────────────────────
 
 const baseQuestionsRo: PainQuestion[] = [
@@ -179,6 +188,271 @@ const tissueQuestionsRo: Partial<Record<"os" | "muschi" | "tendon", PainQuestion
   ],
 };
 
+const organQuestionsRo: PainQuestion[] = [
+  {
+    id: "varsta",
+    question: "Ce vârstă are persoana?",
+    options: [
+      { label: "Sub 12 ani", score: { mediu: 1, consultare_doctor: 1 }, finding: "copil" },
+      { label: "12-64 ani", score: { usor: 1 }, finding: "adult" },
+      { label: "65+ ani", score: { mediu: 1, consultare_doctor: 1 }, finding: "vârstă înaintată" },
+    ],
+  },
+  {
+    id: "intensitate",
+    question: "Cât de intens este disconfortul sau durerea?",
+    options: [
+      { label: "Ușor, suportabil", score: { usor: 2 }, finding: "disconfort ușor" },
+      { label: "Moderat, deranjează activitatea", score: { mediu: 3 }, finding: "disconfort moderat" },
+      { label: "Sever, brusc sau greu de suportat", score: { consultare_doctor: 5 }, finding: "durere severă" },
+    ],
+  },
+  {
+    id: "debut",
+    question: "Cum a apărut?",
+    options: [
+      { label: "Treptat sau după masă/efort", score: { usor: 1, mediu: 1 }, finding: "debut treptat" },
+      { label: "Brusc, fără cauză clară", score: { mediu: 3 }, finding: "debut brusc" },
+      { label: "Brusc, cu stare foarte rea", score: { consultare_doctor: 5 }, finding: "debut brusc sever" },
+    ],
+  },
+  {
+    id: "semne",
+    question: "Există simptome asociate?",
+    options: [
+      { label: "Nu, doar disconfort local", score: { usor: 2 }, finding: "fără simptome asociate" },
+      { label: "Greață, tuse, urinare modificată sau digestie dificilă", score: { mediu: 3 }, finding: "simptome asociate moderate" },
+      {
+        label: "Febră mare, lipsă de aer, durere în piept, leșin sau sânge în urină/scaun",
+        score: { consultare_doctor: 7 },
+        finding: "semne de alarmă organice",
+      },
+    ],
+  },
+  {
+    id: "durata",
+    question: "De cât timp persistă?",
+    options: [
+      { label: "Mai puțin de 24 ore și se ameliorează", score: { usor: 1 }, finding: "durată scurtă" },
+      { label: "Câteva zile sau revine frecvent", score: { mediu: 2 }, finding: "persistență" },
+      { label: "Se agravează rapid", score: { consultare_doctor: 4 }, finding: "agravare rapidă" },
+    ],
+  },
+];
+
+const organSpecificQuestionsRo: Record<string, PainQuestion> = {
+  "organ:inima": {
+    id: "organ_inima",
+    question: "Apare apăsare în piept, palpitații sau lipsă de aer?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără simptome cardiace importante" },
+      { label: "Da, la efort sau stres", score: { mediu: 3 }, finding: "simptome cardiace la efort" },
+      { label: "Da, în repaus, cu lipsă de aer sau leșin", score: { consultare_doctor: 7 }, finding: "semne cardiace de alarmă" },
+    ],
+  },
+  "organ:plamani": {
+    id: "organ_plamani",
+    question: "Ai dificultăți de respirație, tuse persistentă sau durere la respirație?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără dificultate respiratorie" },
+      { label: "Ușor, mai ales la efort", score: { mediu: 3 }, finding: "disconfort respirator la efort" },
+      { label: "Da, lipsă de aer în repaus, buze vineții sau durere toracică", score: { consultare_doctor: 7 }, finding: "semne respiratorii de alarmă" },
+    ],
+  },
+  "organ:ficat": {
+    id: "organ_ficat",
+    question: "Apare durere în dreapta sus, greață sau îngălbenirea pielii/ochilor?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără semne hepatice evidente" },
+      { label: "Durere sau greață ușoară", score: { mediu: 3 }, finding: "simptome digestive/hepatice moderate" },
+      { label: "Piele/ochi galbeni, urină foarte închisă sau durere severă", score: { consultare_doctor: 6 }, finding: "semne hepatice de alarmă" },
+    ],
+  },
+  "organ:stomac": {
+    id: "organ_stomac",
+    question: "Disconfortul este legat de masă, arsuri sau vărsături?",
+    options: [
+      { label: "Ușor și trecător", score: { usor: 2 }, finding: "disconfort gastric ușor" },
+      { label: "Arsuri, greață sau vărsături repetate", score: { mediu: 3 }, finding: "simptome gastrice moderate" },
+      { label: "Vărsături cu sânge, scaun negru sau durere severă", score: { consultare_doctor: 7 }, finding: "semne gastrice de alarmă" },
+    ],
+  },
+  "organ:rinichi": {
+    id: "organ_rinichi",
+    question: "Ai durere lombară, usturime la urinare sau sânge în urină?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără semne urinare evidente" },
+      { label: "Usturime, urinări dese sau durere lombară moderată", score: { mediu: 3 }, finding: "simptome urinare moderate" },
+      { label: "Febră, frisoane, sânge în urină sau durere foarte puternică", score: { consultare_doctor: 7 }, finding: "semne renale de alarmă" },
+    ],
+  },
+  "organ:intestine": {
+    id: "organ_intestine",
+    question: "Există balonare, diaree/constipație sau sânge în scaun?",
+    options: [
+      { label: "Nu, doar disconfort trecător", score: { usor: 1 }, finding: "disconfort intestinal ușor" },
+      { label: "Balonare, diaree sau constipație câteva zile", score: { mediu: 3 }, finding: "simptome intestinale moderate" },
+      { label: "Sânge în scaun, durere severă sau abdomen foarte umflat", score: { consultare_doctor: 7 }, finding: "semne intestinale de alarmă" },
+    ],
+  },
+  "organ:splina": {
+    id: "organ_splina",
+    question: "Durerea este în stânga sus sau a apărut după lovitură în abdomen?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără semne splenice evidente" },
+      { label: "Disconfort în stânga sus", score: { mediu: 3 }, finding: "durere în stânga sus" },
+      { label: "După lovitură, cu amețeală sau durere severă", score: { consultare_doctor: 7 }, finding: "semne splenice de alarmă" },
+    ],
+  },
+  "organ:pancreas": {
+    id: "organ_pancreas",
+    question: "Durerea este sus în abdomen și merge spre spate?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără tipar pancreatic evident" },
+      { label: "Da, ușor/moderat, cu greață", score: { mediu: 3 }, finding: "simptome pancreatice moderate" },
+      { label: "Da, sever, cu vărsături sau stare generală proastă", score: { consultare_doctor: 7 }, finding: "semne pancreatice de alarmă" },
+    ],
+  },
+  "organ:vezica-urinara": {
+    id: "organ_vezica",
+    question: "Ai usturime, urinări dese sau nu poți urina?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără semne vezicale evidente" },
+      { label: "Usturime sau urinări dese", score: { mediu: 3 }, finding: "simptome urinare joase" },
+      { label: "Nu pot urina, am febră sau sânge în urină", score: { consultare_doctor: 7 }, finding: "semne urinare de alarmă" },
+    ],
+  },
+  "organ:esofag": {
+    id: "organ_esofag",
+    question: "Ai arsuri, durere la înghițire sau dificultate la înghițire?",
+    options: [
+      { label: "Arsuri rare, trecătoare", score: { usor: 1 }, finding: "reflux ușor posibil" },
+      { label: "Durere sau arsură frecventă", score: { mediu: 3 }, finding: "simptome esofagiene moderate" },
+      { label: "Nu pot înghiți, durere severă sau sânge", score: { consultare_doctor: 7 }, finding: "semne esofagiene de alarmă" },
+    ],
+  },
+  "organ:trahee": {
+    id: "organ_trahee",
+    question: "Respirația este zgomotoasă sau simți că aerul trece greu?",
+    options: [
+      { label: "Nu", score: { usor: 1 }, finding: "fără semne traheale evidente" },
+      { label: "Ușor, cu tuse sau iritație", score: { mediu: 3 }, finding: "iritare respiratorie moderată" },
+      { label: "Da, respirație dificilă, șuierat sever sau sufocare", score: { consultare_doctor: 8 }, finding: "semne de obstrucție respiratorie" },
+    ],
+  },
+};
+
+const muscleSpecificQuestionsRo: Record<string, PainQuestion> = {
+  "muschi:muschii-bratului": {
+    id: "muschi_brat_specific",
+    question: "Durerea apare când ridici, împingi sau tragi cu brațul?",
+    options: [
+      { label: "Doar după efort", score: { usor: 1 }, finding: "disconfort la efortul brațului" },
+      { label: "Da, limitează forța", score: { mediu: 3 }, finding: "limitare la braț" },
+      { label: "Da, cu pierdere clară de forță sau umflare mare", score: { consultare_doctor: 5 }, finding: "semne musculare importante la braț" },
+    ],
+  },
+  "muschi:muschii-antebratului": {
+    id: "muschi_antebrat_specific",
+    question: "Durerea crește la strângerea pumnului sau mișcarea încheieturii?",
+    options: [
+      { label: "Puțin, după folosire", score: { usor: 1 }, finding: "suprasolicitare antebraț" },
+      { label: "Da, scade priza", score: { mediu: 3 }, finding: "priză slăbită" },
+      { label: "Da, cu amorțeală sau slăbiciune în degete", score: { consultare_doctor: 5 }, finding: "semne neurologice în antebraț/mână" },
+    ],
+  },
+  "muschi:muschii-umarului": {
+    id: "muschi_umar_specific",
+    question: "Poți ridica brațul deasupra capului?",
+    options: [
+      { label: "Da, aproape normal", score: { usor: 1 }, finding: "mobilitate păstrată la umăr" },
+      { label: "Doar cu durere sau limitare", score: { mediu: 3 }, finding: "limitare la umăr" },
+      { label: "Nu pot ridica brațul sau a apărut după traumatism", score: { consultare_doctor: 5 }, finding: "semne de alarmă la umăr" },
+    ],
+  },
+  "muschi:muschii-mainii": {
+    id: "muschi_mana_specific",
+    question: "Durerea afectează prinderea obiectelor sau mișcarea degetelor?",
+    options: [
+      { label: "Nu, doar disconfort", score: { usor: 1 }, finding: "funcție păstrată la mână" },
+      { label: "Da, prind mai greu", score: { mediu: 3 }, finding: "priză redusă" },
+      { label: "Nu pot mișca normal degetele sau apare amorțeală", score: { consultare_doctor: 5 }, finding: "semne importante la mână" },
+    ],
+  },
+  "muschi:muschii-coapsei": {
+    id: "muschi_coapsa_specific",
+    question: "Durerea apare la mers, urcat scări sau genuflexiune?",
+    options: [
+      { label: "Doar după efort", score: { usor: 1 }, finding: "oboseală la coapsă" },
+      { label: "Da, limitează mersul", score: { mediu: 3 }, finding: "mers limitat" },
+      { label: "Da, nu pot sprijini bine piciorul", score: { consultare_doctor: 5 }, finding: "limitare severă la coapsă" },
+    ],
+  },
+  "muschi:muschii-gambei": {
+    id: "muschi_gamba_specific",
+    question: "Durerea apare la mers, alergare sau ridicare pe vârfuri?",
+    options: [
+      { label: "Doar după efort", score: { usor: 1 }, finding: "suprasolicitare gambă" },
+      { label: "Da, mă face să șchiopătez", score: { mediu: 3 }, finding: "șchiopătat" },
+      { label: "Da, cu umflare, roșeață sau durere bruscă intensă", score: { consultare_doctor: 6 }, finding: "semne importante la gambă" },
+    ],
+  },
+  "muschi:muschii-piciorului": {
+    id: "muschi_picior_specific",
+    question: "Durerea apare când calci sau împingi în talpă?",
+    options: [
+      { label: "Puțin", score: { usor: 1 }, finding: "disconfort plantar ușor" },
+      { label: "Da, limitează sprijinul", score: { mediu: 3 }, finding: "sprijin limitat" },
+      { label: "Nu pot călca sau există umflare mare", score: { consultare_doctor: 5 }, finding: "imposibilitate de sprijin" },
+    ],
+  },
+  "muschi:muschii-soldului": {
+    id: "muschi_sold_specific",
+    question: "Durerea apare la mers, rotația șoldului sau ridicarea piciorului?",
+    options: [
+      { label: "Doar după efort", score: { usor: 1 }, finding: "disconfort la șold după efort" },
+      { label: "Da, limitează pasul", score: { mediu: 3 }, finding: "mobilitate redusă la șold" },
+      { label: "Nu pot merge normal sau durerea a apărut după cădere", score: { consultare_doctor: 5 }, finding: "semne de alarmă la șold" },
+    ],
+  },
+  "muschi:muschii-spatelui": {
+    id: "muschi_spate_specific",
+    question: "Durerea crește la aplecare, ridicare sau răsucire?",
+    options: [
+      { label: "Ușor, mai ales după postură/efort", score: { usor: 1 }, finding: "tensiune de spate" },
+      { label: "Da, limitează mișcarea", score: { mediu: 3 }, finding: "spate blocat parțial" },
+      { label: "Da, cu amorțeală/slăbiciune pe picior sau pierdere de control urinar", score: { consultare_doctor: 7 }, finding: "semne neurologice la spate" },
+    ],
+  },
+  "muschi:muschii-capului-gatului": {
+    id: "muschi_gat_specific",
+    question: "Durerea crește când întorci capul sau menții gâtul într-o poziție?",
+    options: [
+      { label: "Ușor, ca tensiune", score: { usor: 1 }, finding: "tensiune cervicală" },
+      { label: "Da, limitează rotația", score: { mediu: 3 }, finding: "gât rigid" },
+      { label: "Da, cu febră, durere severă de cap sau amorțeală", score: { consultare_doctor: 6 }, finding: "semne cervicale de alarmă" },
+    ],
+  },
+  "muschi:muschii-toracelui": {
+    id: "muschi_torace_specific",
+    question: "Durerea crește la respirație profundă, tuse sau împins?",
+    options: [
+      { label: "Doar după efort", score: { usor: 1 }, finding: "disconfort toracic muscular" },
+      { label: "Da, dar pot respira normal", score: { mediu: 3 }, finding: "durere toracică mecanică" },
+      { label: "Da, cu lipsă de aer, apăsare în piept sau amețeală", score: { consultare_doctor: 7 }, finding: "semne toracice de alarmă" },
+    ],
+  },
+  "muschi:abdomen": {
+    id: "muschi_abdomen_specific",
+    question: "Durerea crește când încordezi abdomenul, tușești sau te ridici din culcat?",
+    options: [
+      { label: "Doar ușor, după efort", score: { usor: 1 }, finding: "tensiune abdominală musculară" },
+      { label: "Da, limitează flexia trunchiului", score: { mediu: 3 }, finding: "limitare abdominală musculară" },
+      { label: "Da, cu durere severă, febră sau abdomen foarte sensibil", score: { consultare_doctor: 7 }, finding: "semne abdominale de alarmă" },
+    ],
+  },
+};
+
 // ─── English questions ────────────────────────────────────────────────────────
 
 const baseQuestionsEn: PainQuestion[] = [
@@ -272,6 +546,271 @@ const tissueQuestionsEn: Partial<Record<"os" | "muschi" | "tendon", PainQuestion
       ],
     },
   ],
+};
+
+const organQuestionsEn: PainQuestion[] = [
+  {
+    id: "varsta",
+    question: "How old is the person?",
+    options: [
+      { label: "Under 12", score: { mediu: 1, consultare_doctor: 1 }, finding: "child" },
+      { label: "12-64", score: { usor: 1 }, finding: "adult" },
+      { label: "65+", score: { mediu: 1, consultare_doctor: 1 }, finding: "older adult" },
+    ],
+  },
+  {
+    id: "intensitate",
+    question: "How intense is the discomfort or pain?",
+    options: [
+      { label: "Mild, tolerable", score: { usor: 2 }, finding: "mild discomfort" },
+      { label: "Moderate, affects activity", score: { mediu: 3 }, finding: "moderate discomfort" },
+      { label: "Severe, sudden or hard to tolerate", score: { consultare_doctor: 5 }, finding: "severe pain" },
+    ],
+  },
+  {
+    id: "debut",
+    question: "How did it start?",
+    options: [
+      { label: "Gradually or after food/exertion", score: { usor: 1, mediu: 1 }, finding: "gradual onset" },
+      { label: "Suddenly, without a clear cause", score: { mediu: 3 }, finding: "sudden onset" },
+      { label: "Suddenly, with feeling very unwell", score: { consultare_doctor: 5 }, finding: "severe sudden onset" },
+    ],
+  },
+  {
+    id: "semne",
+    question: "Are there associated symptoms?",
+    options: [
+      { label: "No, only local discomfort", score: { usor: 2 }, finding: "no associated symptoms" },
+      { label: "Nausea, cough, urinary changes or digestive difficulty", score: { mediu: 3 }, finding: "moderate associated symptoms" },
+      {
+        label: "High fever, shortness of breath, chest pain, fainting or blood in urine/stool",
+        score: { consultare_doctor: 7 },
+        finding: "organ red flag signs",
+      },
+    ],
+  },
+  {
+    id: "durata",
+    question: "How long has it persisted?",
+    options: [
+      { label: "Less than 24 hours and improving", score: { usor: 1 }, finding: "short duration" },
+      { label: "Several days or recurring often", score: { mediu: 2 }, finding: "persistence" },
+      { label: "Worsening quickly", score: { consultare_doctor: 4 }, finding: "rapid worsening" },
+    ],
+  },
+];
+
+const organSpecificQuestionsEn: Record<string, PainQuestion> = {
+  "organ:inima": {
+    id: "organ_inima",
+    question: "Is there chest pressure, palpitations or shortness of breath?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no important heart symptoms" },
+      { label: "Yes, with effort or stress", score: { mediu: 3 }, finding: "heart symptoms with effort" },
+      { label: "Yes, at rest, with shortness of breath or fainting", score: { consultare_doctor: 7 }, finding: "heart red flag signs" },
+    ],
+  },
+  "organ:plamani": {
+    id: "organ_plamani",
+    question: "Do you have breathing difficulty, persistent cough or pain while breathing?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no breathing difficulty" },
+      { label: "Mild, mostly with effort", score: { mediu: 3 }, finding: "breathing discomfort with effort" },
+      { label: "Yes, shortness of breath at rest, blue lips or chest pain", score: { consultare_doctor: 7 }, finding: "respiratory red flag signs" },
+    ],
+  },
+  "organ:ficat": {
+    id: "organ_ficat",
+    question: "Is there upper-right pain, nausea or yellowing of the skin/eyes?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear liver signs" },
+      { label: "Mild pain or nausea", score: { mediu: 3 }, finding: "moderate digestive/liver symptoms" },
+      { label: "Yellow skin/eyes, very dark urine or severe pain", score: { consultare_doctor: 6 }, finding: "liver red flag signs" },
+    ],
+  },
+  "organ:stomac": {
+    id: "organ_stomac",
+    question: "Is the discomfort related to meals, heartburn or vomiting?",
+    options: [
+      { label: "Mild and temporary", score: { usor: 2 }, finding: "mild gastric discomfort" },
+      { label: "Heartburn, nausea or repeated vomiting", score: { mediu: 3 }, finding: "moderate gastric symptoms" },
+      { label: "Vomiting blood, black stool or severe pain", score: { consultare_doctor: 7 }, finding: "gastric red flag signs" },
+    ],
+  },
+  "organ:rinichi": {
+    id: "organ_rinichi",
+    question: "Do you have lower-back/flank pain, burning urination or blood in urine?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear urinary signs" },
+      { label: "Burning, frequent urination or moderate flank pain", score: { mediu: 3 }, finding: "moderate urinary symptoms" },
+      { label: "Fever, chills, blood in urine or very strong pain", score: { consultare_doctor: 7 }, finding: "kidney red flag signs" },
+    ],
+  },
+  "organ:intestine": {
+    id: "organ_intestine",
+    question: "Is there bloating, diarrhea/constipation or blood in stool?",
+    options: [
+      { label: "No, only temporary discomfort", score: { usor: 1 }, finding: "mild intestinal discomfort" },
+      { label: "Bloating, diarrhea or constipation for a few days", score: { mediu: 3 }, finding: "moderate intestinal symptoms" },
+      { label: "Blood in stool, severe pain or very swollen abdomen", score: { consultare_doctor: 7 }, finding: "intestinal red flag signs" },
+    ],
+  },
+  "organ:splina": {
+    id: "organ_splina",
+    question: "Is the pain in the upper left abdomen or after a blow to the abdomen?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear spleen signs" },
+      { label: "Upper-left discomfort", score: { mediu: 3 }, finding: "upper-left pain" },
+      { label: "After a blow, with dizziness or severe pain", score: { consultare_doctor: 7 }, finding: "spleen red flag signs" },
+    ],
+  },
+  "organ:pancreas": {
+    id: "organ_pancreas",
+    question: "Is the pain high in the abdomen and spreading toward the back?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear pancreatic pattern" },
+      { label: "Yes, mild/moderate, with nausea", score: { mediu: 3 }, finding: "moderate pancreatic symptoms" },
+      { label: "Yes, severe, with vomiting or feeling very unwell", score: { consultare_doctor: 7 }, finding: "pancreatic red flag signs" },
+    ],
+  },
+  "organ:vezica-urinara": {
+    id: "organ_vezica",
+    question: "Do you have burning, frequent urination or inability to urinate?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear bladder signs" },
+      { label: "Burning or frequent urination", score: { mediu: 3 }, finding: "lower urinary symptoms" },
+      { label: "Cannot urinate, fever or blood in urine", score: { consultare_doctor: 7 }, finding: "urinary red flag signs" },
+    ],
+  },
+  "organ:esofag": {
+    id: "organ_esofag",
+    question: "Do you have heartburn, pain when swallowing or trouble swallowing?",
+    options: [
+      { label: "Rare, temporary heartburn", score: { usor: 1 }, finding: "possible mild reflux" },
+      { label: "Frequent pain or burning", score: { mediu: 3 }, finding: "moderate esophageal symptoms" },
+      { label: "Cannot swallow, severe pain or bleeding", score: { consultare_doctor: 7 }, finding: "esophageal red flag signs" },
+    ],
+  },
+  "organ:trahee": {
+    id: "organ_trahee",
+    question: "Is breathing noisy or does air feel blocked?",
+    options: [
+      { label: "No", score: { usor: 1 }, finding: "no clear tracheal signs" },
+      { label: "Mild, with cough or irritation", score: { mediu: 3 }, finding: "moderate airway irritation" },
+      { label: "Yes, difficult breathing, severe wheeze/noisy breathing or choking", score: { consultare_doctor: 8 }, finding: "airway obstruction signs" },
+    ],
+  },
+};
+
+const muscleSpecificQuestionsEn: Record<string, PainQuestion> = {
+  "muschi:muschii-bratului": {
+    id: "muschi_brat_specific",
+    question: "Does pain appear when lifting, pushing or pulling with the arm?",
+    options: [
+      { label: "Only after effort", score: { usor: 1 }, finding: "arm effort discomfort" },
+      { label: "Yes, it limits strength", score: { mediu: 3 }, finding: "arm limitation" },
+      { label: "Yes, with clear loss of strength or major swelling", score: { consultare_doctor: 5 }, finding: "important arm muscle signs" },
+    ],
+  },
+  "muschi:muschii-antebratului": {
+    id: "muschi_antebrat_specific",
+    question: "Does pain increase when gripping or moving the wrist?",
+    options: [
+      { label: "Slightly, after use", score: { usor: 1 }, finding: "forearm overuse" },
+      { label: "Yes, grip is weaker", score: { mediu: 3 }, finding: "weaker grip" },
+      { label: "Yes, with numbness or weakness in the fingers", score: { consultare_doctor: 5 }, finding: "forearm/hand neurological signs" },
+    ],
+  },
+  "muschi:muschii-umarului": {
+    id: "muschi_umar_specific",
+    question: "Can you raise the arm above the head?",
+    options: [
+      { label: "Yes, almost normally", score: { usor: 1 }, finding: "shoulder mobility preserved" },
+      { label: "Only with pain or limitation", score: { mediu: 3 }, finding: "shoulder limitation" },
+      { label: "Cannot raise it or it started after trauma", score: { consultare_doctor: 5 }, finding: "shoulder red flag signs" },
+    ],
+  },
+  "muschi:muschii-mainii": {
+    id: "muschi_mana_specific",
+    question: "Does pain affect gripping objects or moving the fingers?",
+    options: [
+      { label: "No, just discomfort", score: { usor: 1 }, finding: "hand function preserved" },
+      { label: "Yes, gripping is harder", score: { mediu: 3 }, finding: "reduced grip" },
+      { label: "Cannot move fingers normally or numbness appears", score: { consultare_doctor: 5 }, finding: "important hand signs" },
+    ],
+  },
+  "muschi:muschii-coapsei": {
+    id: "muschi_coapsa_specific",
+    question: "Does pain appear when walking, climbing stairs or squatting?",
+    options: [
+      { label: "Only after effort", score: { usor: 1 }, finding: "thigh fatigue" },
+      { label: "Yes, it limits walking", score: { mediu: 3 }, finding: "walking limited" },
+      { label: "Yes, I cannot support the leg well", score: { consultare_doctor: 5 }, finding: "severe thigh limitation" },
+    ],
+  },
+  "muschi:muschii-gambei": {
+    id: "muschi_gamba_specific",
+    question: "Does pain appear when walking, running or rising on tiptoe?",
+    options: [
+      { label: "Only after effort", score: { usor: 1 }, finding: "calf overuse" },
+      { label: "Yes, it makes me limp", score: { mediu: 3 }, finding: "limping" },
+      { label: "Yes, with swelling, redness or sudden intense pain", score: { consultare_doctor: 6 }, finding: "important calf signs" },
+    ],
+  },
+  "muschi:muschii-piciorului": {
+    id: "muschi_picior_specific",
+    question: "Does pain appear when stepping or pushing through the sole?",
+    options: [
+      { label: "Slightly", score: { usor: 1 }, finding: "mild plantar discomfort" },
+      { label: "Yes, it limits support", score: { mediu: 3 }, finding: "limited support" },
+      { label: "Cannot step or there is major swelling", score: { consultare_doctor: 5 }, finding: "inability to bear weight" },
+    ],
+  },
+  "muschi:muschii-soldului": {
+    id: "muschi_sold_specific",
+    question: "Does pain appear when walking, rotating the hip or lifting the leg?",
+    options: [
+      { label: "Only after effort", score: { usor: 1 }, finding: "hip discomfort after effort" },
+      { label: "Yes, it limits the step", score: { mediu: 3 }, finding: "reduced hip mobility" },
+      { label: "Cannot walk normally or it started after a fall", score: { consultare_doctor: 5 }, finding: "hip red flag signs" },
+    ],
+  },
+  "muschi:muschii-spatelui": {
+    id: "muschi_spate_specific",
+    question: "Does pain increase when bending, lifting or twisting?",
+    options: [
+      { label: "Mildly, mostly after posture/effort", score: { usor: 1 }, finding: "back tension" },
+      { label: "Yes, it limits movement", score: { mediu: 3 }, finding: "partly locked back" },
+      { label: "Yes, with leg numbness/weakness or loss of bladder control", score: { consultare_doctor: 7 }, finding: "back neurological signs" },
+    ],
+  },
+  "muschi:muschii-capului-gatului": {
+    id: "muschi_gat_specific",
+    question: "Does pain increase when turning the head or holding the neck in one position?",
+    options: [
+      { label: "Mild, like tension", score: { usor: 1 }, finding: "neck tension" },
+      { label: "Yes, rotation is limited", score: { mediu: 3 }, finding: "stiff neck" },
+      { label: "Yes, with fever, severe headache or numbness", score: { consultare_doctor: 6 }, finding: "neck red flag signs" },
+    ],
+  },
+  "muschi:muschii-toracelui": {
+    id: "muschi_torace_specific",
+    question: "Does pain increase with deep breathing, coughing or pushing?",
+    options: [
+      { label: "Only after effort", score: { usor: 1 }, finding: "muscular chest discomfort" },
+      { label: "Yes, but I can breathe normally", score: { mediu: 3 }, finding: "mechanical chest pain" },
+      { label: "Yes, with shortness of breath, chest pressure or dizziness", score: { consultare_doctor: 7 }, finding: "chest red flag signs" },
+    ],
+  },
+  "muschi:abdomen": {
+    id: "muschi_abdomen_specific",
+    question: "Does pain increase when tightening the abdomen, coughing or sitting up?",
+    options: [
+      { label: "Only mildly, after effort", score: { usor: 1 }, finding: "muscular abdominal tension" },
+      { label: "Yes, it limits trunk flexion", score: { mediu: 3 }, finding: "muscular abdominal limitation" },
+      { label: "Yes, with severe pain, fever or very tender abdomen", score: { consultare_doctor: 7 }, finding: "abdominal red flag signs" },
+    ],
+  },
 };
 
 // ─── Knowledge bases ──────────────────────────────────────────────────────────
@@ -384,6 +923,42 @@ const musclePainKnowledgeEn = {
   },
 } as const;
 
+const organPainKnowledge = {
+  usor: [
+    "disconfort funcțional ușor sau tranzitoriu",
+    "iritație digestivă, respiratorie sau urinară minoră, în funcție de organ",
+    "simptome generale fără semne de alarmă evidente",
+  ],
+  mediu: [
+    "simptome persistente care merită urmărite atent",
+    "posibilă inflamație sau iritație a organului selectat",
+    "manifestări asociate precum greață, tuse, urinare modificată sau digestie dificilă",
+  ],
+  consultare_doctor: [
+    "semne de alarmă legate de organe interne",
+    "durere severă, debut brusc sau agravare rapidă",
+    "simptome precum lipsă de aer, durere în piept, febră mare, leșin sau sânge în urină/scaun",
+  ],
+} as const;
+
+const organPainKnowledgeEn = {
+  usor: [
+    "mild or temporary functional discomfort",
+    "minor digestive, respiratory or urinary irritation depending on the selected organ",
+    "general symptoms without obvious red flag signs",
+  ],
+  mediu: [
+    "persistent symptoms worth monitoring carefully",
+    "possible inflammation or irritation of the selected organ",
+    "associated signs such as nausea, cough, urinary changes or digestive difficulty",
+  ],
+  consultare_doctor: [
+    "red flag signs related to internal organs",
+    "severe pain, sudden onset or rapid worsening",
+    "symptoms such as shortness of breath, chest pain, high fever, fainting or blood in urine/stool",
+  ],
+} as const;
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function classifyPainLocally(symptoms: string): PainLevel {
@@ -393,20 +968,79 @@ export function classifyPainLocally(symptoms: string): PainLevel {
   return "usor";
 }
 
-export function getKnowledgeFor(tissueType: "os" | "muschi" | "tendon") {
+export function getKnowledgeFor(tissueType: PainTissueType) {
+  if (tissueType === "organ") return organPainKnowledge;
   if (tissueType === "tendon") return musclePainKnowledge.tendon;
   if (tissueType === "os") return musclePainKnowledge.os;
   return musclePainKnowledge.default;
 }
 
 export function getPainQuestions(
-  tissueType: "os" | "muschi" | "tendon",
+  tissueType: PainTissueType,
   lang: "ro" | "en" = "ro",
+  context: PainQuestionContext = {},
 ): PainQuestion[] {
-  if (lang === "en") {
-    return [...baseQuestionsEn, ...(tissueQuestionsEn[tissueType] ?? [])];
+  if (tissueType === "organ") {
+    const specific = (lang === "en" ? organSpecificQuestionsEn : organSpecificQuestionsRo)[
+      context.structureId ?? ""
+    ];
+    return [
+      ...(lang === "en" ? organQuestionsEn : organQuestionsRo),
+      ...(specific ? [specific] : []),
+    ];
   }
-  return [...baseQuestionsRo, ...(tissueQuestionsRo[tissueType] ?? [])];
+
+  if (lang === "en") {
+    return [
+      ...baseQuestionsEn,
+      ...(tissueQuestionsEn[tissueType] ?? []),
+      ...getMuscleSpecificQuestions("en", context),
+    ];
+  }
+  return [
+    ...baseQuestionsRo,
+    ...(tissueQuestionsRo[tissueType] ?? []),
+    ...getMuscleSpecificQuestions("ro", context),
+  ];
+}
+
+function getMuscleSpecificQuestions(
+  lang: "ro" | "en",
+  context: PainQuestionContext,
+): PainQuestion[] {
+  const map = lang === "en" ? muscleSpecificQuestionsEn : muscleSpecificQuestionsRo;
+  const key = context.structureId ?? "";
+  const inferredKey = inferMuscleQuestionKey(context);
+  const question = map[key] ?? (inferredKey ? map[inferredKey] : undefined);
+  return question ? [question] : [];
+}
+
+function inferMuscleQuestionKey(context: PainQuestionContext): string | null {
+  const text = [context.structureId, context.selectedName, context.segment, context.group]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+  if (text.includes("antebrat") || text.includes("forearm")) return "muschi:muschii-antebratului";
+  if (text.includes("umar") || text.includes("shoulder")) return "muschi:muschii-umarului";
+  if (text.includes("mana") || text.includes("main") || text.includes("hand")) return "muschi:muschii-mainii";
+  if (text.includes("coaps") || text.includes("thigh")) return "muschi:muschii-coapsei";
+  if (text.includes("gamba") || text.includes("calf")) return "muschi:muschii-gambei";
+  if (text.includes("laba piciorului") || text.includes("talpa") || text.includes("foot")) return "muschi:muschii-piciorului";
+  if (text.includes("sold") || text.includes("hip")) return "muschi:muschii-soldului";
+  if (text.includes("spate") || text.includes("dorsal") || text.includes("back")) return "muschi:muschii-spatelui";
+  if (text.includes("abdomen") || text.includes("abdominal")) return "muschi:abdomen";
+  if (text.includes("cap") || text.includes("gat") || text.includes("ceafa") || text.includes("neck")) {
+    return "muschi:muschii-capului-gatului";
+  }
+  if (text.includes("torace") || text.includes("piept") || text.includes("pectoral") || text.includes("intercostal") || text.includes("thorax")) {
+    return "muschi:muschii-toracelui";
+  }
+  if (text.includes("brat") || text.includes("arm")) return "muschi:muschii-bratului";
+
+  return null;
 }
 
 export function validateAnswerConsistency(
@@ -456,13 +1090,15 @@ export function analyzePainLocally({
   answers,
   segment,
   group,
+  structureId,
   lang = "ro",
 }: {
-  tissueType: "os" | "muschi" | "tendon";
+  tissueType: PainTissueType;
   selectedName: string;
   answers: Record<string, number>;
   segment?: string;
   group?: string;
+  structureId?: string;
   lang?: "ro" | "en";
 }): SymptomAnalysis {
   const consistency = validateAnswerConsistency(answers, lang);
@@ -490,7 +1126,12 @@ export function analyzePainLocally({
   const scores: Record<PainLevel, number> = { usor: 0, mediu: 0, consultare_doctor: 0 };
   const findings: string[] = [];
 
-  for (const question of getPainQuestions(tissueType, lang)) {
+  for (const question of getPainQuestions(tissueType, lang, {
+    structureId,
+    selectedName,
+    segment,
+    group,
+  })) {
     const optionIndex = answers[question.id];
     const option = Number.isInteger(optionIndex) ? question.options[optionIndex] : undefined;
     if (!option) continue;
@@ -545,7 +1186,7 @@ export function analyzePainLocally({
     scores.consultare_doctor += 2;
   }
 
-  const smallStructureResult = isSmallDistalStructure
+  const smallStructureResult = tissueType !== "organ" && isSmallDistalStructure
     ? buildSmallStructureAnalysis({
         tissueType, scores, findings, hasSeverePain, hasTrauma,
         hasMajorRedFlag, hasPersistenceOrWorsening, hasFunctionalLimitation, lang,
@@ -556,7 +1197,13 @@ export function analyzePainLocally({
 
   const level = pickLevel(scores);
   const knowledge = lang === "en"
-    ? (tissueType === "tendon" ? musclePainKnowledgeEn.tendon : tissueType === "os" ? musclePainKnowledgeEn.os : musclePainKnowledgeEn.default)
+    ? tissueType === "organ"
+      ? organPainKnowledgeEn
+      : tissueType === "tendon"
+        ? musclePainKnowledgeEn.tendon
+        : tissueType === "os"
+          ? musclePainKnowledgeEn.os
+          : musclePainKnowledgeEn.default
     : getKnowledgeFor(tissueType);
   const details = painLevels[level];
   const label = lang === "en" ? details.labelEn : details.label;
@@ -790,9 +1437,10 @@ function getStructureRiskCategory({
   selectedName: string;
   segment?: string;
   group?: string;
-  tissueType: "os" | "muschi" | "tendon";
+  tissueType: PainTissueType;
 }): RiskCategory {
   if (tissueType === "muschi") return "muscle";
+  if (tissueType === "organ") return "unknown";
 
   const text = [selectedName, segment, group]
     .filter(Boolean)

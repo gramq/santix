@@ -39,6 +39,7 @@ import {
 import type { BoneSelection, TissueType } from "./SkeletonScene";
 import type { LayerMode } from "./LayersToggle";
 import { getInternalOrgan, type InternalOrgan } from "@/data/internalOrgans";
+import { localizeInternalOrgan } from "@/data/organLocalization";
 import { useLanguage } from "@/lib/useLanguage";
 
 interface Props {
@@ -94,11 +95,12 @@ function getTechnicalDetails(input: {
   functionText: string;
   labels: { origin: string; insertion: string; innervation: string; action: string };
   lang: "ro" | "en";
+  organ?: InternalOrgan;
 }): TechnicalDetail[] {
   const selectionSource = input.selection as unknown as AnatomyDetailSource;
   const boneSource = (input.bone ?? {}) as AnatomyDetailSource;
   const dbSource = (input.dbStructure ?? {}) as AnatomyDetailSource;
-  const organ = getInternalOrgan(input.selection.id);
+  const organ = input.organ ?? getInternalOrgan(input.selection.id);
   const region = input.selection.regionLabel ?? input.curriculum.subgroup ?? input.curriculum.group;
   const segment = input.curriculum.segment.toLowerCase();
   const group = input.curriculum.group.toLowerCase();
@@ -194,6 +196,7 @@ export function BoneInfoPanel({
   const [contextSuggestion, setContextSuggestion] = useState<ContextSwitchSuggestion | null>(null);
   const [dbStructureName, setDbStructureName] = useState<AnatomyStructureNameRow | null>(null);
   const previousSelectionKeyRef = useRef<string | null>(null);
+  const previousLangRef = useRef(lang);
   const missingNameLogKeyRef = useRef<string | null>(null);
   const shownSuggestionKeysRef = useRef<Set<string>>(new Set());
 
@@ -252,6 +255,18 @@ export function BoneInfoPanel({
     tendon: { label: t.bone_tissue_tendon, Icon: Layers, tagBg: "bg-accent/15 border-accent/30", tagText: "text-accent-foreground" },
     organ: { label: t.bone_tissue_organ, Icon: HeartPulse, tagBg: "bg-primary/15 border-primary/30", tagText: "text-primary" },
   };
+
+  useEffect(() => {
+    if (previousLangRef.current === lang) return;
+    previousLangRef.current = lang;
+    setResult(null);
+    setError(null);
+    setAiInput("");
+    setAiMessages([]);
+    setAiConversationId(undefined);
+    setAiError(null);
+    setContextSuggestion(null);
+  }, [lang]);
 
   useEffect(() => {
     const selectionKey = selection
@@ -334,7 +349,10 @@ export function BoneInfoPanel({
   if (!selection) return null;
 
   const tissue = selection.tissue;
-  const selectedOrgan = tissue === "organ" ? getInternalOrgan(selection.id) : undefined;
+  const selectedOrgan = localizeInternalOrgan(
+    tissue === "organ" ? getInternalOrgan(selection.id) : undefined,
+    lang,
+  );
   const aiLayer = tissue === "organ" ? "organs" : tissue === "muschi" ? "muscular" : "skeleton";
   const aiLayerLabel =
     tissue === "organ" ? t.layers_organs : aiLayer === "muscular" ? t.layers_muscles : t.layers_skeleton;
@@ -386,6 +404,7 @@ export function BoneInfoPanel({
 
   const technicalDetails = getTechnicalDetails({
     bone, selection, dbStructure: dbStructureName, curriculum, functionText: funcText,
+    organ: selectedOrgan,
     labels: {
       origin: t.bone_origin,
       insertion: t.bone_insertion,
@@ -395,12 +414,17 @@ export function BoneInfoPanel({
     lang,
   });
 
-  const questions = tissue === "organ" ? [] : getPainQuestions(tissue, lang);
+  const questions = getPainQuestions(tissue, lang, {
+    structureId: selection.id,
+    selectedName: displayName,
+    segment: curriculum.segment,
+    group: curriculum.group,
+  });
   const answeredCount = questions.filter((q) => answers[q.id] !== undefined).length;
   const canSubmit = answeredCount === questions.length;
 
   const handleAnalyze = () => {
-    if (!canSubmit || tissue === "organ") return;
+    if (!canSubmit) return;
     setError(null);
     setResult(null);
     const consistency = validateAnswerConsistency(answers, lang);
@@ -408,7 +432,15 @@ export function BoneInfoPanel({
       setError(consistency.message ?? (isEn ? "Answers are contradictory. Review your selections." : "Răspunsurile se contrazic. Revizuiește selecțiile."));
       return;
     }
-    setResult(analyzePainLocally({ tissueType: tissue, selectedName: displayName, answers, segment: curriculum.segment, group: curriculum.group, lang }));
+    setResult(analyzePainLocally({
+      tissueType: tissue,
+      selectedName: displayName,
+      answers,
+      segment: curriculum.segment,
+      group: curriculum.group,
+      structureId: selection.id,
+      lang,
+    }));
   };
 
   const submitAiPrompt = async (
@@ -497,7 +529,10 @@ export function BoneInfoPanel({
       action.target_layer === "organs" ? "organ" : action.target_layer === "muscular" ? "muschi" : "os";
     const nextLayer =
       action.target_layer === "organs" ? "organs" : action.target_layer === "muscular" ? "muscular" : "skeleton";
-    const nextOrgan = nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
+    const nextOrgan = localizeInternalOrgan(
+      nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined,
+      lang,
+    );
     const targetName = nextOrgan?.name ?? action.target_body_region ?? action.target_structure_slug.replace(/^muschi:/, "");
 
     setContextSuggestion(null);
@@ -722,30 +757,9 @@ export function BoneInfoPanel({
                 </div>
               )}
             </motion.div>
-          ) : isOrganSelection ? (
-            <motion.div
-              key="organ-ai-locked"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="order-first pb-3 mb-1 border-b border-primary/10"
-            >
-              <div className="rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
-                    <Bot className="size-4 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold tracking-tight">{t.bone_ai_organs_label}</h3>
-                    <p className="text-[11px] text-muted-foreground">{t.bone_login_organs}</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
           ) : (
             <motion.div
-              key="local-triage"
+              key={`local-triage-${tissue}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -761,6 +775,20 @@ export function BoneInfoPanel({
                   <p className="text-[11px] text-muted-foreground">{t.bone_triage_subtitle(displayTitle.toLowerCase())}</p>
                 </div>
               </div>
+
+              {isOrganSelection && (
+                <div className="mb-3 rounded-2xl border border-primary/15 bg-white/[0.04] p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
+                      <Bot className="size-4 text-primary-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold tracking-tight">{t.bone_ai_organs_label}</h3>
+                      <p className="text-[11px] text-muted-foreground">{t.bone_login_organs}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-3 space-y-3">
                 {questions.map((question, questionIndex) => (
