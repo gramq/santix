@@ -202,4 +202,4 @@ Pentru AI local este necesar Ollama cu modelul `llama3.2:3b`. Pentru autentifica
 
 ## Status
 
-Proiectul este încă în dezvoltare. Înainte de prezentarea finală vrem să mai curățăm deploy-ul de producție, să verificăm responsivitatea pe mai multe rezoluții și să păstrăm documentația cât mai clară pentru juriu.
+Proiectul este încă în dezvoltare.
