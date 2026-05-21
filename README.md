@@ -126,23 +126,29 @@ Migrațiile sunt păstrate în `supabase/migrations/`, ca să poată fi urmărit
 
 Mai multe detalii sunt în `docs/security.md`.
 
-## Ce am construit noi
+## Contribuția echipei
 
-Partea noastră din proiect include:
+Proiectul a fost împărțit pe zone principale de lucru, iar integrarea finală a fost făcută împreună.
 
-- interfața aplicației și structura paginilor;
-- exploratorul 3D și logica de selectare / afișare a structurilor;
-- integrarea modelelor anatomice în aplicație;
-- mapping-ul dintre structuri, denumiri și informații;
-- baza de date și migrațiile Supabase;
+### Alexandru Grama
+
+- flow-ul aplicației și structura interfeței;
+- landing page, explorator și navigare;
+- integrarea modelului 3D în browser;
+- logica de interacțiune cu straturile anatomice;
+- mapping vizual între structuri, denumiri și informații;
+- ajustări pentru experiența utilizatorului în demo.
+
+### Andrei Meilă
+
+- Supabase, autentificare și reguli RLS;
+- schema bazei de date și migrațiile SQL;
 - logica pentru conversații și istoric;
 - pipeline-ul AI pentru clasificare, triaj și răspunsuri;
-- quiz-ul și ghidul;
-- sistemul de limbă RO/EN;
-- partea de securitate și validare;
-- testele automate.
+- validare input, rate limiting și security headers;
+- teste automate pentru scenarii AI, securitate și date anatomice.
 
-Bibliotecile externe sunt folosite ca infrastructură, nu ca aplicație gata făcută. Modelele 3D și resursele anatomice sunt integrate și adaptate în Santix, iar logica aplicației este scrisă de echipă.
+Bibliotecile externe sunt folosite ca infrastructură, nu ca aplicație gata făcută. Modelele 3D și resursele anatomice sunt integrate și adaptate în Santix, iar produsul, integrarea și deciziile de implementare aparțin echipei.
 
 ## Structura proiectului
 
