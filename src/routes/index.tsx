@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { motion, useInView } from "framer-motion";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LanguageToggle } from "@/components/layout/LanguageToggle";
 import { useLanguage } from "@/lib/useLanguage";
@@ -42,6 +43,30 @@ const skeletonZonesEn = [
   { id: "knee", label: "Knee", description: "Complex joint for stability, walking and testing mechanical pain.", x: 142, y: 350 },
   { id: "ankle", label: "Ankle", description: "Stability, propulsion and frequent sprains during movement.", x: 198, y: 408 },
 ] as const;
+
+function RevealOnScroll({
+  children,
+  delay = 0,
+  className = "",
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{ opacity: 0, y: 32 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.72, ease: [0, 0, 0.2, 1], delay }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 function SantixLanding() {
   const { lang, t } = useLanguage();
@@ -78,18 +103,40 @@ function SantixLanding() {
       <main className="relative z-10">
         <section className="mx-auto grid min-h-[calc(100vh-84px)] max-w-7xl items-center gap-12 px-6 pb-20 pt-10 md:grid-cols-[1.02fr_0.98fr] md:px-10">
           <div className="max-w-3xl">
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-300">
-              <span className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(0,242,254,0.9)]" />
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: [0, 0, 0.2, 1] }}
+              className="mb-8 inline-flex items-center gap-2.5 rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300 shadow-[0_0_28px_rgba(0,242,254,0.07),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm"
+            >
+              <span className="badge-dot-pulse size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(0,242,254,0.9)]" />
               {t.landing_hero_title}
-            </div>
+            </motion.div>
 
-            <h1 className="max-w-4xl text-5xl font-black leading-[0.96] tracking-tight text-white md:text-7xl lg:text-8xl">
+            <motion.h1
+              initial={{ opacity: 0, y: 22 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.68, ease: [0, 0, 0.2, 1], delay: 0.07 }}
+              className="text-[clamp(3.6rem,10.5vw,8.5rem)] font-black leading-[0.9] tracking-[-0.04em] text-white"
+            >
               San<span className="santix-title-gradient">tix</span>
-            </h1>
+            </motion.h1>
 
-            <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">{t.landing_account_desc}</p>
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.62, ease: [0, 0, 0.2, 1], delay: 0.16 }}
+              className="mt-8 max-w-xl text-lg leading-8 text-slate-400"
+            >
+              {t.landing_account_desc}
+            </motion.p>
 
-            <div className="mt-10 flex flex-wrap gap-3">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.58, ease: [0, 0, 0.2, 1], delay: 0.26 }}
+              className="mt-10 flex flex-wrap gap-3"
+            >
               <Link
                 to="/explorator"
                 className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] transition hover:-translate-y-1 hover:shadow-[0_0_54px_rgba(0,242,254,0.45)]"
@@ -104,57 +151,71 @@ function SantixLanding() {
                 {t.landing_how}
                 <Sparkles className="size-4 text-cyan-300" />
               </a>
-            </div>
+            </motion.div>
 
-            <div className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.58, ease: [0, 0, 0.2, 1], delay: 0.36 }}
+              className="mt-16 grid max-w-2xl grid-cols-3 gap-8"
+            >
               <IntroStat value={t.landing_stat1_val} label={t.landing_stat1_label} />
               <IntroStat value={t.landing_stat2_val} label={t.landing_stat2_label} />
               <IntroStat value={t.landing_stat3_val} label={t.landing_stat3_label} />
-            </div>
+            </motion.div>
           </div>
 
-          <div className="relative hidden min-h-[620px] items-center justify-center md:flex">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.88, ease: [0, 0, 0.2, 1], delay: 0.12 }}
+            className="relative hidden min-h-[620px] items-center justify-center md:flex"
+          >
             <NeonSkeletonPreview lang={lang} selectedZoneLabel={t.landing_selected_zone} />
-          </div>
+          </motion.div>
         </section>
 
-        <section id="anatomie" className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
-          <div className="mx-auto mb-10 max-w-7xl">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_features_title}</p>
-            <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
+        <section id="anatomie" className="border-t border-cyan-300/10 px-6 py-28 md:px-10">
+          <RevealOnScroll className="mx-auto mb-16 max-w-7xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.05] px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300">
+              {t.landing_features_title}
+            </div>
+            <h2 className="max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
               {t.landing_feature1_desc}
             </h2>
-          </div>
+          </RevealOnScroll>
 
           <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
-            <Feature icon={Layers} title={t.landing_feature1_title} text={t.landing_feature2_desc} />
-            <Feature icon={Brain} title={t.landing_feature2_title} text={t.landing_feature3_desc} />
-            <Feature icon={ShieldCheck} title={t.landing_feature3_title} text={t.landing_feature4_desc} />
+            <Feature icon={Layers} title={t.landing_feature1_title} text={t.landing_feature2_desc} delay={0} />
+            <Feature icon={Brain} title={t.landing_feature2_title} text={t.landing_feature3_desc} delay={0.12} />
+            <Feature icon={ShieldCheck} title={t.landing_feature3_title} text={t.landing_feature4_desc} delay={0.24} />
           </div>
         </section>
 
-        <section id="flux" className="px-6 pb-28 md:px-10">
+        <section id="flux" className="px-6 pb-32 md:px-10">
           <div className="mx-auto max-w-7xl">
-            <div className="mb-10 flex items-end justify-between gap-6">
+            <RevealOnScroll className="mb-16 flex items-end justify-between gap-6">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_how_title}</p>
-                <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.05] px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300">
+                  {t.landing_how_title}
+                </div>
+                <h2 className="max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
                   {t.landing_how_subtitle}
                 </h2>
               </div>
               <Link
                 to="/explorator"
-                className="hidden items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-black transition hover:-translate-y-0.5 md:inline-flex"
+                className="hidden shrink-0 items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-black transition hover:-translate-y-0.5 md:inline-flex"
               >
                 {t.landing_start}
                 <ArrowRight className="size-4" />
               </Link>
-            </div>
+            </RevealOnScroll>
 
             <div className="grid gap-5 md:grid-cols-3">
-              <Step number={t.landing_step1_num} title={t.landing_step1_title} text={t.landing_step1_desc} />
-              <Step number={t.landing_step2_num} title={t.landing_step2_title} text={t.landing_step2_desc} />
-              <Step number={t.landing_step3_num} title={t.landing_step3_title} text={t.landing_step3_desc} />
+              <Step number={t.landing_step1_num} title={t.landing_step1_title} text={t.landing_step1_desc} delay={0} />
+              <Step number={t.landing_step2_num} title={t.landing_step2_title} text={t.landing_step2_desc} delay={0.11} />
+              <Step number={t.landing_step3_num} title={t.landing_step3_title} text={t.landing_step3_desc} delay={0.22} />
             </div>
           </div>
         </section>
@@ -165,32 +226,77 @@ function SantixLanding() {
 
 function IntroStat({ value, label }: { value: string; label: string }) {
   return (
-    <div>
-      <div className="text-3xl font-black text-white">{value}</div>
-      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>
+    <div className="group">
+      <div className="stat-gradient text-4xl font-black tracking-[-0.04em]">{value}</div>
+      <div className="mt-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 transition-colors group-hover:text-slate-400">{label}</div>
     </div>
   );
 }
 
-function Feature({ icon: Icon, title, text }: { icon: typeof Activity; title: string; text: string }) {
+function Feature({
+  icon: Icon,
+  title,
+  text,
+  delay = 0,
+}: {
+  icon: typeof Activity;
+  title: string;
+  text: string;
+  delay?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+
   return (
-    <article className="group rounded-3xl border border-cyan-300/10 bg-white/[0.035] p-7 shadow-[0_18px_70px_rgba(0,0,0,0.28)] transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/35 hover:bg-cyan-300/[0.055] hover:shadow-[0_26px_90px_rgba(0,242,254,0.16)]">
-      <div className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300 transition-all duration-300 group-hover:scale-110 group-hover:border-cyan-300/45 group-hover:bg-cyan-300/15 group-hover:shadow-[0_0_34px_rgba(0,242,254,0.28)]">
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      whileHover={{ y: -8, transition: { type: "spring", stiffness: 360, damping: 30 } }}
+      transition={{ duration: 0.72, ease: [0, 0, 0.2, 1], delay }}
+      className="group relative flex flex-col overflow-hidden rounded-3xl border border-cyan-300/12 bg-white/[0.035] p-8 shadow-[0_18px_70px_rgba(0,0,0,0.28)] transition-[border-color,background-color,box-shadow] duration-300 hover:border-cyan-300/35 hover:bg-cyan-300/[0.055] hover:shadow-[0_26px_90px_rgba(0,242,254,0.16)]"
+    >
+      <div className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-cyan-300/[0.07] to-transparent transition-transform duration-700 ease-in-out group-hover:translate-x-full" />
+      <div className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300 transition-all duration-300 group-hover:scale-110 group-hover:border-cyan-300/45 group-hover:shadow-[0_0_28px_rgba(0,242,254,0.25)]">
         <Icon className="size-5" />
       </div>
-      <h3 className="text-xl font-black tracking-tight text-white transition-colors group-hover:text-cyan-100">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
-    </article>
+      <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors duration-300 group-hover:text-slate-300">{text}</p>
+    </motion.div>
   );
 }
 
-function Step({ number, title, text }: { number: string; title: string; text: string }) {
+function Step({
+  number,
+  title,
+  text,
+  delay = 0,
+}: {
+  number: string;
+  title: string;
+  text: string;
+  delay?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+
   return (
-    <article className="group rounded-3xl border border-white/10 bg-white/[0.03] p-7 transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/30 hover:bg-white/[0.055] hover:shadow-[0_24px_80px_rgba(0,242,254,0.12)]">
-      <div className="text-5xl font-black text-cyan-300/15 transition-all duration-300 group-hover:text-cyan-300/35">{number}</div>
-      <h3 className="mt-5 text-xl font-black text-white transition-colors group-hover:text-cyan-100">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
-    </article>
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      whileHover={{ y: -8, transition: { type: "spring", stiffness: 360, damping: 30 } }}
+      transition={{ duration: 0.72, ease: [0, 0, 0.2, 1], delay }}
+      className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025] p-8 transition-[border-color,background-color,box-shadow] duration-500 hover:border-cyan-300/25 hover:bg-white/[0.04] hover:shadow-[0_24px_80px_rgba(0,242,254,0.1)]"
+    >
+      <div className="pointer-events-none absolute -right-2 -top-4 select-none text-[9rem] font-black leading-none text-white/[0.038] transition-colors duration-500 group-hover:text-cyan-300/[0.065]">
+        {number}
+      </div>
+      <div className="relative">
+        <h3 className="text-xl font-black text-white transition-colors group-hover:text-cyan-100">{title}</h3>
+        <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
+      </div>
+    </motion.div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { SkeletonScene, type BoneSelection } from "@/components/skeleton/SkeletonScene";
 import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
 import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
@@ -168,15 +169,20 @@ function ExploratorPage() {
         }}
       />
 
-      <BoneInfoPanel
-        bone={selectedBone}
-        selection={selection}
-        onClose={() => handleSelectionChange(null)}
-        onContextSwitch={handleAiContextSwitch}
-        preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
-        visualLayer={layerMode}
-        openConversationId={openConversationId}
-      />
+      <AnimatePresence mode="popLayout">
+        {selection && (
+          <BoneInfoPanel
+            key={`${selection.side}-${selection.id}`}
+            bone={selectedBone}
+            selection={selection}
+            onClose={() => handleSelectionChange(null)}
+            onContextSwitch={handleAiContextSwitch}
+            preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
+            visualLayer={layerMode}
+            openConversationId={openConversationId}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

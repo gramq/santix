@@ -11,7 +11,6 @@ import {
   type OrganModelPart,
 } from "@/data/internalOrgans";
 
-// Map submesh node names → bone IDs from src/data/bones.ts (used by FEMALE simple model)
 const MESH_TO_BONE: Record<string, string> = {
   SM_HumanSkeleton_17: "frontal",
   SM_HumanSkeleton_18: "mandibula",
@@ -125,27 +124,19 @@ function resolveAnatomicalScale(model: OrganModelPart, rawSize: THREE.Vector3) {
   return new THREE.Vector3(uniformScale, uniformScale, uniformScale);
 }
 
-// Keep first paint light. The complex anatomy GLB is loaded only after the user opts in.
 useGLTF.preload(FALLBACK_URL);
-internalOrgans.forEach((organ) => {
-  organ.modelParts?.forEach((part) => useGLTF.preload(part.url));
-});
 
 export type SkeletonSide = "male" | "female";
 export type TissueType = "os" | "muschi" | "tendon" | "organ";
 export type AnatomyModelMode = "simple" | "complex";
 
 export interface BoneSelection {
-  /** Bone id from src/data/bones.ts when known, otherwise a synthetic id (e.g. "muschi-grup-2"). */
   id: string;
   side: SkeletonSide;
   tissue: TissueType;
-  /** Intuitive region used to highlight related tiny pieces together. */
   regionId?: string;
   regionLabel?: string;
-  /** Display label (used when the selection is not a catalogued bone). */
   label?: string;
-  /** Original English anatomical name, useful for stable classification/search. */
   labelEn?: string;
 }
 
@@ -156,6 +147,12 @@ const SELECT_COLOR = new THREE.Color("#4a2fb7");
 const SELECT_EMISSIVE = new THREE.Color("#c01874");
 const DIM_COLOR = new THREE.Color("#e7ddf3");
 const COMPLETE_REFERENCE_COLOR = new THREE.Color("#7fb7bd");
+
+type RimUniforms = { uRimIntensity: { value: number }; uRimColor: { value: THREE.Color } };
+
+function injectRimShader(_material: THREE.MeshPhysicalMaterial, rimColor: THREE.Color): RimUniforms {
+  return { uRimIntensity: { value: 0 }, uRimColor: { value: rimColor.clone() } };
+}
 
 function isTissueLayerActive(tissue: TissueType | undefined, layerMode: LayerMode) {
   if (layerMode === "complete") return tissue === "os" || tissue === "muschi" || tissue === "tendon" || tissue === "organ";
@@ -466,7 +463,6 @@ function inferIntuitiveRegion(input: {
   return undefined;
 }
 
-// ----- Female (simple skeleton GLB) -----------------------------------------
 
 interface SimpleSkeletonModelProps {
   url: string;
@@ -522,8 +518,9 @@ function ResolvedSimpleSkeletonModel({
     [variant],
   );
 
-  const cloned = useMemo(() => {
+  const { cloned, allMeshes: simpleMeshes } = useMemo(() => {
     const root = gltf.scene.clone(true);
+    const allMeshes: THREE.Mesh[] = [];
     root.traverse((obj) => {
       if (!(obj as THREE.Mesh).isMesh) return;
       const mesh = obj as THREE.Mesh;
@@ -567,29 +564,15 @@ function ResolvedSimpleSkeletonModel({
         emissiveIntensity: 0,
         envMapIntensity: 1.2,
       });
+      mesh.userData.rimUniforms = injectRimShader(mat, new THREE.Color("#00f2fe"));
       mesh.material = mat;
+      allMeshes.push(mesh);
     });
-    return root;
+    return { cloned: root, allMeshes };
   }, [gltf, baseColor, variant, side]);
 
-  useFrame(() => {
-    cloned.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
-      const boneId = mesh.userData.boneId as string | null;
-      if (!boneId) return;
-      const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      const isSelected =
-        selection !== null && selection.side === side && selection.id === boneId;
-      const targetEmissive = isSelected ? 0.75 : 0;
-      mat.emissiveIntensity += (targetEmissive - mat.emissiveIntensity) * 0.18;
-      const targetColor = isSelected ? SELECT_COLOR : baseColor;
-      mat.color.lerp(targetColor, 0.18);
-    });
-    if (groupRef.current && !selection) {
-      groupRef.current.rotation.y += 0.0012;
-    }
-  });
+  const simpleIsDirtyRef = useRef(true);
+  useEffect(() => { simpleIsDirtyRef.current = true; }, [selection]);
 
   const { scale, offset } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(cloned);
@@ -603,21 +586,39 @@ function ResolvedSimpleSkeletonModel({
   }, [cloned]);
 
   const hoveredMeshRef = useRef<THREE.Mesh | null>(null);
+
   useFrame(() => {
     const hovered = hoveredMeshRef.current;
-    cloned.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
+    const rotating = !selection;
+    if (!simpleIsDirtyRef.current && !hovered && !rotating) return;
+
+    let settling = false;
+    for (const mesh of simpleMeshes) {
+      if (!mesh.visible || !mesh.material) continue;
       const boneId = mesh.userData.boneId as string | null;
-      if (!boneId) return;
+      if (!boneId) continue;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      const isSelected =
-        selection !== null && selection.side === side && selection.id === boneId;
-      if (isSelected) return;
-      const isHov = hovered && (hovered.userData.boneId as string) === boneId;
-      const targetColor = isHov ? HOVER_COLOR_BONE : baseColor;
+      const isSelected = selection !== null && selection.side === side && selection.id === boneId;
+      const isHov = !isSelected && !!hovered && (hovered.userData.boneId as string) === boneId;
+
+      const targetEmissive = isSelected ? 0.75 : 0;
+      mat.emissiveIntensity += (targetEmissive - mat.emissiveIntensity) * 0.18;
+      const targetColor = isSelected ? SELECT_COLOR : isHov ? HOVER_COLOR_BONE : baseColor;
       mat.color.lerp(targetColor, 0.18);
-    });
+
+      const rimUniforms = mesh.userData.rimUniforms as RimUniforms | undefined;
+      if (rimUniforms) {
+        const targetRim = isSelected ? 1.4 : isHov ? 0.75 : 0;
+        rimUniforms.uRimIntensity.value += (targetRim - rimUniforms.uRimIntensity.value) * 0.18;
+        if (Math.abs(rimUniforms.uRimIntensity.value - targetRim) > 0.004) settling = true;
+      }
+      if (Math.abs(mat.emissiveIntensity - targetEmissive) > 0.004) settling = true;
+    }
+    if (!settling && !hovered) simpleIsDirtyRef.current = false;
+
+    if (groupRef.current && rotating) {
+      groupRef.current.rotation.y += 0.0012;
+    }
   });
 
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
@@ -626,11 +627,13 @@ function ResolvedSimpleSkeletonModel({
     const id = mesh.userData?.boneId as string | null;
     if (!id) return;
     hoveredMeshRef.current = mesh;
+    simpleIsDirtyRef.current = true;
     document.body.style.cursor = "pointer";
   };
   const handlePointerOut = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     hoveredMeshRef.current = null;
+    simpleIsDirtyRef.current = true;
     document.body.style.cursor = "auto";
   };
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -653,7 +656,6 @@ function ResolvedSimpleSkeletonModel({
   );
 }
 
-// ----- Male (complex multi-layer anatomy GLB) --------------------------------
 
 interface ComplexMaleProps {
   url: string;
@@ -668,12 +670,14 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
   const groupRef = useRef<THREE.Group>(null);
   const layerModeRef = useRef(layerMode);
 
-  const { cloned, layerMeshes } = useMemo(() => {
+  const { cloned, layerMeshes, allMeshes } = useMemo(() => {
     const root = gltf.scene.clone(true);
     const layerMeshes: Record<TissueType, THREE.Mesh[]> = { os: [], muschi: [], tendon: [], organ: [] };
+    const allMeshes: THREE.Mesh[] = [];
     root.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
+      allMeshes.push(mesh);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
 
@@ -711,12 +715,14 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       });
       const selectionId =
         catalogSelection?.id ??
-        readableMuscleSelection?.id ??
-        (tissue === "muschi" && intuitiveRegion?.regionId ? intuitiveRegion.regionId : structureId);
+        (tissue === "muschi"
+          ? (intuitiveRegion?.regionId ?? readableMuscleSelection?.id ?? structureId)
+          : (readableMuscleSelection?.id ?? structureId));
       const selectionLabel =
         catalogSelection?.label ??
-        readableMuscleSelection?.label ??
-        (tissue === "muschi" ? intuitiveRegion?.regionLabel : undefined) ??
+        (tissue === "muschi"
+          ? (intuitiveRegion?.regionLabel ?? readableMuscleSelection?.label)
+          : undefined) ??
         intuitiveRegion?.regionLabel ??
         stripLateralityFromLabel(structureName);
 
@@ -751,15 +757,20 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       mat.userData.baseColor = baseColor.clone();
       mat.userData.baseOpacity = mat.opacity;
       mesh.material = mat;
-      if (tissue === "organ") {
+      if (tissue !== "organ") {
+        const rimColor =
+          tissue === "muschi" ? new THREE.Color("#d91f7b") :
+          tissue === "tendon" ? new THREE.Color("#e8a030") :
+          new THREE.Color("#00f2fe");
+        mesh.userData.rimUniforms = injectRimShader(mat, rimColor);
+      } else {
         mesh.raycast = () => null;
       }
       layerMeshes[tissue].push(mesh);
     });
-    return { cloned: root, layerMeshes };
+    return { cloned: root, layerMeshes, allMeshes };
   }, [gltf]);
 
-  // Apply exclusive layer visibility.
   useEffect(() => {
     layerModeRef.current = layerMode;
     layerMeshes.os.forEach((m) => (m.visible = isTissueLayerActive("os", layerMode)));
@@ -775,7 +786,6 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
     }
   }, [layerMode, onSelect, selection]);
 
-  // Center & scale to a calm anatomy-viewer size without changing the authored orientation.
   const { scale, offset } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(cloned);
     const size = new THREE.Vector3();
@@ -788,14 +798,21 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
   }, [cloned]);
 
   const hoveredMeshRef = useRef<THREE.Mesh | null>(null);
+  const isDirtyRef = useRef(true);
+
+  useEffect(() => { isDirtyRef.current = true; }, [selection, layerMode]);
 
   useFrame(() => {
     const hovered = hoveredMeshRef.current;
+    const rotating = !selection;
+    if (!isDirtyRef.current && !hovered && !rotating) return;
+
+    let settling = false;
     const hasSelection = selection !== null && selection.side === "male";
     const isCompleteLayer = layerModeRef.current === "complete";
-    cloned.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
+
+    for (const mesh of allMeshes) {
+      if (!mesh.visible || !mesh.material) continue;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
       const baseColor = (mat.userData.baseColor as THREE.Color) ?? mat.color;
       const baseOpacity = (mat.userData.baseOpacity as number | undefined) ?? mat.opacity;
@@ -849,9 +866,20 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
               ? hoverColor
               : baseColor;
       mat.color.lerp(targetColor, 0.18);
-    });
 
-    if (groupRef.current && !selection) {
+      const rimUniforms = mesh.userData.rimUniforms as RimUniforms | undefined;
+      if (rimUniforms) {
+        const targetRim = isCompleteLayer ? 0 : isSelected ? 1.6 : isHov ? 0.9 : 0;
+        rimUniforms.uRimIntensity.value += (targetRim - rimUniforms.uRimIntensity.value) * 0.18;
+        if (Math.abs(rimUniforms.uRimIntensity.value - targetRim) > 0.004) settling = true;
+      }
+      if (Math.abs(mat.opacity - targetOpacity) > 0.004) settling = true;
+      if (Math.abs(mat.emissiveIntensity - targetEmissive) > 0.004) settling = true;
+    }
+
+    if (!settling && !hovered) isDirtyRef.current = false;
+
+    if (groupRef.current && rotating) {
       groupRef.current.rotation.y += 0.0012;
     }
   });
@@ -877,6 +905,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
         )[0] ?? null;
     if (!mesh) return;
     hoveredMeshRef.current = mesh;
+    isDirtyRef.current = true;
     document.body.style.cursor = "pointer";
   };
   const handlePointerOut = (e: ThreeEvent<PointerEvent>) => {
@@ -887,6 +916,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
     }
     e.stopPropagation();
     hoveredMeshRef.current = null;
+    isDirtyRef.current = true;
     document.body.style.cursor = "auto";
   };
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -1264,6 +1294,7 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
   return (
     <Canvas
       shadows
+      dpr={[1, 1.5]}
       camera={{ position: [0, 0.15, 10], fov: 30 }}
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
@@ -1277,8 +1308,8 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
         position={[5, 8, 7]}
         intensity={isLightMode ? 1.22 : 1.12}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-bias={-0.0005}
       />
       <directionalLight position={[-5, 5, 5]} intensity={isLightMode ? 0.6 : 0.5} color="#dffcff" />

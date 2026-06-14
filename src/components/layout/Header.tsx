@@ -1,5 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, UserCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -41,13 +42,20 @@ export function Header() {
               <Link
                 key={to}
                 to={to}
-                className={`px-4 py-2 rounded-2xl text-sm font-medium tracking-tight transition-all duration-300 ${
+                className={`relative px-4 py-2 rounded-2xl text-sm font-medium tracking-tight transition-colors duration-200 ${
                   active
-                    ? "bg-primary/12 text-primary"
+                    ? "text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
                 }`}
               >
-                {label}
+                {active && (
+                  <motion.div
+                    layoutId="header-nav-pill"
+                    className="absolute inset-0 rounded-2xl bg-primary/12"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className="relative z-10">{label}</span>
               </Link>
             );
           })}

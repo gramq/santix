@@ -66,16 +66,26 @@ type TechnicalDetail = {
 
 type AnatomyDetailSource = Record<string, unknown>;
 
-function shouldShowContextSuggestion(action: AiContextSwitchAction | undefined) {
+function shouldAutoRedirect(action: AiContextSwitchAction | undefined): boolean {
   return Boolean(
     action?.should_switch_context &&
     action.confidence === "high" &&
     action.target_layer &&
     action.target_structure_slug &&
-    (action.selected_context_fit === "likely_muscular_but_bone_selected" ||
-      action.selected_context_fit === "likely_bone_joint_but_muscle_selected" ||
-      action.selected_context_fit === "likely_organ_but_other_selected" ||
-      action.selected_context_fit === "different_body_region_detected" ||
+    (action.selected_context_fit === "different_body_region_detected" ||
+      action.selected_context_fit === "likely_muscular_but_bone_selected" ||
+      action.selected_context_fit === "likely_bone_joint_but_muscle_selected"),
+  );
+}
+
+function shouldShowContextSuggestion(action: AiContextSwitchAction | undefined) {
+  if (shouldAutoRedirect(action)) return false;
+  return Boolean(
+    action?.should_switch_context &&
+    action.confidence === "high" &&
+    action.target_layer &&
+    action.target_structure_slug &&
+    (action.selected_context_fit === "likely_organ_but_other_selected" ||
       action.selected_context_fit === "red_flag_priority"),
   );
 }
@@ -200,7 +210,6 @@ export function BoneInfoPanel({
   const missingNameLogKeyRef = useRef<string | null>(null);
   const shownSuggestionKeysRef = useRef<Set<string>>(new Set());
 
-  // Resizable panel
   const MIN_WIDTH = 300;
   const MAX_WIDTH = 700;
   const [panelWidth, setPanelWidth] = useState(() => {
@@ -223,7 +232,6 @@ export function BoneInfoPanel({
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
-      // Panel is on the right; dragging left increases width
       const delta = dragStartX.current - e.clientX;
       const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidth.current + delta));
       setPanelWidth(next);
@@ -373,9 +381,7 @@ export function BoneInfoPanel({
   const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName, lang });
   const displayName = selectedOrgan?.name ?? displayInfo.display_name;
   const displayTitle = selectedOrgan?.name ?? displayInfo.title;
-  const displaySubtitle = selectedOrgan?.latinName ?? displayInfo.subtitle;
   const aiStructureName = displayTitle;
-  const displayLatin = selectedOrgan?.latinName ?? displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
   const categoryLabelsLang = lang === "en" ? categoryLabelsEn : categoryLabels;
   const categoryText = selectedOrgan?.category ?? (bone ? categoryLabelsLang[bone.category] : curriculum.group);
 
@@ -387,15 +393,15 @@ export function BoneInfoPanel({
       ? isEn ? "Internal organ included in the complete Santix visualization." : "Organ intern inclus în vizualizarea completă Santix."
       : tissue === "muschi"
       ? isEn
-        ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Muscles produce movement through contraction and attach to bones via tendons.`
-        : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Mușchii produc mișcare prin contracție și se atașează de oase prin tendoane.`
+        ? "Part of the muscular system. It helps the body move by contracting and working with bones and tendons."
+        : "Parte din sistemul muscular. Ajută corpul să se miște prin contractare și lucrează împreună cu oasele și tendoanele."
       : tissue === "tendon"
         ? isEn
-          ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Fibrous connective tissue that stabilises or transmits muscular force.`
-          : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Țesut conjunctiv fibros care stabilizează sau transmite forța musculară.`
+          ? "Strong connective tissue that helps keep the area stable and passes force from muscle to bone."
+          : "Țesut rezistent care ajută zona să fie stabilă și transmite forța de la mușchi către os."
         : isEn
-          ? `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Bone structure organised by locomotor system regions.`
-          : `${curriculum.group}${curriculum.subgroup ? ` - ${curriculum.subgroup}` : ""}. Structură osoasă organizată după regiunile aparatului locomotor.`);
+          ? "Part of the skeleton. It helps support the body, protect nearby areas and make movement possible."
+          : "Parte a scheletului. Ajută la susținerea corpului, protejează zone apropiate și face mișcarea posibilă.");
 
   const funcText = selectedOrgan?.function ?? (isEn ? bone?.functie_en ?? bone?.funcție : bone?.funcție) ?? curriculum.functionHint;
   const isCompleteAnatomyMode = visualLayer === "complete";
@@ -498,11 +504,56 @@ export function BoneInfoPanel({
       setAiMessages((current) => [...current, { role: "assistant", content: response.answer }]);
 
       const contextSwitch = response.contextSwitch;
-      if (!options.suppressSuggestion && contextSwitch && shouldShowContextSuggestion(contextSwitch)) {
-        const suggestionKey = [contextSwitch.target_layer, contextSwitch.target_structure_slug, contextSwitch.selected_context_fit].join(":");
-        if (!shownSuggestionKeysRef.current.has(suggestionKey)) {
-          shownSuggestionKeysRef.current.add(suggestionKey);
-          setContextSuggestion({ action: contextSwitch, prompt, conversationId: response.conversationId, key: suggestionKey });
+
+      if (!options.suppressSuggestion && contextSwitch) {
+        if (shouldAutoRedirect(contextSwitch)) {
+          const action = contextSwitch;
+          if (action.target_layer && action.target_structure_slug) {
+            const nextTissue: TissueType =
+              action.target_layer === "organs" ? "organ"
+              : action.target_layer === "muscular" ? "muschi"
+              : "os";
+            const nextLayer =
+              action.target_layer === "organs" ? "organs"
+              : action.target_layer === "muscular" ? "muscular"
+              : "skeleton";
+            const nextOrgan = localizeInternalOrgan(
+              nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined,
+              lang,
+            );
+            const targetName =
+              nextOrgan?.name ??
+              action.target_body_region ??
+              action.target_structure_slug.replace(/^muschi:/, "").replace(/-/g, " ");
+
+            const regionLabel = action.target_body_region ?? targetName;
+            const notice = isEn
+              ? `I noticed your question is about **${regionLabel}**, not the current selection. Switching automatically.`
+              : `Am observat că întrebarea ta este despre **${regionLabel}**, nu despre selecția curentă. Schimb selecția automat.`;
+            setAiMessages((current) => [...current.slice(0, -1), { role: "assistant", content: notice }]);
+
+            onContextSwitch?.(action);
+
+            await submitAiPrompt(prompt, {
+              appendUser: false,
+              suppressSuggestion: true,
+              overrideContext: {
+                tissue: nextTissue,
+                structureName: targetName,
+                structureSlug: action.target_structure_slug,
+                modelSelectionId: action.target_structure_slug,
+                bodyRegion: action.target_body_region ?? curriculum.segment,
+                visualLayer: nextLayer,
+                aiLayer: nextLayer,
+              },
+            });
+          }
+        } else if (shouldShowContextSuggestion(contextSwitch)) {
+          const suggestionKey = [contextSwitch.target_layer, contextSwitch.target_structure_slug, contextSwitch.selected_context_fit].join(":");
+          if (!shownSuggestionKeysRef.current.has(suggestionKey)) {
+            shownSuggestionKeysRef.current.add(suggestionKey);
+            setContextSuggestion({ action: contextSwitch, prompt, conversationId: response.conversationId, key: suggestionKey });
+          }
         }
       }
     } catch (err) {
@@ -551,12 +602,14 @@ export function BoneInfoPanel({
   };
 
   return (
-    <div
-      key={`${selection.side}-${selection.id}`}
-      className="absolute right-6 top-6 bottom-24 glass-strong rounded-3xl flex flex-col fade-up overflow-hidden"
+    <motion.div
+      initial={{ opacity: 0, x: 32, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: 24, scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 360, damping: 32 }}
+      className="absolute right-6 top-6 bottom-24 glass-strong rounded-3xl flex flex-col overflow-hidden"
       style={{ width: panelWidth }}
     >
-      {/* Resize handle */}
       <div
         onMouseDown={onResizeStart}
         className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group flex items-center justify-center"
@@ -565,7 +618,12 @@ export function BoneInfoPanel({
         <div className="w-[3px] h-12 rounded-full bg-white/10 group-hover:bg-primary/50 transition-colors duration-150" />
       </div>
       <div className="flex flex-col flex-1 overflow-hidden p-6">
-      <div className="flex items-start justify-between gap-3 mb-5">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.2, ease: "easeOut" }}
+        className="flex items-start justify-between gap-3 mb-5"
+      >
         <div className="flex items-center gap-2">
           <div className={`size-10 rounded-2xl border flex items-center justify-center ${meta.tagBg}`}>
             <Icon className={`size-4 ${meta.tagText}`} />
@@ -584,23 +642,31 @@ export function BoneInfoPanel({
         >
           <X className="size-4" />
         </button>
-      </div>
+      </motion.div>
 
-      <h2 className="text-3xl font-bold tracking-tight leading-tight mb-1">{displayTitle}</h2>
-      {(displaySubtitle || displayLatin) && (
-        <p className="text-sm italic text-muted-foreground mb-5">{displaySubtitle ?? displayLatin}</p>
-      )}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12, duration: 0.2, ease: "easeOut" }}
+      >
+        <h2 className="text-3xl font-bold tracking-tight leading-tight mb-1">{displayTitle}</h2>
 
-      {bone && (
-        <div className="flex items-center gap-2 mb-5 px-3 py-2 rounded-2xl bg-bone-glow/10 border border-bone-glow/20 w-fit">
-          <Sparkles className="size-3.5 text-primary" />
-          <span className="text-xs font-semibold text-primary">
-            {bone.count} {bone.count === 1 ? t.bone_count_singular : t.bone_count_plural} {isEn ? "in the body" : "în corp"}
-          </span>
-        </div>
-      )}
+        {bone && (
+          <div className="flex items-center gap-2 mb-5 px-3 py-2 rounded-2xl bg-bone-glow/10 border border-bone-glow/20 w-fit">
+            <Sparkles className="size-3.5 text-primary" />
+            <span className="text-xs font-semibold text-primary">
+              {bone.count} {bone.count === 1 ? t.bone_count_singular : t.bone_count_plural} {isEn ? "in the body" : "în corp"}
+            </span>
+          </div>
+        )}
+      </motion.div>
 
-      <div className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 -mr-1">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.17, duration: 0.24, ease: "easeOut" }}
+        className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 -mr-1"
+      >
         <Section title={t.bone_description}>
           <p className="text-sm leading-relaxed text-foreground/90">{description}</p>
         </Section>
@@ -892,9 +958,9 @@ export function BoneInfoPanel({
             </motion.div>
           )) : null}
         </AnimatePresence>
+      </motion.div>
       </div>
-      </div>{/* /inner p-6 wrapper */}
-    </div>
+    </motion.div>
   );
 }
 

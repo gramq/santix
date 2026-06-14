@@ -1,4 +1,3 @@
--- User-facing anatomy names. Slugs and model ids remain unchanged.
 
 alter table if exists public.anatomy_structures
   add column if not exists common_name_ro text,

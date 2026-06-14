@@ -43,57 +43,37 @@
 
 :root {
   --radius: 1rem;
-
-  /* Santix dark clinical theme: obsidian surfaces with cyan diagnostic light */
   --background: oklch(0.055 0.012 230);
   --foreground: oklch(0.94 0.018 210);
-
   --card: oklch(0.12 0.018 230 / 0.88);
   --card-foreground: oklch(0.94 0.018 210);
-
   --popover: oklch(0.10 0.018 230 / 0.96);
   --popover-foreground: oklch(0.94 0.018 210);
-
   --primary: oklch(0.82 0.17 205);
   --primary-foreground: oklch(0.055 0.012 230);
-
   --secondary: oklch(0.16 0.028 225);
   --secondary-foreground: oklch(0.88 0.04 205);
-
   --muted: oklch(0.16 0.025 225);
   --muted-foreground: oklch(0.78 0.035 215);
-
   --accent: oklch(0.73 0.15 225);
   --accent-foreground: oklch(0.055 0.012 230);
-
   --destructive: oklch(0.62 0.22 27);
   --destructive-foreground: oklch(1 0 0);
-
   --border: oklch(0.82 0.17 205 / 18%);
   --input: oklch(0.82 0.17 205 / 20%);
   --ring: oklch(0.82 0.17 205);
-
-  /* Domain tokens */
   --medical: oklch(0.76 0.14 190);
   --medical-foreground: oklch(1 0 0);
-
   --bone: oklch(0.78 0.06 215);
   --bone-glow: oklch(0.86 0.13 205);
-
   --success: oklch(0.66 0.16 155);
-
-  /* Glass surfaces: dark translucent panels with cyan edge light */
   --glass: oklch(0.09 0.018 230 / 78%);
   --glass-border: oklch(0.82 0.17 205 / 18%);
-
-  /* Soft diffuse cyan shadows */
   --shadow-float:
     0 1px 2px oklch(0 0 0 / 0.35),
     0 12px 30px -12px oklch(0.82 0.17 205 / 0.20),
     0 28px 62px -20px oklch(0 0 0 / 0.55);
   --shadow-glow: 0 0 56px -10px oklch(0.82 0.17 205 / 0.42);
-
-  /* Premium gradients */
   --gradient-bg:
     radial-gradient(circle at 48% -18%, oklch(0.82 0.17 205 / 0.16) 0%, transparent 30%),
     radial-gradient(circle at 14% 18%, oklch(0.76 0.14 190 / 0.10) 0%, transparent 34%),
@@ -101,16 +81,13 @@
     linear-gradient(180deg, oklch(0.075 0.018 230) 0%, oklch(0.045 0.012 235) 58%, oklch(0.03 0.008 240) 100%);
   --gradient-primary: linear-gradient(135deg, oklch(0.86 0.14 195), oklch(0.68 0.17 220));
   --gradient-glass: linear-gradient(135deg, oklch(0.13 0.024 230 / 0.92), oklch(0.075 0.018 235 / 0.78));
-
   --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-
   --chart-1: oklch(0.82 0.17 205);
   --chart-2: oklch(0.76 0.14 190);
   --chart-3: oklch(0.73 0.15 225);
   --chart-4: oklch(0.62 0.13 245);
   --chart-5: oklch(0.62 0.22 27);
-
   --sidebar: oklch(0.09 0.018 230 / 84%);
   --sidebar-foreground: oklch(0.94 0.018 210);
   --sidebar-primary: oklch(0.82 0.17 205);
@@ -122,7 +99,6 @@
 }
 
 .dark {
-  /* App is light-only; mirror :root so any .dark wrapper stays consistent */
   --background: oklch(0.055 0.012 230);
   --foreground: oklch(0.94 0.018 210);
   --card: oklch(0.12 0.018 230 / 0.88);
@@ -279,7 +255,6 @@
     font-weight: 700;
   }
 
-  /* Minimalist scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -797,6 +772,28 @@
   @keyframes santix-zone-pulse {
     0%, 100% { transform: scale(0.72); opacity: 0.7; }
     50% { transform: scale(1.12); opacity: 0.12; }
+  }
+
+
+  .stat-gradient {
+    background: linear-gradient(140deg, #ffffff 35%, rgba(0, 242, 254, 0.82) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .badge-dot-pulse {
+    animation: badge-dot-pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes badge-dot-pulse {
+    0%, 100% {
+      box-shadow: 0 0 8px rgba(0, 242, 254, 0.9);
+    }
+    50% {
+      transform: scale(1.3);
+      box-shadow: 0 0 22px rgba(0, 242, 254, 0.45), 0 0 6px rgba(0, 242, 254, 0.9);
+    }
   }
 
 }

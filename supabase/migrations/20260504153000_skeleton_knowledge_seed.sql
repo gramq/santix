@@ -1,4 +1,3 @@
--- Seed Santix skeleton knowledge. Content is synthesized in Romanian from the sources inserted below; do not treat it as a diagnosis.
 
 insert into public.medical_sources (title, url, publisher, source_type, notes) values
   ('MedlinePlus Fractures', 'https://medlineplus.gov/fractures.html', 'MedlinePlus / NIH', 'medical_reference', 'fractures'),

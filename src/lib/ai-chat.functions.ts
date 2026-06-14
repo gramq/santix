@@ -333,7 +333,6 @@ const BODY_REGION_TERMS: Array<{
       "pumn",
       "carp",
       "metacarp",
-      // English
       "hand",
       "wrist",
       "finger",
@@ -422,7 +421,6 @@ const BODY_REGION_TERMS: Array<{
       "metatars",
       "gamba",
       "coapsa",
-      // English
       "foot",
       "feet",
       "heel",
@@ -445,15 +443,23 @@ const BODY_REGION_TERMS: Array<{
   {
     key: "torace",
     label: "torace / piept",
-    terms: ["torace", "piept", "coaste", "stern", "respiratie", "chest", "thorax", "rib", "ribs", "sternum", "sternum", "breathing"],
+    terms: ["torace", "piept", "pectoral", "coaste", "stern", "respiratie", "chest", "thorax", "rib", "ribs", "sternum", "breathing"],
     bodyRegions: ["torace", "trunchi"],
     targetStructureSlug: "coaste",
     targetStructureType: "os",
   },
   {
+    key: "abdomen",
+    label: "abdomen / burtă",
+    terms: ["abdomen", "abdominal", "burta", "burtă", "stomac", "buric", "iliac", "belly", "stomach area", "abdominal"],
+    bodyRegions: ["abdomen", "trunchi"],
+    targetStructureSlug: "coxal",
+    targetStructureType: "os",
+  },
+  {
     key: "cap",
     label: "cap / față",
-    terms: ["cap", "craniu", "fata", "frunte", "mandibula", "ochi", "head", "skull", "face", "jaw", "forehead", "cheek"],
+    terms: ["cap", "craniu", "fata", "frunte", "mandibula", "ochi", "tampla", "head", "skull", "face", "jaw", "forehead", "cheek", "temple"],
     bodyRegions: ["cap_craniu", "fata", "cap_gat"],
     targetStructureSlug: "frontal",
     targetStructureType: "os",
@@ -604,7 +610,6 @@ const SELECTION_TERMS = [
   "intestin",
   "unde se afla",
   "la ce foloseste",
-  // English equivalents
   "what is",
   "what are",
   "what does",
@@ -656,7 +661,6 @@ const MEDICAL_GENERAL_TERMS = [
   "pancreas",
   "vezica",
   "intestin",
-  // English equivalents
   "pain",
   "injury",
   "fracture",
@@ -706,7 +710,6 @@ const PAIN_STARTER_TERMS = [
   "vanat",
   "accidentare",
   "accident",
-  // English equivalents
   "it hurts",
   "i have pain",
   "pain in",
@@ -750,7 +753,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "intepatura",
       "junghi",
       "junghiuri",
-      // English
       "stabbing",
       "stabbing pain",
       "sharp stab",
@@ -765,7 +767,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "arde",
       "ustura",
       "usturime",
-      // English
       "burning",
       "burns",
       "burning sensation",
@@ -778,7 +779,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "pulseaza",
       "zvacneste",
       "zvacnitoare",
-      // English
       "throbbing",
       "pulsating",
       "pounding",
@@ -791,7 +791,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "surda",
       "apasatoare",
       "disconfort",
-      // English
       "dull ache",
       "dull pain",
       "aching",
@@ -802,7 +801,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
     terms: [
       "ascutita",
       "taioasa",
-      // English
       "sharp",
       "sharp pain",
       "cutting",
@@ -814,7 +812,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "presiune",
       "apasa",
       "apasare",
-      // English
       "pressure",
       "pressing",
       "heavy feeling",
@@ -826,7 +823,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "trage",
       "tragere",
       "intinde",
-      // English
       "pulling",
       "tugging",
       "stretching pain",
@@ -838,7 +834,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "crampa",
       "carcel",
       "spasm",
-      // English
       "cramp",
       "cramping",
       "muscle cramp",
@@ -857,7 +852,6 @@ const ANATOMY_INTENT_TERMS = [
   "explica",
   "functie",
   "functia",
-  // English equivalents
   "what is",
   "what are",
   "what does",
@@ -1102,7 +1096,28 @@ const REGION_CONTEXT_TARGETS: Record<
     muscularSlug: "muschi:muschii-toracelui",
     bodyRegion: "torace",
     skeletonLabel: "Coaste",
-    muscleLabel: "Mușchii toracelui",
+    muscleLabel: "Mușchii pieptului",
+  },
+  piept: {
+    skeletonSlug: "coaste",
+    muscularSlug: "muschi:muschii-toracelui",
+    bodyRegion: "torace",
+    skeletonLabel: "Coaste",
+    muscleLabel: "Mușchii pieptului",
+  },
+  abdomen: {
+    skeletonSlug: "coxal",
+    muscularSlug: "muschi:muschii-abdomenului",
+    bodyRegion: "abdomen",
+    skeletonLabel: "Oase coxale",
+    muscleLabel: "Mușchii abdomenului",
+  },
+  cap: {
+    skeletonSlug: "frontal",
+    muscularSlug: "muschi:muschii-capului-gatului",
+    bodyRegion: "cap_gat",
+    skeletonLabel: "Os frontal",
+    muscleLabel: "Mușchii capului și gâtului",
   },
 };
 
@@ -1177,11 +1192,17 @@ function organTargetFromText(value: string | undefined) {
 
 function directMuscleTargetFromText(value: string | undefined) {
   const text = normalizeText(value);
-  if (hasAny(text, ["biceps", "triceps", "brat"])) return REGION_CONTEXT_TARGETS.brat;
-  if (hasAny(text, ["cvadriceps", "coapsa"])) return REGION_CONTEXT_TARGETS.genunchi;
-  if (hasAny(text, ["gamba", "gambei"])) return REGION_CONTEXT_TARGETS.glezna;
-  if (hasAny(text, ["spate", "lombar"])) return REGION_CONTEXT_TARGETS.spate;
-  if (hasAny(text, ["umar", "deltoid"])) return REGION_CONTEXT_TARGETS.umar;
+  if (hasAny(text, ["biceps", "triceps", "brat", "antebrat", "forearm"])) return REGION_CONTEXT_TARGETS.brat;
+  if (hasAny(text, ["cvadriceps", "coapsa", "ischiogambieri", "thigh"])) return REGION_CONTEXT_TARGETS.genunchi;
+  if (hasAny(text, ["gamba", "gambei", "molet", "calf"])) return REGION_CONTEXT_TARGETS.glezna;
+  if (hasAny(text, ["spate", "lombar", "coloana", "back"])) return REGION_CONTEXT_TARGETS.spate;
+  if (hasAny(text, ["umar", "deltoid", "shoulder", "coafa rotatorie", "coafa rotatorilor"])) return REGION_CONTEXT_TARGETS.umar;
+  if (hasAny(text, ["pectoral", "piept", "chest"])) return REGION_CONTEXT_TARGETS.piept;
+  if (hasAny(text, ["abdomen", "abdominal", "burta", "belly"])) return REGION_CONTEXT_TARGETS.abdomen;
+  if (hasAny(text, ["gat", "neck", "ceafa", "cervical"])) return REGION_CONTEXT_TARGETS.gat;
+  if (hasAny(text, ["sold", "fesier", "fesa", "hip", "gluteus"])) return REGION_CONTEXT_TARGETS.sold;
+  if (hasAny(text, ["picior", "talpa", "plantar", "foot"])) return REGION_CONTEXT_TARGETS.picior;
+  if (hasAny(text, ["mana", "deget", "palm", "hand", "incheietura", "wrist"])) return REGION_CONTEXT_TARGETS.mana;
   return null;
 }
 
@@ -1479,7 +1500,6 @@ function detectAskedFields(message: string, state: SymptomState) {
     "cazut",
     "efort",
     "accident",
-    // English
     "impact",
     "fall",
     "exertion",
@@ -1493,7 +1513,6 @@ function detectAskedFields(message: string, state: SymptomState) {
     "miscare normal",
     "ridici",
     "miscarea",
-    // English
     "can you move",
     "move the area",
     "move it normally",
@@ -1517,7 +1536,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "sala",
       "intindere",
       "crampa",
-      // English
       "muscle strain",
       "muscle use",
       "overexertion",
@@ -1535,7 +1553,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "lovitura",
       "cazatura",
       "accident",
-      // English
       "deep pain",
       "swelling",
       "deformity",
@@ -1581,7 +1598,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "amorteala",
       "slabiciune",
       "deformare",
-      // English
       "swelling",
       "bruising",
       "numbness",
@@ -1600,7 +1616,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "severa",
       "cat de severa",
       "intensitate",
-      // English
       "mild",
       "moderate",
       "how strong",
@@ -1619,7 +1634,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "cand a inceput",
       "de cand",
       "cat timp",
-      // English
       "how long",
       "when did it start",
       "how many days",
@@ -1648,7 +1662,6 @@ function isMovementOkReply(text: string) {
     /\bpot\b.*\b(misca|misc|normal)\b/.test(text) ||
     /\b(misc|misca|miscarea|se misca)\b.*\bnormal\b/.test(text) ||
     text === "normal" ||
-    // English
     /\b(yes|yeah|yep)\b.*\b(can|move)\b/.test(text) ||
     /\bcan\b.*\b(move|use)\b.*\b(it|area|normally|fine|ok)\b/.test(text) ||
     hasAny(text, ["moves fine", "moving fine", "move normally", "can move", "still moving"])
@@ -1663,7 +1676,6 @@ function isMovementBlockedReply(text: string) {
     "deloc",
     "nu misc",
     "nu se misca",
-    // English
     "can't move",
     "cannot move",
     "can't use",
@@ -1691,7 +1703,6 @@ function parseSeverity(text: string): SymptomState["severity"] | null {
       "sever",
       "insuportabil",
       "nu suport",
-      // English
       "severe",
       "very bad",
       "very strong",
@@ -1752,7 +1763,6 @@ function parseOnset(text: string): SymptomState["onset"] | null {
       "dintr-o data",
       "deodata",
       "a aparut dintr o data",
-      // English
       "suddenly",
       "all of a sudden",
       "out of nowhere",
@@ -1766,7 +1776,6 @@ function parseOnset(text: string): SymptomState["onset"] | null {
     hasAny(text, [
       "treptat",
       "incet",
-      // English
       "gradually",
       "slowly",
       "over time",
@@ -1786,7 +1795,6 @@ function parseDuration(text: string): SymptomState["duration"] | null {
       "ora",
       "de azi",
       "azi",
-      // English
       "hours",
       "this morning",
       "this afternoon",
@@ -1803,7 +1811,6 @@ function parseDuration(text: string): SymptomState["duration"] | null {
       "de cateva zile",
       "cateva zile",
       "de zile",
-      // English
       "days",
       "yesterday",
       "a few days",
@@ -1820,7 +1827,6 @@ function parseDuration(text: string): SymptomState["duration"] | null {
       "cronic",
       "luni",
       "de mult",
-      // English
       "months",
       "chronic",
       "a long time",
@@ -1853,7 +1859,6 @@ function isContextualReply(question: string, state: SymptomState) {
       "moderat",
       "moderata",
       "nu pot",
-      // English
       "a bit",
       "really",
       "severe",
@@ -1894,7 +1899,6 @@ function applySymptomFactsFromText(
       "nu am",
       "fara",
       "deloc",
-      // English
       "nope",
       "nah",
       "didnt",
@@ -1928,7 +1932,6 @@ function applySymptomFactsFromText(
       "durere",
       "doare",
       "dureros",
-      // English
       "pain",
       "hurts",
       " hurt",
@@ -1953,7 +1956,6 @@ function applySymptomFactsFromText(
       "efort",
       "accident",
       "trauma",
-      // English
       "fell",
       "fall",
       "hit",
@@ -2006,7 +2008,6 @@ function applySymptomFactsFromText(
         "poti misca",
         "miscare normal",
         "durerea este severa",
-        // English
         "can you move",
         "move normally",
         "is the pain severe",
@@ -2019,7 +2020,6 @@ function applySymptomFactsFromText(
       "nu pot folosi",
       "nu pot ridica",
       "miscarea e limitata",
-      // English
       "cant use",
       "cannot use",
       "cant lift",
@@ -2075,7 +2075,6 @@ function applySymptomFactsFromText(
       "amortit",
       "slabiciune",
       "furnicaturi",
-      // English
       "numbness",
       "numb",
       "tingling",
@@ -2096,7 +2095,6 @@ function applySymptomFactsFromText(
       "slabiciune",
       "nu am forta",
       "pierdere de forta",
-      // English
       "weakness",
       "weak",
       "no strength",
@@ -2116,7 +2114,6 @@ function applySymptomFactsFromText(
       "deform",
       "stramb",
       "os iesit",
-      // English
       "deformity",
       "deformed",
       "bent",
@@ -2298,10 +2295,6 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
   }
 
   if (!recognizableIntent) {
-    // In English mode, route unrecognized messages to the LLM (selection_specific if a
-    // structure is selected, otherwise medical_general) instead of showing a deterministic
-    // "unclear" response. The Romanian keyword patterns don't cover English input, so the
-    // LLM is a much better fallback for English users.
     if (input.lang === "en" && text.trim().length > 0) {
       if (input.structureName || input.structureSlug) {
         return {
@@ -2423,7 +2416,6 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
     };
   }
 
-  // Final fallback: in English mode, send to LLM rather than unclear
   if (input.lang === "en" && text.trim().length > 0) {
     if (input.structureName || input.structureSlug) {
       return {
@@ -3518,20 +3510,75 @@ async function getGeneralMedicalContext(
 
 async function getGuardrailContext(
   supabase: ReturnType<typeof createUserSupabaseClient>,
+  lang: "ro" | "en" = "ro",
 ): Promise<KnowledgeEntry[]> {
-  const rows = await safeSelect<{ id: string; name: string; instruction_ro: string }>(
-    supabase.from("ai_guardrails").select("id, name, instruction_ro").eq("active", true).limit(20),
+  type GuardrailRow = {
+    id: string;
+    name: string;
+    instruction_ro: string;
+    instruction_en: string | null;
+    severity_level: "low" | "medium" | "critical";
+    fallback_message_ro: string | null;
+    fallback_message_en: string | null;
+    category: "safety" | "clinical" | "formatting";
+  };
+
+  const rows = await safeSelect<GuardrailRow>(
+    supabase
+      .from("ai_guardrails")
+      .select(
+        "id, name, instruction_ro, instruction_en, severity_level, fallback_message_ro, fallback_message_en, category",
+      )
+      .eq("active", true)
+      .in("category", ["safety", "clinical"])
+      .limit(20),
   );
 
-  return rows.map((row) =>
-    makeVirtualContext(
-      "ai_guardrails",
-      "guardrail",
-      `Regulă Santix: ${row.name}`,
-      row.instruction_ro,
-      10,
-    ),
+  return rows.map((row) => {
+    const instruction = lang === "en" ? (row.instruction_en || row.instruction_ro) : row.instruction_ro;
+    const title =
+      lang === "en"
+        ? `Santix ${row.category} rule: ${row.name}`
+        : `Regulă Santix ${row.category}: ${row.name}`;
+
+    return {
+      ...makeVirtualContext(
+        "ai_guardrails",
+        "guardrail",
+        title,
+        instruction,
+        10,
+      ),
+      id: row.id,
+      metadata: {
+        name: row.name,
+        severity_level: row.severity_level,
+        category: row.category,
+        fallback_message_ro: row.fallback_message_ro,
+        fallback_message_en: row.fallback_message_en,
+      },
+    };
+  });
+}
+
+function getCriticalGuardrailFallback(
+  context: KnowledgeEntry[],
+  ruleName: string,
+  lang: "ro" | "en" = "ro",
+) {
+  const guardrail = context.find(
+    (entry) =>
+      entry.category === "guardrail" &&
+      entry.metadata?.name === ruleName &&
+      entry.metadata?.severity_level === "critical",
   );
+
+  const fallback =
+    lang === "en"
+      ? guardrail?.metadata?.fallback_message_en
+      : guardrail?.metadata?.fallback_message_ro;
+
+  return typeof fallback === "string" && fallback.trim() ? fallback.trim() : null;
 }
 
 function isVaguePainQuestion(question: string) {
@@ -3824,9 +3871,6 @@ export function buildClarifyingAnswer(
 
 function buildFollowUpAnswer(input: z.infer<typeof InputSchema>, context: KnowledgeEntry[], lang: "ro" | "en" = "ro") {
   const en = lang === "en";
-  // For English, never embed Romanian DB content — it would produce a mixed-language response.
-  // English section bodies always use static EN strings; Ollama provides the actual EN content
-  // when available. For Romanian, use DB content as usual.
   const causes = en ? [] : splitSentences(findContext(context, "cauze_posibile")).slice(0, 4);
   const symptoms = en ? [] : splitSentences(findContext(context, "simptome")).slice(0, 4);
   const recommendations = en ? [] : splitSentences(findContext(context, "recomandari")).slice(0, 4);
@@ -3875,7 +3919,6 @@ function buildSelectionSpecificAnswer(
   lang: "ro" | "en" = "ro",
 ) {
   const en = lang === "en";
-  // For English, skip Romanian DB content to avoid mixed-language responses.
   const anatomy = en ? [] : splitSentences(findContext(context, "anatomie")).slice(0, 3);
   const recommendations = en ? [] : splitSentences(findContext(context, "recomandari")).slice(0, 2);
   const symptoms = en ? [] : splitSentences(findContext(context, "simptome")).slice(0, 2);
@@ -4025,7 +4068,25 @@ function buildDbAnswer(
   void isFirstMessage;
   const lang = input.lang ?? "ro";
 
-  if (route.category === "out_of_scope") return buildOutOfScopeAnswer(lang);
+  if (route.category === "out_of_scope") {
+    return getCriticalGuardrailFallback(context, "medical_scope_only", lang) ?? buildOutOfScopeAnswer(lang);
+  }
+  if (
+    hasAny(input.question, [
+      "diagnostic sigur",
+      "diagnostic cert",
+      "pune diagnostic",
+      "diagnosticheaza",
+      "diagnostichează",
+      "give me a diagnosis",
+      "diagnose me",
+      "final diagnosis",
+      "definitive diagnosis",
+    ])
+  ) {
+    const diagnosisFallback = getCriticalGuardrailFallback(context, "no_real_diagnosis", lang);
+    if (diagnosisFallback) return diagnosisFallback;
+  }
   if (route.category === "app_specific") return buildAppSpecificAnswer(context, lang);
   if (isStructureClarificationReply(route, symptomState))
     return buildStructureClarificationAnswer(input, lang);
@@ -4047,8 +4108,6 @@ function buildDbAnswer(
     symptomState.pain_present &&
     symptomState.next_step !== "recommend" &&
     route.category !== "selection_specific";
-  // Once the pain flow has reached "recommend", don't keep replaying the recommendation
-  // on every subsequent short message — let the conversation continue normally via LLM.
   const alreadyRecommended = symptomState.next_step === "recommend";
   if (!alreadyRecommended && (vagueQuestion || shortSymptomFollowUp || contextualReply || deterministicPainStep)) {
     return buildClarifyingAnswer(input, symptomState, lang);
@@ -4482,10 +4541,8 @@ export const askSelectionAi = createServerFn({ method: "POST" })
           ? []
           : selectionContext;
     const guardrailContext =
-      route.category !== "out_of_scope" &&
-      route.category !== "app_specific" &&
-      route.category !== "unclear_message"
-        ? await getGuardrailContext(supabase)
+      route.category !== "app_specific" && route.category !== "unclear_message"
+        ? await getGuardrailContext(supabase, aiInput.lang)
         : [];
     const context = [...guardrailContext, ...baseContext];
 
@@ -4520,7 +4577,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       symptomState.pain_present &&
       symptomState.next_step !== "recommend" &&
       route.category !== "selection_specific";
-    // Once next_step === "recommend" the pain flow is done — don't keep it deterministic.
     const alreadyRecommended = symptomState.next_step === "recommend";
     const shouldUseDeterministicAnswer =
       route.category === "out_of_scope" ||
@@ -4533,10 +4589,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       (!alreadyRecommended && isShortSymptomFollowUp(aiInput.question, symptomState)) ||
       (!alreadyRecommended && isContextualReply(aiInput.question, symptomState));
 
-    // For English, always try Ollama for content-heavy routes — the DB content is Romanian
-    // and the deterministic builders embed it verbatim, producing mixed-language responses.
-    // Ollama is already prompted to respond in English. The deterministic answer serves as
-    // fallback only if Ollama throws.
     const isEnContentRoute =
       aiInput.lang === "en" &&
       (route.category === "selection_specific" ||
@@ -4544,10 +4596,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
         route.category === "symptom_or_injury" ||
         route.category === "red_flag_or_urgent");
 
-    // If the bot previously asked a clarifying question and the user replied with something
-    // the keyword classifier didn't recognize (e.g. "articulatia de sus" after "upper/middle/lower?"),
-    // the user is almost certainly answering the bot's question. Ollama sees the full conversation
-    // history and can respond intelligently instead of returning "Nu am înțeles".
     const isContextualUnclear =
       route.category === "unclear_message" &&
       Boolean(symptomState.last_question_intent);

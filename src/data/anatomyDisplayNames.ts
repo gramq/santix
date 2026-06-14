@@ -278,37 +278,37 @@ const boneDisplayById: Record<
     common_name_ro: "Osul brațului",
     scientific_name_ro: "humerus",
     latin_name: "Humerus",
-    display_name: "Osul brațului (humerus)",
+    display_name: "Osul brațului",
     title: "Osul brațului",
     title_en: "Upper Arm Bone",
-    subtitle: "Humerus",
+    subtitle: "Braț",
   },
   femur: {
     common_name_ro: "Osul coapsei",
     scientific_name_ro: "femur",
     latin_name: "Femur",
-    display_name: "Osul coapsei (femur)",
+    display_name: "Osul coapsei",
     title: "Osul coapsei",
     title_en: "Thigh Bone",
-    subtitle: "Femur",
+    subtitle: "Coapsă",
   },
   scapula: {
     common_name_ro: "Omoplatul",
     scientific_name_ro: "scapula",
     latin_name: "Scapula",
-    display_name: "Omoplatul (scapula)",
+    display_name: "Omoplatul",
     title: "Omoplatul",
     title_en: "Shoulder Blade",
-    subtitle: "Scapula",
+    subtitle: "Umăr",
   },
   rotula: {
     common_name_ro: "Rotula",
     scientific_name_ro: "patela",
     latin_name: "Patella",
-    display_name: "Rotula (patela)",
+    display_name: "Rotula",
     title: "Rotula",
     title_en: "Kneecap",
-    subtitle: "Patela",
+    subtitle: "Genunchi",
   },
 };
 
@@ -332,9 +332,8 @@ function stripTechnicalPrefix(value: string) {
     .trim();
 }
 
-function formatDisplay(commonName: string, scientificName: string) {
-  const scientific = stripTechnicalPrefix(scientificName);
-  return `${commonName} (${scientific})`;
+function formatDisplay(commonName: string) {
+  return commonName;
 }
 
 function matchesRule(rule: DisplayRule, haystack: string, tissue: TissueType) {
@@ -375,7 +374,6 @@ export function getAnatomyDisplayName(input: {
       latin_name: bone.latin,
       display_name: boneTitle,
       title: boneTitle,
-      subtitle: bone.latin,
       missing_ro_display_name: true,
       source: "fallback",
     };
@@ -389,7 +387,8 @@ export function getAnatomyDisplayName(input: {
   const rule = muscleDisplayRules.find((candidate) =>
     matchesRule(candidate, haystack, selection.tissue),
   );
-  const phalanx = inferHandPhalanxDisplay(haystack, lang);
+  const phalanx =
+    inferHandPhalanxDisplay(haystack, lang) ?? inferFootPhalanxDisplay(haystack, lang);
 
   if (phalanx) {
     return {
@@ -398,7 +397,6 @@ export function getAnatomyDisplayName(input: {
       original_name: originalName,
       display_name: phalanx,
       title: phalanx,
-      subtitle: selection.labelEn ?? originalName,
       missing_ro_display_name: false,
       source: "fallback",
     };
@@ -406,14 +404,12 @@ export function getAnatomyDisplayName(input: {
 
   if (rule) {
     const title = isEn && rule.common_name_en ? rule.common_name_en : rule.common_name_ro;
-    const subtitle = stripTechnicalPrefix(rule.scientific_name_ro);
     return {
       common_name_ro: rule.common_name_ro,
       scientific_name_ro: rule.scientific_name_ro,
       original_name: originalName,
-      display_name: isEn ? title : formatDisplay(rule.common_name_ro, rule.scientific_name_ro),
+      display_name: isEn ? title : formatDisplay(rule.common_name_ro),
       title,
-      subtitle,
       missing_ro_display_name: false,
       source: "fallback",
     };
@@ -426,10 +422,6 @@ export function getAnatomyDisplayName(input: {
     scientific_name_ro: fallbackScientific,
     display_name: fallbackTitle,
     title: fallbackTitle,
-    subtitle:
-      isEn
-        ? undefined
-        : selection.labelEn && selection.labelEn !== originalName ? selection.labelEn : undefined,
     missing_ro_display_name: true,
     source: "fallback",
   };
@@ -448,7 +440,6 @@ function getDbDisplayName(
 
   const isEn = lang === "en";
   const englishName = firstText(structure.english_name);
-  // When EN is requested but DB has no English name, fall through to local rule matcher
   if (isEn && !englishName) return null;
 
   const romanianName = firstText(
@@ -460,15 +451,7 @@ function getDbDisplayName(
   const commonName = firstText(structure.common_name_ro);
   const scientificName = firstText(structure.scientific_name_ro);
   const fallbackName = firstText(romanianName, structure.name, englishName, originalName);
-  const subtitle = firstText(
-    structure.subtitle_name,
-    scientificName && scientificName !== displayName && scientificName !== commonName
-      ? scientificName
-      : null,
-    structure.latin_name,
-    structure.name_latin,
-    englishName,
-  );
+  const subtitle = firstText(structure.subtitle_name);
   const resolvedTitle = isEn ? (englishName ?? displayName) : displayName;
 
   if (resolvedTitle) {
@@ -494,7 +477,7 @@ function getDbDisplayName(
       original_name: originalName,
       display_name: t,
       title: t,
-      subtitle: firstText(structure.subtitle_name, scientificName),
+      subtitle,
       missing_ro_display_name: Boolean(structure.missing_ro_display_name),
       source: "db",
     };
@@ -581,17 +564,17 @@ function inferHandPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
     return `${segEn} Phalanx of the ${fingerEn}`;
   }
 
-  const segment = haystack.includes("proximal")
-    ? "proximală"
+  const segmentLabel = haystack.includes("proximal")
+    ? "Baza"
     : haystack.includes("middle")
-      ? "mijlocie"
+      ? "Mijlocul"
       : haystack.includes("distal")
-        ? "distală"
+        ? "Vârful"
         : null;
-  if (!segment) return null;
+  if (!segmentLabel) return null;
 
   const finger = hasAnyNormalized(haystack, ["thumb"])
-    ? "policelui"
+    ? "marelui deget"
     : hasAnyNormalized(haystack, ["index", "second"])
       ? "degetului arătător"
       : hasAnyNormalized(haystack, ["middle finger", "third"])
@@ -603,7 +586,60 @@ function inferHandPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
             : null;
   if (!finger) return null;
 
-  return `Falanga ${segment} a ${finger}`;
+  return `${segmentLabel} ${finger}`;
+}
+
+function inferFootPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
+  if (!haystack.includes("phalanx")) return null;
+  if (!hasAnyNormalized(haystack, ["toe", "foot", "hallux"])) return null;
+
+  if (lang === "en") {
+    const segEn = haystack.includes("proximal")
+      ? "Proximal"
+      : haystack.includes("middle")
+        ? "Middle"
+        : haystack.includes("distal")
+          ? "Distal"
+          : null;
+    if (!segEn) return null;
+
+    const toeEn = hasAnyNormalized(haystack, ["hallux", "great toe", "big toe", "first toe"])
+      ? "Big Toe"
+      : hasAnyNormalized(haystack, ["second toe", "2nd toe"])
+        ? "Second Toe"
+        : hasAnyNormalized(haystack, ["third toe", "3rd toe"])
+          ? "Third Toe"
+          : hasAnyNormalized(haystack, ["fourth toe", "4th toe"])
+            ? "Fourth Toe"
+            : hasAnyNormalized(haystack, ["fifth toe", "5th toe", "little toe", "small toe"])
+              ? "Little Toe"
+              : null;
+
+    return toeEn ? `${segEn} Phalanx of the ${toeEn}` : `${segEn} Phalanx of the Foot`;
+  }
+
+  const segmentLabel = haystack.includes("proximal")
+    ? "Baza"
+    : haystack.includes("middle")
+      ? "Mijlocul"
+      : haystack.includes("distal")
+        ? "Vârful"
+        : null;
+  if (!segmentLabel) return null;
+
+  const toe = hasAnyNormalized(haystack, ["hallux", "great toe", "big toe", "first toe"])
+    ? "halucelui (degetul mare)"
+    : hasAnyNormalized(haystack, ["second toe", "2nd toe"])
+      ? "degetului 2 de la picior"
+      : hasAnyNormalized(haystack, ["third toe", "3rd toe"])
+        ? "degetului 3 de la picior"
+        : hasAnyNormalized(haystack, ["fourth toe", "4th toe"])
+          ? "degetului 4 de la picior"
+          : hasAnyNormalized(haystack, ["fifth toe", "5th toe", "little toe", "small toe"])
+            ? "degetului mic de la picior"
+            : null;
+
+  return toe ? `${segmentLabel} ${toe}` : `${segmentLabel} falangei piciorului`;
 }
 
 function hasAnyNormalized(haystack: string, terms: string[]) {
