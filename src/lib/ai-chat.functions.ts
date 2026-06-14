@@ -3361,18 +3361,41 @@ async function getGeneralMedicalContext(
     id: string;
     slug: string;
     name_ro: string;
+    name_en?: string | null;
     medical_name?: string | null;
+    medical_name_en?: string | null;
     tissue?: string | null;
     default_level?: string | null;
     description_ro?: string | null;
+    description_en?: string | null;
     educational_note_ro?: string | null;
+    educational_note_en?: string | null;
+    condition_category?: string | null;
+    aliases_ro?: string[] | null;
+    aliases_en?: string[] | null;
+    keywords_ro?: string[] | null;
+    keywords_en?: string[] | null;
+    typical_duration_ro?: string | null;
+    typical_duration_en?: string | null;
+    common_causes_ro?: string | null;
+    common_causes_en?: string | null;
+    self_care_ro?: string | null;
+    self_care_en?: string | null;
+    doctor_when_ro?: string | null;
+    doctor_when_en?: string | null;
+    emergency_signs_ro?: string | null;
+    emergency_signs_en?: string | null;
+    prevention_ro?: string | null;
+    prevention_en?: string | null;
+    icd10_code?: string | null;
+    triage_priority?: number | null;
+    active?: boolean | null;
+    review_status?: string | null;
   }>(
     supabase
       .from("conditions")
-      .select(
-        "id, slug, name_ro, medical_name, tissue, default_level, description_ro, educational_note_ro",
-      )
-      .limit(80),
+      .select("*")
+      .limit(120),
   );
 
   const triageQuestionRows = await safeSelect<{
@@ -3450,22 +3473,47 @@ async function getGeneralMedicalContext(
     ),
   );
 
-  const conditionContext = conditionRows.map((row) =>
-    makeVirtualContext(
-      "conditions",
-      "cauze_posibile",
-      `Afecțiune posibilă: ${row.name_ro}`,
-      [
-        row.medical_name ? `Denumire medicală: ${row.medical_name}.` : "",
-        row.default_level ? `Nivel implicit: ${row.default_level}.` : "",
-        row.description_ro,
-        row.educational_note_ro,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      row.default_level === "consultare_doctor" ? 7 : 5,
-    ),
-  );
+  const conditionContext = conditionRows
+    .filter((row) => row.active !== false && row.review_status !== "archived")
+    .map((row) =>
+      makeVirtualContext(
+        "conditions",
+        "cauze_posibile",
+        `Afecțiune posibilă: ${row.name_ro}`,
+        [
+          row.medical_name ? `Denumire medicală: ${row.medical_name}.` : "",
+          row.medical_name_en ? `Medical name EN: ${row.medical_name_en}.` : "",
+          row.name_en ? `Denumire EN: ${row.name_en}.` : "",
+          row.condition_category ? `Categorie: ${row.condition_category}.` : "",
+          row.default_level ? `Nivel implicit: ${row.default_level}.` : "",
+          row.triage_priority ? `Prioritate triaj: ${row.triage_priority}.` : "",
+          row.aliases_ro?.length ? `Aliasuri RO: ${row.aliases_ro.join(", ")}.` : "",
+          row.aliases_en?.length ? `Aliases EN: ${row.aliases_en.join(", ")}.` : "",
+          row.keywords_ro?.length ? `Cuvinte cheie RO: ${row.keywords_ro.join(", ")}.` : "",
+          row.keywords_en?.length ? `Keywords EN: ${row.keywords_en.join(", ")}.` : "",
+          row.description_ro,
+          row.description_en,
+          row.typical_duration_ro ? `Durată tipică: ${row.typical_duration_ro}` : "",
+          row.typical_duration_en ? `Typical duration: ${row.typical_duration_en}` : "",
+          row.common_causes_ro ? `Cauze frecvente: ${row.common_causes_ro}` : "",
+          row.common_causes_en ? `Common causes: ${row.common_causes_en}` : "",
+          row.self_care_ro ? `Îngrijire inițială: ${row.self_care_ro}` : "",
+          row.self_care_en ? `Initial self-care: ${row.self_care_en}` : "",
+          row.doctor_when_ro ? `Când se recomandă medic: ${row.doctor_when_ro}` : "",
+          row.doctor_when_en ? `When to seek medical care: ${row.doctor_when_en}` : "",
+          row.emergency_signs_ro ? `Semne de urgență: ${row.emergency_signs_ro}` : "",
+          row.emergency_signs_en ? `Emergency signs: ${row.emergency_signs_en}` : "",
+          row.prevention_ro ? `Prevenție: ${row.prevention_ro}` : "",
+          row.prevention_en ? `Prevention: ${row.prevention_en}` : "",
+          row.icd10_code ? `ICD-10: ${row.icd10_code}.` : "",
+          row.educational_note_ro,
+          row.educational_note_en,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        row.triage_priority ?? (row.default_level === "consultare_doctor" ? 7 : 5),
+      ),
+    );
 
   const triageQuestionContext = triageQuestionRows.map((row) =>
     makeVirtualContext(
