@@ -93,7 +93,6 @@ type PainQuestionContext = {
   group?: string;
 };
 
-// ─── Romanian questions ───────────────────────────────────────────────────────
 
 const baseQuestionsRo: PainQuestion[] = [
   {
@@ -453,7 +452,6 @@ const muscleSpecificQuestionsRo: Record<string, PainQuestion> = {
   },
 };
 
-// ─── English questions ────────────────────────────────────────────────────────
 
 const baseQuestionsEn: PainQuestion[] = [
   {
@@ -813,7 +811,6 @@ const muscleSpecificQuestionsEn: Record<string, PainQuestion> = {
   },
 };
 
-// ─── Knowledge bases ──────────────────────────────────────────────────────────
 
 export const musclePainKnowledge = {
   default: {
@@ -959,7 +956,6 @@ const organPainKnowledgeEn = {
   ],
 } as const;
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export function classifyPainLocally(symptoms: string): PainLevel {
   const text = symptoms.toLowerCase();
@@ -1224,7 +1220,6 @@ export function analyzePainLocally({
   };
 }
 
-// ─── Private helpers ──────────────────────────────────────────────────────────
 
 function buildSmallStructureAnalysis({
   tissueType,
@@ -1484,7 +1479,6 @@ function buildRecommendation(level: PainLevel, lang: "ro" | "en" = "ro"): string
   return "Poți încerca repaus relativ, hidratare, revenire treptată la efort și observarea simptomelor. Dacă durerea persistă, crește sau apar semne noi, cere sfat medical.";
 }
 
-// ─── Symptom relevance (kept RO-only — used only for internal validation) ─────
 
 const anatomyTerms = {
   mana: ["mână", "mana", "palmă", "palma", "deget", "degete", "încheietură", "incheietura", "pumn", "carp"],

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { getAnatomyDisplayName, type AnatomyNameRecord } from "../src/data/anatomyDisplayNames";
+import { getInternalOrgan } from "../src/data/internalOrgans";
+import { localizeInternalOrgan } from "../src/data/organLocalization";
 import type { BoneSelection } from "../src/components/skeleton/SkeletonScene";
 
 function selection(overrides: Partial<BoneSelection>): BoneSelection {
@@ -95,4 +97,105 @@ test("fallback avoids mixed Romanian-English phalanx title while DB migration is
 
   expect(result.title).toBe("Falanga mijlocie a degetului inelar");
   expect(result.source).toBe("fallback");
+});
+
+test("uses popular bilingual muscle names while keeping scientific names secondary", () => {
+  const selected = selection({
+    id: "muschi-gastrocnemius-muscle-left",
+    tissue: "muschi",
+    label: "Mușchiul gastrocnemian (stânga)",
+    labelEn: "Gastrocnemius muscle (left)",
+  });
+  const dbStructure = {
+    popular_name_ro: "Mușchiul gambei (stânga)",
+    popular_name_en: "Calf muscle (left)",
+    scientific_name_ro: "Mușchiul gastrocnemian (stânga)",
+    scientific_name_en: "Gastrocnemius muscle (left)",
+    display_name_ro: "Mușchiul gambei (stânga)",
+    english_name: "Calf muscle (left)",
+    subtitle_name: "Mușchiul gastrocnemian (stânga)",
+  };
+
+  const ro = getAnatomyDisplayName({ dbStructure, selection: selected, lang: "ro" });
+  const en = getAnatomyDisplayName({ dbStructure, selection: selected, lang: "en" });
+
+  expect(ro.title).toBe("Mușchiul gambei (stânga)");
+  expect(ro.subtitle).toBe("Mușchiul gastrocnemian (stânga)");
+  expect(en.title).toBe("Calf muscle (left)");
+  expect(en.subtitle).toBe("Gastrocnemius muscle (left)");
+});
+
+test("canonical popular names override conflicting legacy display fields", () => {
+  const selected = selection({
+    id: "humerus",
+    labelEn: "Humerus",
+  });
+  const dbStructure = {
+    popular_name_ro: "Osul de sus al brațului",
+    popular_name_en: "Upper arm bone",
+    scientific_name_ro: "Humerus",
+    scientific_name_en: "Humerus",
+    latin_name: "Humerus",
+    display_name_ro: "NUME VECHI",
+    display_name_en: "OLD NAME",
+    english_name: "LEGACY NAME",
+  };
+
+  const ro = getAnatomyDisplayName({ dbStructure, selection: selected, lang: "ro" });
+  const en = getAnatomyDisplayName({ dbStructure, selection: selected, lang: "en" });
+
+  expect(ro.title).toBe("Osul de sus al brațului");
+  expect(en.title).toBe("Upper arm bone");
+  expect(ro.subtitle).toBe("Humerus");
+  expect(en.subtitle).toBe("Humerus");
+});
+
+test("internal organs expose canonical popular, scientific, and Latin names in both languages", () => {
+  const heartRo = getInternalOrgan("organ:inima");
+  const heartEn = localizeInternalOrgan(heartRo, "en");
+
+  expect(heartRo).toMatchObject({
+    popularName: "Inimă",
+    popularNameEn: "Heart",
+    scientificName: "Inimă",
+    scientificNameEn: "Heart",
+    latinName: "Cor",
+  });
+  expect(heartEn).toMatchObject({
+    popularName: "Heart",
+    scientificName: "Heart",
+    latinName: "Cor",
+  });
+});
+
+test("occipitalis is presented with a plain-language title", () => {
+  const result = getAnatomyDisplayName({
+    selection: selection({
+      id: "muschi-occipitalis-muscle-right",
+      tissue: "muschi",
+      regionId: "muschi:muschii-capului-gatului",
+      regionLabel: "Mușchii capului și gâtului",
+      label: "Mușchiul Occipitalis (dreapta)",
+      labelEn: "Occipitalis muscle (right)",
+    }),
+  });
+
+  expect(result.title).toBe("Mușchiul din spatele capului (dreapta)");
+  expect(result.title).not.toContain("Occipitalis");
+});
+
+test("generic muscle fallback keeps the side without exposing the raw model label", () => {
+  const result = getAnatomyDisplayName({
+    selection: selection({
+      id: "muschi-unknown-deep-muscle-left",
+      tissue: "muschi",
+      regionId: "muschi:muschii-spatelui",
+      regionLabel: "Mușchii spatelui",
+      label: "Mușchiul Unknown profund (stânga)",
+      labelEn: "Unknown deep muscle (left)",
+    }),
+  });
+
+  expect(result.title).toBe("Mușchii spatelui (stânga)");
+  expect(result.title).not.toContain("Unknown");
 });

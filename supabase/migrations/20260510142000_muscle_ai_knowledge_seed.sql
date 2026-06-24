@@ -1,5 +1,3 @@
--- Muscle-specific Santix AI knowledge.
--- The AI context RPC always filters by tissue, so these rows stay separate from bone knowledge.
 
 delete from public.ai_knowledge_entries
 where tissue = 'muschi'

@@ -1,6 +1,5 @@
 export const translations = {
   ro: {
-    // Nav
     nav_explorator: "Explorator",
     nav_ghid: "Ghid Santix",
     nav_quiz: "Quiz",
@@ -8,13 +7,11 @@ export const translations = {
     nav_login: "Înregistrează-te",
     nav_lang: "Schimbă limba",
 
-    // Sidebar
     sidebar_explorator: "Explorator Anatomie",
     sidebar_ghid: "Ghid de utilizare",
     sidebar_quiz: "Test Rapid",
     sidebar_optica: "Optică & Vedere",
 
-    // Theme toggle
     theme_activate_dark: "Activează modul întunecat",
     theme_activate_light: "Activează modul luminos",
     theme_dark: "Întunecat",
@@ -24,15 +21,12 @@ export const translations = {
     text_size_large: "Text mare",
     text_size_xlarge: "Text foarte mare",
 
-    // References
     ref_button: "Referințe",
 
-    // Auth callback
     auth_callback_title: "Se verifică linkul Santix",
     auth_callback_desc: "Finalizăm autentificarea și te trimitem înapoi în explorator.",
     auth_callback_back: "Înapoi la explorator",
 
-    // Auth dialog
     auth_login_title: "Intră în cont",
     auth_register_title: "Creează cont",
     auth_reset_title: "Resetează parola",
@@ -55,8 +49,8 @@ export const translations = {
     auth_no_account: "Nu ai cont? Creează unul",
     auth_have_account: "Ai deja cont? Intră în cont",
     auth_forgot_pass: "Ai uitat parola?",
-    // Auth errors
-    auth_err_too_many: "Ai cerut prea multe emailuri într-un timp scurt. Așteaptă câteva minute și încearcă din nou.",
+    auth_err_too_many:
+      "Ai cerut prea multe emailuri într-un timp scurt. Așteaptă câteva minute și încearcă din nou.",
     auth_err_invalid: "Emailul sau parola nu sunt corecte.",
     auth_err_not_confirmed: "Confirmă emailul înainte de logare.",
     auth_err_exists: "Există deja un cont Santix pentru acest email. Intră în cont.",
@@ -67,11 +61,11 @@ export const translations = {
     auth_err_enter_email: "Introdu emailul contului Santix.",
     auth_err_no_account_reset: "Nu există un cont Santix pentru acest email.",
     auth_success_reset_sent: "Ți-am trimis linkul de resetare pe email.",
-    auth_success_registered: "Cont creat. Verifică emailul pentru confirmare, dacă Supabase o cere.",
+    auth_success_registered:
+      "Cont creat. Verifică emailul pentru confirmare, dacă Supabase o cere.",
     auth_err_google: "Nu am putut continua cu Google.",
     auth_err_generic: "Nu am putut procesa cererea.",
 
-    // Layers toggle
     layers_title: "Vizualizare Straturi",
     layers_skeleton: "Schelet",
     layers_skeleton_sub: "Oase",
@@ -82,7 +76,6 @@ export const translations = {
     layers_full: "Anatomie Completă",
     layers_full_sub: "Mod avansat",
 
-    // Explorator page
     exp_hint: "Apasă pe un os, mușchi sau organ pentru detalii",
     exp_pain_button: "Mă doare ceva",
     exp_pain_title: "Unde te doare?",
@@ -104,7 +97,6 @@ export const translations = {
       "Mușchii toracelui",
     ],
 
-    // AI history sidebar
     hist_title: "Conversații recente",
     hist_loading_session: "Se verifică sesiunea...",
     hist_login_prompt: "Autentifică-te pentru a vedea istoricul AI.",
@@ -122,23 +114,30 @@ export const translations = {
     hist_delete: "Șterge",
     hist_deleting: "Se șterge...",
     hist_confirm_delete_all: "Ștergi tot istoricul AI?",
-    hist_confirm_delete_all_desc: "Această acțiune va șterge toate conversațiile tale AI. Continuăm?",
+    hist_confirm_delete_all_desc:
+      "Această acțiune va șterge toate conversațiile tale AI. Continuăm?",
     hist_delete_all_btn: "Șterge tot",
     hist_delete_conv: "Șterge conversația",
+    hist_load_error: "Nu am putut încărca istoricul.",
+    hist_load_all_error: "Nu am putut încărca istoricul complet.",
+    hist_delete_error: "Nu am putut șterge conversația.",
+    hist_delete_all_error: "Nu am putut șterge istoricul.",
 
-    // BoneInfoPanel
     bone_count_singular: "exemplar",
     bone_count_plural: "exemplare",
     bone_description: "Descriere",
-    bone_function: "Funcție",
-    bone_anatomical: "Încadrare anatomică",
-    bone_system: "Sistem",
-    bone_segment: "Segment",
-    bone_group: "Grupă",
-    bone_subgroup: "Subgrupă",
+    bone_function: "Ce face",
+    bone_anatomical: "Pe scurt",
+    bone_popular_name: "Denumire simplă",
+    bone_scientific_name: "Denumire anatomică",
+    bone_latin_name: "Denumire latină",
+    bone_system: "Parte a corpului",
+    bone_segment: "Zonă",
+    bone_group: "Categorie",
+    bone_subgroup: "Subzonă",
     bone_general: "General",
-    bone_face_plan: "Față / plan",
-    bone_general_plan: "Plan general",
+    bone_face_plan: "Poziție",
+    bone_general_plan: "Poziție generală",
     bone_tissue_bone: "Țesut osos",
     bone_tissue_muscle: "Țesut muscular",
     bone_tissue_tendon: "Tendon / țesut conjunctiv",
@@ -159,7 +158,8 @@ export const translations = {
     bone_placeholder_movement: "Ex: Mă doare când încordez zona",
     bone_disclaimer: "Asistentul va oferi informații educaționale, nu diagnostic medical.",
     bone_ai_organs_label: "AI pentru organe",
-    bone_login_organs: "Intră în cont pentru conversația AI. Întrebările locale de mai jos funcționează fără cont.",
+    bone_login_organs:
+      "Intră în cont pentru conversația AI. Întrebările locale de mai jos funcționează fără cont.",
     bone_triage_label: "Triaj rapid local",
     bone_triage_subtitle: (name: string) => `Întrebări generale · ${name}`,
     bone_triage_calculate: "Calculează triajul",
@@ -170,12 +170,12 @@ export const translations = {
     bone_triage_signs: "Semne importante",
     bone_triage_disclaimer:
       "Acesta este un triaj educațional, nu un diagnostic medical și nu înlocuiește consultul unui medic.",
-    bone_details_title: "Detalii anatomice",
-    bone_details_subtitle: "Repere tehnice pentru vizualizarea completă",
-    bone_origin: "Origine",
-    bone_insertion: "Inserție",
-    bone_innervation: "Inervație",
-    bone_action: "Acțiune",
+    bone_details_title: "Detalii pentru modul avansat",
+    bone_details_subtitle: "Informații utile pentru orientarea în modelul complet",
+    bone_origin: "Unde se află",
+    bone_insertion: "Cu ce se conectează",
+    bone_innervation: "Control nervos",
+    bone_action: "Rol principal",
     bone_quick_q: "Întrebări rapide",
     bone_beginner: "Începător",
     bone_medium: "Mediu",
@@ -200,6 +200,10 @@ export const translations = {
     bone_progress_label: (current: number, total: number) => `Întrebarea ${current} din ${total}`,
     bone_progress_done: "Triaj complet · vezi recomandarea",
     bone_reading: "Citesc baza Santix pentru selecția curentă...",
+    bone_conversation_continues_ro:
+      "Această conversație a fost începută în română și va continua în română.",
+    bone_conversation_continues_en:
+      "Această conversație a fost începută în engleză și va continua în engleză.",
     bone_full_mode_notice:
       "Anatomie Completă este o vizualizare combinată. Pentru întrebări AI, folosește Schelet, Sistem Muscular sau Organe.",
     bone_login_required: "Trebuie să fii logat pentru a folosi asistentul AI.",
@@ -207,11 +211,11 @@ export const translations = {
     bone_err_ai: "Asistentul AI nu a putut răspunde.",
     bone_err_start: "Nu am putut porni conversația momentan. Reîncearcă în câteva secunde.",
 
-    // Landing page
     landing_title: "Santix — Înțelege-ți corpul",
     landing_meta_desc:
       "Santix este introducerea către exploratorul anatomic 3D cu schelet, mușchi, tendoane, bibliotecă și quiz.",
-    landing_og_desc: "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă.",
+    landing_og_desc:
+      "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă.",
     landing_hero_title: "Platformă medicală 3D interactivă",
     landing_account_desc:
       "Creează-ți cont pentru a folosi Santix complet: explorezi corpul în 3D, păstrezi conversațiile recente și poți întreba asistentul AI despre zona selectată, într-un mod educațional.",
@@ -226,27 +230,33 @@ export const translations = {
     landing_features_title: "Ce poți face",
     landing_feature1_desc: "Explorezi corpul, alegi zona care te interesează și înveți pas cu pas.",
     landing_feature1_title: "Corp 3D pe straturi",
-    landing_feature2_desc: "Comuți între schelet, mușchi și anatomie completă pentru a vedea zona mai clar.",
+    landing_feature2_desc:
+      "Comuți între schelet, mușchi și anatomie completă pentru a vedea zona mai clar.",
     landing_feature2_title: "Întrebări despre zona aleasă",
-    landing_feature3_desc: "Poți întreba despre durere, mișcare sau rolul unei structuri, într-un limbaj simplu.",
+    landing_feature3_desc:
+      "Poți întreba despre durere, mișcare sau rolul unei structuri, într-un limbaj simplu.",
     landing_feature3_title: "Istoric personal",
-    landing_feature4_desc: "Dacă ești autentificat, poți reveni la conversațiile tale recente cu asistentul.",
+    landing_feature4_desc:
+      "Dacă ești autentificat, poți reveni la conversațiile tale recente cu asistentul.",
     landing_how_title: "Cum funcționează",
     landing_how_subtitle: "De la o zonă aleasă la o explicație mai clară.",
     landing_step1_num: "01",
     landing_step1_title: "Alegi zona",
-    landing_step1_desc: "Pornești de la modelul 3D și apeși pe osul sau mușchiul care te interesează.",
+    landing_step1_desc:
+      "Pornești de la modelul 3D și apeși pe osul sau mușchiul care te interesează.",
     landing_step2_num: "02",
     landing_step2_title: "Citești explicația",
-    landing_step2_desc: "Panoul de detalii îți arată numele pe înțelesul tău și informațiile importante.",
+    landing_step2_desc:
+      "Panoul de detalii îți arată numele pe înțelesul tău și informațiile importante.",
     landing_step3_num: "03",
     landing_step3_title: "Întrebi mai departe",
-    landing_step3_desc: "Asistentul te poate ghida cu întrebări despre durere, mișcare sau situația descrisă.",
+    landing_step3_desc:
+      "Asistentul te poate ghida cu întrebări despre durere, mișcare sau situația descrisă.",
     landing_selected_zone: "Zonă selectată",
 
-    // Quiz page
     quiz_meta_title: "Test Rapid — Santix",
-    quiz_meta_desc: "Testează-ți cunoștințele de anatomie cu întrebări mixte: alegere multiplă și identificare în 3D.",
+    quiz_meta_desc:
+      "Testează-ți cunoștințele de anatomie cu întrebări mixte: alegere multiplă și identificare în 3D.",
     quiz_og_title: "Test Rapid de Anatomie — Santix",
     quiz_og_desc: "Quiz interactiv despre oasele corpului uman.",
     quiz_title: "Test rapid de anatomie",
@@ -262,9 +272,9 @@ export const translations = {
     quiz_correct_prefix: "Ai răspuns corect la",
     quiz_restart: "Reia testul",
 
-    // Ghid / Glosar page
     ghid_meta_title: "Ghid de utilizare Santix — Santix",
-    ghid_meta_desc: "Ghid Santix pentru alegerea scheletului 3D, sistemului muscular sau anatomiei complete.",
+    ghid_meta_desc:
+      "Ghid Santix pentru alegerea scheletului 3D, sistemului muscular sau anatomiei complete.",
     ghid_og_desc:
       "Sfaturi pentru utilizatori despre când să folosească scheletul, mușchii, anatomia completă și AI-ul Santix.",
     ghid_title: "Ghid de utilizare Santix",
@@ -280,7 +290,6 @@ export const translations = {
   },
 
   en: {
-    // Nav
     nav_explorator: "Explorer",
     nav_ghid: "Santix Guide",
     nav_quiz: "Quiz",
@@ -288,13 +297,11 @@ export const translations = {
     nav_login: "Login",
     nav_lang: "Change language",
 
-    // Sidebar
     sidebar_explorator: "Anatomy Explorer",
     sidebar_ghid: "Usage Guide",
     sidebar_quiz: "Quick Test",
     sidebar_optica: "Optics & Vision",
 
-    // Theme toggle
     theme_activate_dark: "Enable dark mode",
     theme_activate_light: "Enable light mode",
     theme_dark: "Dark",
@@ -304,15 +311,12 @@ export const translations = {
     text_size_large: "Large text",
     text_size_xlarge: "Extra large text",
 
-    // References
     ref_button: "References",
 
-    // Auth callback
     auth_callback_title: "Verifying Santix link",
     auth_callback_desc: "Finishing authentication and sending you back to the explorer.",
     auth_callback_back: "Back to explorer",
 
-    // Auth dialog
     auth_login_title: "Sign in",
     auth_register_title: "Create account",
     auth_reset_title: "Reset password",
@@ -335,7 +339,6 @@ export const translations = {
     auth_no_account: "No account? Create one",
     auth_have_account: "Already have an account? Sign in",
     auth_forgot_pass: "Forgot password?",
-    // Auth errors
     auth_err_too_many: "Too many email requests in a short time. Wait a few minutes and try again.",
     auth_err_invalid: "Email or password is incorrect.",
     auth_err_not_confirmed: "Please confirm your email before signing in.",
@@ -351,7 +354,6 @@ export const translations = {
     auth_err_google: "Could not continue with Google.",
     auth_err_generic: "Could not process the request.",
 
-    // Layers toggle
     layers_title: "Layer View",
     layers_skeleton: "Skeleton",
     layers_skeleton_sub: "Bones",
@@ -362,7 +364,6 @@ export const translations = {
     layers_full: "Full Anatomy",
     layers_full_sub: "Advanced mode",
 
-    // Explorator page
     exp_hint: "Click on a bone, muscle or organ for details",
     exp_pain_button: "Something hurts",
     exp_pain_title: "Where does it hurt?",
@@ -384,7 +385,6 @@ export const translations = {
       "Thorax muscles",
     ],
 
-    // AI history sidebar
     hist_title: "Recent conversations",
     hist_loading_session: "Checking session...",
     hist_login_prompt: "Sign in to view your AI history.",
@@ -405,20 +405,26 @@ export const translations = {
     hist_confirm_delete_all_desc: "This will delete all your AI conversations. Continue?",
     hist_delete_all_btn: "Delete all",
     hist_delete_conv: "Delete conversation",
+    hist_load_error: "Could not load the conversation history.",
+    hist_load_all_error: "Could not load the full conversation history.",
+    hist_delete_error: "Could not delete the conversation.",
+    hist_delete_all_error: "Could not delete the conversation history.",
 
-    // BoneInfoPanel
     bone_count_singular: "instance",
     bone_count_plural: "instances",
     bone_description: "Description",
-    bone_function: "Function",
-    bone_anatomical: "Anatomical classification",
-    bone_system: "System",
-    bone_segment: "Segment",
-    bone_group: "Group",
-    bone_subgroup: "Subgroup",
+    bone_function: "What it does",
+    bone_anatomical: "At a glance",
+    bone_popular_name: "Simple name",
+    bone_scientific_name: "Anatomical name",
+    bone_latin_name: "Latin name",
+    bone_system: "Body part",
+    bone_segment: "Area",
+    bone_group: "Category",
+    bone_subgroup: "Sub-area",
     bone_general: "General",
-    bone_face_plan: "Face / plane",
-    bone_general_plan: "General plane",
+    bone_face_plan: "Position",
+    bone_general_plan: "General position",
     bone_tissue_bone: "Bone tissue",
     bone_tissue_muscle: "Muscle tissue",
     bone_tissue_tendon: "Tendon / connective tissue",
@@ -439,7 +445,8 @@ export const translations = {
     bone_placeholder_movement: "E.g. It hurts when I flex the area",
     bone_disclaimer: "The assistant provides educational information, not medical diagnosis.",
     bone_ai_organs_label: "AI for organs",
-    bone_login_organs: "Sign in for the AI conversation. The local questions below work without an account.",
+    bone_login_organs:
+      "Sign in for the AI conversation. The local questions below work without an account.",
     bone_triage_label: "Quick local triage",
     bone_triage_subtitle: (name: string) => `General questions · ${name}`,
     bone_triage_calculate: "Calculate triage",
@@ -450,12 +457,12 @@ export const translations = {
     bone_triage_signs: "Important signs",
     bone_triage_disclaimer:
       "This is an educational triage, not a medical diagnosis and does not replace a doctor's consultation.",
-    bone_details_title: "Anatomical details",
-    bone_details_subtitle: "Technical reference for complete visualization",
-    bone_origin: "Origin",
-    bone_insertion: "Insertion",
-    bone_innervation: "Innervation",
-    bone_action: "Action",
+    bone_details_title: "Details for advanced mode",
+    bone_details_subtitle: "Useful reference for orientation in the complete model",
+    bone_origin: "Where it sits",
+    bone_insertion: "What it connects to",
+    bone_innervation: "Nerve control",
+    bone_action: "Main role",
     bone_quick_q: "Quick questions",
     bone_beginner: "Beginner",
     bone_medium: "Intermediate",
@@ -480,6 +487,10 @@ export const translations = {
     bone_progress_label: (current: number, total: number) => `Question ${current} of ${total}`,
     bone_progress_done: "Triage complete · see recommendation",
     bone_reading: "Reading Santix database for current selection...",
+    bone_conversation_continues_ro:
+      "This conversation started in Romanian and will continue in Romanian.",
+    bone_conversation_continues_en:
+      "This conversation started in English and will continue in English.",
     bone_full_mode_notice:
       "Full Anatomy is a combined view. For AI questions, use Skeleton, Muscular System or Organs.",
     bone_login_required: "You must be signed in to use the AI assistant.",
@@ -487,9 +498,9 @@ export const translations = {
     bone_err_ai: "The AI assistant could not respond.",
     bone_err_start: "Could not start the conversation right now. Try again in a few seconds.",
 
-    // Landing page
     landing_title: "Santix — Understand your body",
-    landing_meta_desc: "Santix is your gateway to the 3D anatomy explorer with skeleton, muscles, tendons, library and quiz.",
+    landing_meta_desc:
+      "Santix is your gateway to the 3D anatomy explorer with skeleton, muscles, tendons, library and quiz.",
     landing_og_desc: "Interactive 3D medical platform for anatomy, symptoms and fast learning.",
     landing_hero_title: "Interactive 3D medical platform",
     landing_account_desc:
@@ -503,29 +514,34 @@ export const translations = {
     landing_stat3_val: "History",
     landing_stat3_label: "Saved conversations",
     landing_features_title: "What you can do",
-    landing_feature1_desc: "Explore the body, pick the area you're interested in and learn step by step.",
+    landing_feature1_desc:
+      "Explore the body, pick the area you're interested in and learn step by step.",
     landing_feature1_title: "Layered 3D body",
-    landing_feature2_desc: "Switch between skeleton, muscles and full anatomy to see the area more clearly.",
+    landing_feature2_desc:
+      "Switch between skeleton, muscles and full anatomy to see the area more clearly.",
     landing_feature2_title: "Questions about the selected area",
     landing_feature3_desc: "Ask about pain, movement or the role of a structure in plain language.",
     landing_feature3_title: "Personal history",
-    landing_feature4_desc: "If you're signed in, you can return to your recent conversations with the assistant.",
+    landing_feature4_desc:
+      "If you're signed in, you can return to your recent conversations with the assistant.",
     landing_how_title: "How it works",
     landing_how_subtitle: "From a selected area to a clearer explanation.",
     landing_step1_num: "01",
     landing_step1_title: "Pick an area",
-    landing_step1_desc: "Start from the 3D model and click on the bone or muscle you're interested in.",
+    landing_step1_desc:
+      "Start from the 3D model and click on the bone or muscle you're interested in.",
     landing_step2_num: "02",
     landing_step2_title: "Read the explanation",
     landing_step2_desc: "The details panel shows the name in plain language and key information.",
     landing_step3_num: "03",
     landing_step3_title: "Ask further",
-    landing_step3_desc: "The assistant can guide you with questions about pain, movement or the described situation.",
+    landing_step3_desc:
+      "The assistant can guide you with questions about pain, movement or the described situation.",
     landing_selected_zone: "Selected area",
 
-    // Quiz page
     quiz_meta_title: "Quick Test — Santix",
-    quiz_meta_desc: "Test your anatomy knowledge with mixed questions: multiple choice and 3D identification.",
+    quiz_meta_desc:
+      "Test your anatomy knowledge with mixed questions: multiple choice and 3D identification.",
     quiz_og_title: "Quick Anatomy Test — Santix",
     quiz_og_desc: "Interactive quiz about human body bones.",
     quiz_title: "Quick anatomy test",
@@ -541,10 +557,10 @@ export const translations = {
     quiz_correct_prefix: "You answered correctly",
     quiz_restart: "Restart test",
 
-    // Ghid / Glosar page
     ghid_meta_title: "Santix Usage Guide — Santix",
     ghid_meta_desc: "Santix guide for choosing the 3D skeleton, muscular system or full anatomy.",
-    ghid_og_desc: "Tips for users on when to use skeleton, muscles, full anatomy and the Santix AI.",
+    ghid_og_desc:
+      "Tips for users on when to use skeleton, muscles, full anatomy and the Santix AI.",
     ghid_title: "Santix Usage Guide",
     ghid_subtitle: "Easily choose between skeleton, muscles and full anatomy",
     ghid_disclaimer:

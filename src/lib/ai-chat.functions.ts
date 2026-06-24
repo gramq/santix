@@ -3,9 +3,23 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeMedicalText as normalizeSantixMedicalText } from "./ai/normalizer";
 import { createAiProvider } from "./ai/provider";
-import { hybridSearchKnowledge, type KnowledgeEntry, type RetrievalFilters } from "./ai/retrieval";
+import {
+  hybridSearchKnowledge,
+  knowledgeContent,
+  knowledgeTitle,
+  type KnowledgeEntry,
+  type MedicalSourceCitation,
+  type RetrievalFilters,
+} from "./ai/retrieval";
 import { mergePersistedStateIntoLegacy, toPersistableState } from "./ai/state";
 import { buildStructuredAiOutput, type SantixStructuredAiOutput } from "./ai/structured-output";
+import {
+  localizedMessageColumns,
+  localizedMessageContent,
+  lockConversationLanguage,
+  normalizeConversationLanguage,
+  type ConversationLanguage,
+} from "./ai/conversationLanguage";
 import { validateAiUserText, sanitizeTextForStorage } from "./security/inputSafety";
 import { assertRateLimitAllowed, enforceAiRateLimit } from "./security/rateLimit";
 
@@ -16,6 +30,7 @@ const InputSchema = z.object({
   question: z.string().min(2).max(900),
   tissue: TissueSchema,
   structureName: z.string().min(1).max(160),
+  technicalStructureName: z.string().min(1).max(200).optional(),
   structureSlug: z.string().min(1).max(160).optional(),
   modelSelectionId: z.string().min(1).max(160).optional(),
   bodyRegion: z.string().min(1).max(160).optional(),
@@ -95,6 +110,7 @@ type ContextSwitchAction = {
   target_structure_slug: string | null;
   target_structure_type: "bone" | "muscle" | "body_region" | "muscle_group" | "organ" | null;
   target_body_region: string | null;
+  target_display_name: string | null;
   switch_reason: string | null;
   confidence: ContextSwitchConfidence;
   switch_locked_until_clarification: boolean;
@@ -170,6 +186,7 @@ type SymptomState = {
 
 export interface SelectionAiResponse {
   conversationId: string;
+  language: ConversationLanguage;
   answer: string;
   contextCount: number;
   structured: SantixStructuredAiOutput;
@@ -208,8 +225,9 @@ function createUserSupabaseClient(accessToken: string) {
   });
 }
 
-function findContext(context: KnowledgeEntry[], category: string) {
-  return context.find((entry) => entry.category === category)?.content_ro;
+function findContext(context: KnowledgeEntry[], category: string, lang: "ro" | "en" = "ro") {
+  const entry = context.find((item) => item.category === category);
+  return entry ? knowledgeContent(entry, lang) : undefined;
 }
 
 function hasAny(value: string, terms: string[]) {
@@ -241,13 +259,14 @@ function buildConversationTitle(input: z.infer<typeof InputSchema>, route: AiRou
     .replace(/\s+/g, " ")
     .trim();
   const normalizedQuestion = normalizeText(input.question);
+  const en = input.lang === "en";
 
   if (
     route.category === "symptom_or_injury" ||
     route.category === "red_flag_or_urgent" ||
     hasAny(normalizedQuestion, ["durere", "doare", "dureri", "lovitura", "lovit", "efort"])
   ) {
-    return `Durere — ${target}`;
+    return `${en ? "Pain" : "Durere"} — ${target}`;
   }
 
   if (
@@ -262,10 +281,10 @@ function buildConversationTitle(input: z.infer<typeof InputSchema>, route: AiRou
       "unde este",
     ])
   ) {
-    return `Anatomie — ${target}`;
+    return `${en ? "Anatomy" : "Anatomie"} — ${target}`;
   }
 
-  return `Conversație — ${target}`;
+  return `${en ? "Conversation" : "Conversație"} — ${target}`;
 }
 
 const COLLOQUIAL_ADDRESS_TERMS = [
@@ -312,9 +331,23 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function containsMedicalTerm(value: string, term: string) {
+  const normalizedValue = normalizeText(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalizedTerm = normalizeText(term)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedTerm) return false;
+  return ` ${normalizedValue} `.includes(` ${normalizedTerm} `);
+}
+
 const BODY_REGION_TERMS: Array<{
   key: string;
-  label: string;
+  labelRo: string;
+  labelEn: string;
   terms: string[];
   bodyRegions: string[];
   targetStructureSlug: string | null;
@@ -322,7 +355,8 @@ const BODY_REGION_TERMS: Array<{
 }> = [
   {
     key: "mana",
-    label: "mână / încheietură",
+    labelRo: "mână / încheietură",
+    labelEn: "hand / wrist",
     terms: [
       "mana",
       "mainii",
@@ -333,7 +367,6 @@ const BODY_REGION_TERMS: Array<{
       "pumn",
       "carp",
       "metacarp",
-      // English
       "hand",
       "wrist",
       "finger",
@@ -348,7 +381,8 @@ const BODY_REGION_TERMS: Array<{
   },
   {
     key: "cot",
-    label: "cot",
+    labelRo: "cot",
+    labelEn: "elbow",
     terms: ["cot", "cotul", "olecran", "elbow"],
     bodyRegions: ["antebrat", "brat"],
     targetStructureSlug: null,
@@ -356,47 +390,91 @@ const BODY_REGION_TERMS: Array<{
   },
   {
     key: "umar",
-    label: "umăr",
-    terms: ["umar", "umarul", "scapula", "clavicula", "omoplat", "deltoid", "shoulder", "shoulder blade", "collarbone"],
+    labelRo: "umăr",
+    labelEn: "shoulder",
+    terms: [
+      "umar",
+      "umarul",
+      "scapula",
+      "clavicula",
+      "omoplat",
+      "deltoid",
+      "shoulder",
+      "shoulder blade",
+      "collarbone",
+    ],
     bodyRegions: ["umar_centura_scapulara", "membru_superior"],
     targetStructureSlug: "scapula",
     targetStructureType: "os",
   },
   {
     key: "brat",
-    label: "braț",
-    terms: ["brat", "bratul", "antebrat", "humerus", "radius", "ulna", "biceps", "triceps", "arm", "upper arm", "forearm", "upper limb"],
+    labelRo: "braț",
+    labelEn: "arm",
+    terms: [
+      "brat",
+      "bratul",
+      "antebrat",
+      "humerus",
+      "radius",
+      "ulna",
+      "biceps",
+      "triceps",
+      "arm",
+      "upper arm",
+      "forearm",
+      "upper limb",
+    ],
     bodyRegions: ["brat", "antebrat", "membru_superior", "mana_antebrat"],
     targetStructureSlug: "humerus",
     targetStructureType: "os",
   },
   {
     key: "spate",
-    label: "spate / coloană",
-    terms: ["spate", "coloana", "lombar", "cervical", "toracal", "vertebr", "ceafa", "back", "spine", "lumbar", "thoracic", "vertebra", "vertebrae", "spinal"],
+    labelRo: "spate / coloană",
+    labelEn: "back / spine",
+    terms: [
+      "spate",
+      "coloana",
+      "lombar",
+      "cervical",
+      "toracal",
+      "vertebr",
+      "ceafa",
+      "back",
+      "spine",
+      "lumbar",
+      "thoracic",
+      "vertebra",
+      "vertebrae",
+      "spinal",
+    ],
     bodyRegions: ["coloana", "trunchi", "cap_gat"],
     targetStructureSlug: "vert-lombare",
     targetStructureType: "os",
   },
   {
     key: "gat",
-    label: "gât",
-    terms: ["gat", "ceafa", "cervical", "neck"],
+    labelRo: "gât",
+    labelEn: "neck",
+    terms: ["gat", "ceafa", "cervical", "neck", "nape"],
     bodyRegions: ["gat", "cap_gat", "coloana"],
     targetStructureSlug: "vert-cervicale",
     targetStructureType: "os",
   },
   {
     key: "genunchi",
-    label: "genunchi",
-    terms: ["genunchi", "rotula", "patela", "knee", "kneecap"],
+    labelRo: "genunchi",
+    labelEn: "knee",
+    terms: ["genunchi", "genunchiul", "rotula", "patela", "knee", "kneecap"],
     bodyRegions: ["coapsa_sold_genunchi", "membru_inferior"],
     targetStructureSlug: "rotula",
     targetStructureType: "os",
   },
   {
     key: "glezna",
-    label: "gleznă",
+    labelRo: "gleznă",
+    labelEn: "ankle",
     terms: ["glezna", "glezne", "maleola", "ankle"],
     bodyRegions: ["picior", "gamba", "membru_inferior"],
     targetStructureSlug: "tars",
@@ -404,7 +482,8 @@ const BODY_REGION_TERMS: Array<{
   },
   {
     key: "sold",
-    label: "șold / bazin",
+    labelRo: "șold / bazin",
+    labelEn: "hip / pelvis",
     terms: ["sold", "bazin", "pelvis", "coxal", "inghinal", "hip", "groin", "pelvic"],
     bodyRegions: ["pelvis", "membru_inferior"],
     targetStructureSlug: "coxal",
@@ -412,7 +491,8 @@ const BODY_REGION_TERMS: Array<{
   },
   {
     key: "picior",
-    label: "picior / talpă",
+    labelRo: "picior / talpă",
+    labelEn: "leg / foot",
     terms: [
       "picior",
       "talpa",
@@ -422,7 +502,6 @@ const BODY_REGION_TERMS: Array<{
       "metatars",
       "gamba",
       "coapsa",
-      // English
       "foot",
       "feet",
       "heel",
@@ -437,6 +516,7 @@ const BODY_REGION_TERMS: Array<{
       "femur",
       "lower leg",
       "lower limb",
+      "sole",
     ],
     bodyRegions: ["picior", "gamba", "coapsa_sold_genunchi", "membru_inferior"],
     targetStructureSlug: "tars",
@@ -444,34 +524,178 @@ const BODY_REGION_TERMS: Array<{
   },
   {
     key: "torace",
-    label: "torace / piept",
-    terms: ["torace", "piept", "coaste", "stern", "respiratie", "chest", "thorax", "rib", "ribs", "sternum", "sternum", "breathing"],
+    labelRo: "torace / piept",
+    labelEn: "chest / rib cage",
+    terms: [
+      "torace",
+      "piept",
+      "pectoral",
+      "coaste",
+      "stern",
+      "respiratie",
+      "chest",
+      "thorax",
+      "rib",
+      "ribs",
+      "sternum",
+      "breathing",
+    ],
     bodyRegions: ["torace", "trunchi"],
     targetStructureSlug: "coaste",
     targetStructureType: "os",
   },
   {
+    key: "abdomen",
+    labelRo: "abdomen / burtă",
+    labelEn: "abdomen / belly",
+    terms: [
+      "abdomen",
+      "abdominal",
+      "burta",
+      "burtă",
+      "stomac",
+      "buric",
+      "iliac",
+      "belly",
+      "stomach area",
+      "abdominal",
+      "tummy",
+      "navel",
+    ],
+    bodyRegions: ["abdomen", "trunchi"],
+    targetStructureSlug: "coxal",
+    targetStructureType: "os",
+  },
+  {
     key: "cap",
-    label: "cap / față",
-    terms: ["cap", "craniu", "fata", "frunte", "mandibula", "ochi", "head", "skull", "face", "jaw", "forehead", "cheek"],
+    labelRo: "cap / față",
+    labelEn: "head / face",
+    terms: [
+      "cap",
+      "craniu",
+      "fata",
+      "frunte",
+      "mandibula",
+      "ochi",
+      "tampla",
+      "head",
+      "skull",
+      "face",
+      "jaw",
+      "forehead",
+      "cheek",
+      "temple",
+    ],
     bodyRegions: ["cap_craniu", "fata", "cap_gat"],
     targetStructureSlug: "frontal",
     targetStructureType: "os",
   },
 ];
 
-const SYMPTOM_TERMS: Array<{ key: string; terms: string[] }> = [
-  { key: "durere", terms: ["durere", "ma doare", "doare", "dureros", "jena"] },
-  { key: "umflare", terms: ["umflat", "umflare", "inflamat", "edem"] },
+type LocalizedTermEntry = {
+  key: string;
+  labelRo: string;
+  labelEn: string;
+  terms: string[];
+};
+
+const SYMPTOM_TERMS: LocalizedTermEntry[] = [
+  {
+    key: "durere",
+    labelRo: "durere",
+    labelEn: "pain",
+    terms: [
+      "durere",
+      "ma doare",
+      "doare",
+      "dureros",
+      "jena",
+      "pain",
+      "hurts",
+      "hurting",
+      "sore",
+      "ache",
+      "aching",
+      "discomfort",
+    ],
+  },
+  {
+    key: "umflare",
+    labelRo: "umflare",
+    labelEn: "swelling",
+    terms: [
+      "umflat",
+      "umflare",
+      "inflamat",
+      "edem",
+      "swelling",
+      "swollen",
+      "puffy",
+      "inflamed",
+      "edema",
+      "oedema",
+    ],
+  },
   {
     key: "amorțeală",
-    terms: ["amorteala", "amortit", "furnicaturi", "nu simt", "pierderea sensibilitatii"],
+    labelRo: "amorțeală / furnicături",
+    labelEn: "numbness / tingling",
+    terms: [
+      "amorteala",
+      "amortit",
+      "furnicaturi",
+      "nu simt",
+      "pierderea sensibilitatii",
+      "numbness",
+      "numb",
+      "tingling",
+      "pins and needles",
+      "loss of sensation",
+      "cannot feel",
+      "can't feel",
+    ],
   },
-  { key: "vânătaie", terms: ["vanataie", "vanat", "echimoza"] },
-  { key: "slăbiciune", terms: ["slabiciune", "pierdere de forta", "nu am forta"] },
-  { key: "rigiditate", terms: ["rigid", "intepenit", "intepeneala", "blocaj", "blocat"] },
+  {
+    key: "vânătaie",
+    labelRo: "vânătaie",
+    labelEn: "bruising",
+    terms: ["vanataie", "vanat", "echimoza", "bruise", "bruising", "bruised", "black and blue"],
+  },
+  {
+    key: "slăbiciune",
+    labelRo: "slăbiciune",
+    labelEn: "weakness",
+    terms: [
+      "slabiciune",
+      "pierdere de forta",
+      "nu am forta",
+      "weakness",
+      "weak",
+      "loss of strength",
+      "no strength",
+    ],
+  },
+  {
+    key: "rigiditate",
+    labelRo: "rigiditate / blocaj",
+    labelEn: "stiffness / locking",
+    terms: [
+      "rigid",
+      "intepenit",
+      "intepeneala",
+      "blocaj",
+      "blocat",
+      "stiff",
+      "stiffness",
+      "locked",
+      "locking",
+      "tight",
+    ],
+  },
   {
     key: "limitare de mișcare",
+    labelRo: "limitare de mișcare",
+    labelEn: "limited movement",
     terms: [
       "nu pot misca",
       "limitare",
@@ -479,45 +703,280 @@ const SYMPTOM_TERMS: Array<{ key: string; terms: string[] }> = [
       "nu pot ridica",
       "nu pot calca",
       "nu pot sprijini",
+      "cannot move",
+      "can't move",
+      "cannot use",
+      "can't use",
+      "cannot lift",
+      "can't lift",
+      "cannot bend",
+      "can't bend",
+      "cannot walk",
+      "can't walk",
+      "cannot bear weight",
+      "can't bear weight",
+      "limited movement",
+      "limited range of motion",
     ],
   },
 ];
 
-const CONTEXT_TERMS: Array<{ key: string; terms: string[] }> = [
-  { key: "căzătură", terms: ["cazut", "cadere", "am cazut", "m-am impiedicat"] },
-  { key: "sport", terms: ["sport", "fotbal", "baschet", "tenis", "antrenament", "meci"] },
-  { key: "alergare", terms: ["alerg", "alergare", "jogging"] },
-  { key: "ridicat greutăți", terms: ["ridicat greutati", "sala", "gantere", "impins", "tras"] },
-  { key: "lovitură", terms: ["lovitura", "impact", "m-am lovit", "trauma", "traumatism"] },
-  { key: "efort repetitiv", terms: ["efort", "suprasolicitare", "repetitiv", "tastat", "scris"] },
-  { key: "postură", terms: ["postura", "scaun", "stat mult", "birou", "somn"] },
+const CONTEXT_TERMS: LocalizedTermEntry[] = [
+  {
+    key: "căzătură",
+    labelRo: "căzătură",
+    labelEn: "fall",
+    terms: ["cazut", "cadere", "am cazut", "m-am impiedicat", "fell", "fall", "tripped", "slipped"],
+  },
+  {
+    key: "sport",
+    labelRo: "sport",
+    labelEn: "sport",
+    terms: [
+      "sport",
+      "fotbal",
+      "baschet",
+      "tenis",
+      "antrenament",
+      "meci",
+      "football",
+      "soccer",
+      "basketball",
+      "tennis",
+      "training",
+      "match",
+      "workout",
+    ],
+  },
+  {
+    key: "alergare",
+    labelRo: "alergare",
+    labelEn: "running",
+    terms: ["alerg", "alergare", "jogging", "running", "went running"],
+  },
+  {
+    key: "ridicat greutăți",
+    labelRo: "ridicat greutăți",
+    labelEn: "weight training",
+    terms: [
+      "ridicat greutati",
+      "sala",
+      "gantere",
+      "impins",
+      "tras",
+      "lifting weights",
+      "weight training",
+      "gym",
+      "dumbbell",
+      "barbell",
+      "bench press",
+    ],
+  },
+  {
+    key: "lovitură",
+    labelRo: "lovitură / impact",
+    labelEn: "impact / injury",
+    terms: [
+      "lovitura",
+      "impact",
+      "m-am lovit",
+      "trauma",
+      "traumatism",
+      "hit",
+      "injury",
+      "injured",
+      "collision",
+      "crash",
+      "blow",
+    ],
+  },
+  {
+    key: "efort repetitiv",
+    labelRo: "efort repetitiv",
+    labelEn: "repetitive strain / overuse",
+    terms: [
+      "efort",
+      "suprasolicitare",
+      "repetitiv",
+      "tastat",
+      "scris",
+      "overuse",
+      "repetitive",
+      "repetitive strain",
+      "typing",
+      "writing",
+    ],
+  },
+  {
+    key: "postură",
+    labelRo: "postură",
+    labelEn: "posture",
+    terms: [
+      "postura",
+      "scaun",
+      "stat mult",
+      "birou",
+      "somn",
+      "posture",
+      "sitting",
+      "desk",
+      "sleeping position",
+    ],
+  },
 ];
 
-const RED_FLAG_TERMS: Array<{ key: string; terms: string[] }> = [
-  { key: "deformare vizibilă", terms: ["deform", "stramb", "os iesit"] },
-  { key: "durere severă", terms: ["durere severa", "insuportabil", "foarte tare", "nu suport"] },
-  { key: "amorțeală", terms: ["amorteala", "amortit", "nu simt", "pierderea sensibilitatii"] },
+const RED_FLAG_TERMS: LocalizedTermEntry[] = [
+  {
+    key: "deformare vizibilă",
+    labelRo: "deformare vizibilă",
+    labelEn: "visible deformity",
+    terms: [
+      "deformare",
+      "deformat",
+      "deformata",
+      "stramb",
+      "os iesit",
+      "visible deformity",
+      "deformed",
+      "bone sticking out",
+      "bone is out",
+    ],
+  },
+  {
+    key: "durere severă",
+    labelRo: "durere severă",
+    labelEn: "severe pain",
+    terms: [
+      "durere severa",
+      "insuportabil",
+      "foarte tare",
+      "nu suport",
+      "severe pain",
+      "unbearable pain",
+      "excruciating",
+      "worst pain",
+    ],
+  },
+  {
+    key: "amorțeală",
+    labelRo: "amorțeală sau pierderea sensibilității",
+    labelEn: "numbness or loss of sensation",
+    terms: [
+      "amorteala",
+      "amortit",
+      "nu simt",
+      "pierderea sensibilitatii",
+      "numbness",
+      "numb",
+      "cannot feel",
+      "can't feel",
+      "loss of sensation",
+    ],
+  },
   {
     key: "imposibilitate de mișcare",
-    terms: ["nu pot misca", "nu pot folosi", "nu pot ridica", "nu pot indoi"],
+    labelRo: "imposibilitate de mișcare",
+    labelEn: "inability to move or use the area",
+    terms: [
+      "nu pot misca",
+      "nu pot folosi",
+      "nu pot ridica",
+      "nu pot indoi",
+      "cannot move",
+      "can't move",
+      "cannot use",
+      "can't use",
+      "cannot lift",
+      "can't lift",
+      "cannot bend",
+      "can't bend",
+    ],
   },
   {
     key: "imposibilitate de sprijin",
-    terms: ["nu pot calca", "nu pot sprijini", "nu pot merge", "nu pot pune greutate"],
+    labelRo: "imposibilitate de sprijin",
+    labelEn: "inability to walk or bear weight",
+    terms: [
+      "nu pot calca",
+      "nu pot sprijini",
+      "nu pot merge",
+      "nu pot pune greutate",
+      "cannot walk",
+      "can't walk",
+      "cannot bear weight",
+      "can't bear weight",
+      "unable to stand",
+    ],
   },
-  { key: "slăbiciune bruscă", terms: ["slabiciune brusca", "nu am forta", "pierdere de forta"] },
+  {
+    key: "slăbiciune bruscă",
+    labelRo: "slăbiciune bruscă",
+    labelEn: "sudden weakness",
+    terms: [
+      "slabiciune brusca",
+      "nu am forta",
+      "pierdere de forta",
+      "sudden weakness",
+      "sudden loss of strength",
+      "new weakness",
+    ],
+  },
   {
     key: "dificultăți de respirație",
-    terms: ["dificultate de respiratie", "dificultati de respiratie", "nu pot respira", "respir greu"],
+    labelRo: "dificultăți de respirație",
+    labelEn: "difficulty breathing",
+    terms: [
+      "dificultate de respiratie",
+      "dificultati de respiratie",
+      "nu pot respira",
+      "respir greu",
+      "difficulty breathing",
+      "trouble breathing",
+      "shortness of breath",
+      "cannot breathe",
+      "can't breathe",
+      "breathless",
+    ],
   },
-  { key: "durere toracică", terms: ["durere toracica", "durere in piept", "ma doare pieptul"] },
-  { key: "febră mare", terms: ["febra mare", "febra"] },
+  {
+    key: "durere toracică",
+    labelRo: "durere toracică",
+    labelEn: "chest pain",
+    terms: [
+      "durere toracica",
+      "durere in piept",
+      "ma doare pieptul",
+      "chest pain",
+      "chest pressure",
+      "tightness in chest",
+    ],
+  },
+  {
+    key: "febră mare",
+    labelRo: "febră mare",
+    labelEn: "high fever",
+    terms: ["febra mare", "high fever", "very high temperature"],
+  },
   {
     key: "durere abdominală severă",
-    terms: ["durere abdominala severa", "abdomen foarte dureros", "burta foarte tare", "abdomen rigid"],
+    labelRo: "durere abdominală severă",
+    labelEn: "severe abdominal pain",
+    terms: [
+      "durere abdominala severa",
+      "abdomen foarte dureros",
+      "burta foarte tare",
+      "abdomen rigid",
+      "severe abdominal pain",
+      "severe stomach pain",
+      "rigid abdomen",
+      "hard abdomen",
+      "worst abdominal pain",
+    ],
   },
   {
     key: "sânge în urină/scaun/vărsături",
+    labelRo: "sânge în urină, scaun sau vărsături",
+    labelEn: "blood in urine, stool, or vomit",
     terms: [
       "sange in urina",
       "sange in scaun",
@@ -525,27 +984,105 @@ const RED_FLAG_TERMS: Array<{ key: string; terms: string[] }> = [
       "urina cu sange",
       "varsaturi cu sange",
       "vomit sange",
+      "blood in urine",
+      "blood in stool",
+      "bloody stool",
+      "vomiting blood",
+      "vomit blood",
+      "blood in vomit",
+      "black tarry stool",
     ],
   },
   {
     key: "leșin sau confuzie",
-    terms: ["lesin", "am lesinat", "confuz", "confuzie", "ameteli puternice", "foarte slabit"],
+    labelRo: "leșin sau confuzie",
+    labelEn: "fainting or confusion",
+    terms: [
+      "lesin",
+      "am lesinat",
+      "confuz",
+      "confuzie",
+      "ameteli puternice",
+      "foarte slabit",
+      "fainted",
+      "fainting",
+      "passed out",
+      "confused",
+      "confusion",
+      "hard to wake",
+      "cannot stay awake",
+      "can't stay awake",
+    ],
   },
   {
     key: "durere puternică în partea dreaptă jos",
-    terms: ["dreapta jos", "partea dreapta jos", "durere dreapta jos"],
+    labelRo: "durere puternică în partea dreaptă jos",
+    labelEn: "severe lower-right abdominal pain",
+    terms: [
+      "dreapta jos",
+      "partea dreapta jos",
+      "durere dreapta jos",
+      "severe lower right abdominal pain",
+      "lower right abdominal pain",
+      "right lower quadrant pain",
+      "rlq pain",
+    ],
   },
   {
     key: "simptome neurologice bruște",
-    terms: ["nu pot vorbi", "fata cazuta", "paralizie brusca", "slabiciune pe o parte"],
+    labelRo: "simptome neurologice bruște",
+    labelEn: "sudden neurological symptoms",
+    terms: [
+      "nu pot vorbi",
+      "fata cazuta",
+      "paralizie brusca",
+      "slabiciune pe o parte",
+      "cannot speak",
+      "can't speak",
+      "slurred speech",
+      "face drooping",
+      "sudden paralysis",
+      "weakness on one side",
+      "one-sided weakness",
+    ],
   },
   {
     key: "control urinar/fecal afectat",
-    terms: ["urina", "scaun", "control urinar", "control fecal", "incontinenta"],
+    labelRo: "pierderea controlului urinar sau fecal",
+    labelEn: "loss of bladder or bowel control",
+    terms: [
+      "pierderea controlului vezicii",
+      "pierderea controlului urinar",
+      "pierderea controlului intestinal",
+      "nu pot controla urina",
+      "nu pot controla scaunul",
+      "incontinenta brusca",
+      "loss of bladder control",
+      "loss of bowel control",
+      "cannot control my bladder",
+      "can't control my bladder",
+      "cannot control my bowels",
+      "can't control my bowels",
+      "new incontinence",
+    ],
   },
   {
     key: "traumatism puternic",
-    terms: ["accident", "traumatism puternic", "impact puternic", "cazut de la inaltime"],
+    labelRo: "traumatism puternic",
+    labelEn: "major trauma",
+    terms: [
+      "accident rutier",
+      "accident grav",
+      "traumatism puternic",
+      "impact puternic",
+      "cazut de la inaltime",
+      "car accident",
+      "major accident",
+      "major trauma",
+      "high-impact injury",
+      "fell from a height",
+      "fall from a height",
+    ],
   },
 ];
 
@@ -604,7 +1141,6 @@ const SELECTION_TERMS = [
   "intestin",
   "unde se afla",
   "la ce foloseste",
-  // English equivalents
   "what is",
   "what are",
   "what does",
@@ -656,7 +1192,6 @@ const MEDICAL_GENERAL_TERMS = [
   "pancreas",
   "vezica",
   "intestin",
-  // English equivalents
   "pain",
   "injury",
   "fracture",
@@ -706,7 +1241,6 @@ const PAIN_STARTER_TERMS = [
   "vanat",
   "accidentare",
   "accident",
-  // English equivalents
   "it hurts",
   "i have pain",
   "pain in",
@@ -750,7 +1284,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "intepatura",
       "junghi",
       "junghiuri",
-      // English
       "stabbing",
       "stabbing pain",
       "sharp stab",
@@ -765,7 +1298,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "arde",
       "ustura",
       "usturime",
-      // English
       "burning",
       "burns",
       "burning sensation",
@@ -778,7 +1310,6 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
       "pulseaza",
       "zvacneste",
       "zvacnitoare",
-      // English
       "throbbing",
       "pulsating",
       "pounding",
@@ -787,62 +1318,23 @@ const PAIN_QUALITY_TERMS: Array<{ key: Exclude<PainQuality, "unknown">; terms: s
   },
   {
     key: "dull",
-    terms: [
-      "surda",
-      "apasatoare",
-      "disconfort",
-      // English
-      "dull ache",
-      "dull pain",
-      "aching",
-    ],
+    terms: ["surda", "apasatoare", "disconfort", "dull ache", "dull pain", "aching"],
   },
   {
     key: "sharp",
-    terms: [
-      "ascutita",
-      "taioasa",
-      // English
-      "sharp",
-      "sharp pain",
-      "cutting",
-    ],
+    terms: ["ascutita", "taioasa", "sharp", "sharp pain", "cutting"],
   },
   {
     key: "pressure",
-    terms: [
-      "presiune",
-      "apasa",
-      "apasare",
-      // English
-      "pressure",
-      "pressing",
-      "heavy feeling",
-    ],
+    terms: ["presiune", "apasa", "apasare", "pressure", "pressing", "heavy feeling"],
   },
   {
     key: "pulling",
-    terms: [
-      "trage",
-      "tragere",
-      "intinde",
-      // English
-      "pulling",
-      "tugging",
-      "stretching pain",
-    ],
+    terms: ["trage", "tragere", "intinde", "pulling", "tugging", "stretching pain"],
   },
   {
     key: "cramp",
-    terms: [
-      "crampa",
-      "carcel",
-      "spasm",
-      // English
-      "cramp",
-      "cramping",
-      "muscle cramp",
-    ],
+    terms: ["crampa", "carcel", "spasm", "cramp", "cramping", "muscle cramp"],
   },
 ];
 
@@ -857,7 +1349,6 @@ const ANATOMY_INTENT_TERMS = [
   "explica",
   "functie",
   "functia",
-  // English equivalents
   "what is",
   "what are",
   "what does",
@@ -874,29 +1365,62 @@ const ANATOMY_INTENT_TERMS = [
 
 function collectMatches(text: string, entries: Array<{ key: string; terms: string[] }>) {
   return entries
-    .filter((entry) => entry.terms.some((term) => text.includes(term)))
+    .filter((entry) => entry.terms.some((term) => containsMedicalTerm(text, term)))
     .map((entry) => entry.key);
 }
 
-function extractQuestionEntities(question: string): ExtractedEntities {
+function localizeTermKeys(keys: string[], entries: LocalizedTermEntry[], lang: "ro" | "en") {
+  return keys.map((key) => {
+    const entry = entries.find((item) => item.key === key);
+    return lang === "en" ? (entry?.labelEn ?? key) : (entry?.labelRo ?? key);
+  });
+}
+
+export function extractQuestionEntities(
+  question: string,
+  lang: "ro" | "en" = "ro",
+): ExtractedEntities {
   const text = normalizeColloquialAddressing(question);
-  const region = BODY_REGION_TERMS.find((entry) => entry.terms.some((term) => text.includes(term)));
+  const region = BODY_REGION_TERMS.find((entry) =>
+    entry.terms.some((term) => containsMedicalTerm(text, term)),
+  );
   const symptoms = collectMatches(text, SYMPTOM_TERMS);
   const contexts = collectMatches(text, CONTEXT_TERMS);
   const redFlags = collectMatches(text, RED_FLAG_TERMS);
-  const duration = hasAny(text, ["brusc", "dintr-o data"])
-    ? "brusc"
-    : hasAny(text, ["cateva zile", "de zile", "o saptamana", "saptamani"])
-      ? "persistent"
-      : hasAny(text, ["cronic", "luni", "de mult"])
-        ? "cronic"
+  const duration = hasAny(text, ["brusc", "dintr-o data", "suddenly", "sudden"])
+    ? lang === "en"
+      ? "sudden"
+      : "brusc"
+    : hasAny(text, [
+          "cateva zile",
+          "de zile",
+          "o saptamana",
+          "saptamani",
+          "several days",
+          "for days",
+          "one week",
+          "weeks",
+        ])
+      ? lang === "en"
+        ? "persistent"
+        : "persistent"
+      : hasAny(text, ["cronic", "luni", "de mult", "chronic", "months", "long time"])
+        ? lang === "en"
+          ? "chronic"
+          : "cronic"
         : null;
-  const severity = hasAny(text, ["usor", "usoara"])
-    ? "ușoară"
-    : hasAny(text, ["moderat", "mediu"])
-      ? "moderată"
-      : hasAny(text, ["sever", "insuportabil", "nu pot"])
-        ? "severă / limitantă"
+  const severity = hasAny(text, ["usor", "usoara", "mild", "slight"])
+    ? lang === "en"
+      ? "mild"
+      : "ușoară"
+    : hasAny(text, ["moderat", "mediu", "moderate"])
+      ? lang === "en"
+        ? "moderate"
+        : "moderată"
+      : hasAny(text, ["sever", "insuportabil", "nu pot", "severe", "unbearable", "cannot", "can't"])
+        ? lang === "en"
+          ? "severe / limiting"
+          : "severă / limitantă"
         : null;
 
   const keywords = unique([
@@ -910,7 +1434,7 @@ function extractQuestionEntities(question: string): ExtractedEntities {
 
   return {
     bodyRegion: region?.bodyRegions[0] ?? null,
-    bodyRegionLabel: region?.label ?? null,
+    bodyRegionLabel: region ? (lang === "en" ? region.labelEn : region.labelRo) : null,
     bodyRegionKey: region?.key ?? null,
     symptoms,
     contexts,
@@ -929,7 +1453,8 @@ function inferSelectedRegionKey(input: z.infer<typeof InputSchema>) {
   );
 
   return (
-    BODY_REGION_TERMS.find((entry) => entry.terms.some((term) => text.includes(term)))?.key ?? null
+    BODY_REGION_TERMS.find((entry) => entry.terms.some((term) => containsMedicalTerm(text, term)))
+      ?.key ?? null
   );
 }
 
@@ -1011,6 +1536,7 @@ function makeNoSwitch(
     target_structure_slug: null,
     target_structure_type: null,
     target_body_region: null,
+    target_display_name: null,
     switch_reason: reason,
     confidence: "low",
     switch_locked_until_clarification: selected_context_fit === "unclear_need_more_questions",
@@ -1102,7 +1628,28 @@ const REGION_CONTEXT_TARGETS: Record<
     muscularSlug: "muschi:muschii-toracelui",
     bodyRegion: "torace",
     skeletonLabel: "Coaste",
-    muscleLabel: "Mușchii toracelui",
+    muscleLabel: "Mușchii pieptului",
+  },
+  piept: {
+    skeletonSlug: "coaste",
+    muscularSlug: "muschi:muschii-toracelui",
+    bodyRegion: "torace",
+    skeletonLabel: "Coaste",
+    muscleLabel: "Mușchii pieptului",
+  },
+  abdomen: {
+    skeletonSlug: "coxal",
+    muscularSlug: "muschi:muschii-abdomenului",
+    bodyRegion: "abdomen",
+    skeletonLabel: "Oase coxale",
+    muscleLabel: "Mușchii abdomenului",
+  },
+  cap: {
+    skeletonSlug: "frontal",
+    muscularSlug: "muschi:muschii-capului-gatului",
+    bodyRegion: "cap_gat",
+    skeletonLabel: "Os frontal",
+    muscleLabel: "Mușchii capului și gâtului",
   },
 };
 
@@ -1114,86 +1661,219 @@ function regionTarget(regionKey: string | null | undefined) {
 const ORGAN_CONTEXT_TARGETS = [
   {
     slug: "organ:rinichi",
-    label: "Rinichi",
+    labelRo: "rinichi",
+    labelEn: "kidneys",
     bodyRegion: "abdomen",
-    terms: ["rinichi", "rinichii", "renal", "lombar", "urina", "urinare"],
+    terms: [
+      "rinichi",
+      "rinichii",
+      "renal",
+      "durere in flanc",
+      "durere de flanc",
+      "kidney",
+      "kidneys",
+      "flank pain",
+      "renal pain",
+    ],
   },
   {
     slug: "organ:stomac",
-    label: "Stomac",
+    labelRo: "stomac",
+    labelEn: "stomach",
     bodyRegion: "abdomen",
-    terms: ["stomac", "stomacul", "gastric", "greață", "greata", "varsaturi", "voma"],
+    terms: [
+      "stomac",
+      "stomacul",
+      "gastric",
+      "greață",
+      "greata",
+      "varsaturi",
+      "voma",
+      "stomach",
+      "nausea",
+      "vomiting",
+      "vomit",
+    ],
   },
   {
     slug: "organ:inima",
-    label: "Inimă",
+    labelRo: "inimă",
+    labelEn: "heart",
     bodyRegion: "torace",
-    terms: ["inima", "inimă", "cardiac", "piept", "durere in piept", "toracic"],
+    terms: [
+      "inima",
+      "inimă",
+      "cardiac",
+      "durere in piept",
+      "palpitatii",
+      "heart",
+      "heartbeat",
+      "palpitations",
+      "chest pain",
+    ],
   },
   {
     slug: "organ:plamani",
-    label: "Plămâni",
+    labelRo: "plămâni",
+    labelEn: "lungs",
     bodyRegion: "torace",
-    terms: ["plamani", "plămâni", "respir", "respiratie", "tuse", "aer"],
+    terms: [
+      "plamani",
+      "plămâni",
+      "respir",
+      "respiratie",
+      "tuse",
+      "aer",
+      "lung",
+      "lungs",
+      "breathing",
+      "cough",
+      "shortness of breath",
+    ],
   },
   {
     slug: "organ:ficat",
-    label: "Ficat",
+    labelRo: "ficat",
+    labelEn: "liver",
     bodyRegion: "abdomen",
-    terms: ["ficat", "hepatic", "dreapta sus", "bila", "bilă"],
+    terms: [
+      "ficat",
+      "hepatic",
+      "dreapta sus",
+      "bila",
+      "bilă",
+      "liver",
+      "upper right abdomen",
+      "right upper abdomen",
+      "bile",
+    ],
   },
   {
     slug: "organ:pancreas",
-    label: "Pancreas",
+    labelRo: "pancreas",
+    labelEn: "pancreas",
     bodyRegion: "abdomen",
-    terms: ["pancreas", "pancreatic", "glicemie", "insulina"],
+    terms: ["pancreas", "pancreatic", "glicemie", "insulina", "blood sugar", "insulin"],
   },
   {
     slug: "organ:vezica-urinara",
-    label: "Vezică urinară",
+    labelRo: "vezică urinară",
+    labelEn: "urinary bladder",
     bodyRegion: "pelvis",
-    terms: ["vezica", "vezică", "urinara", "urinară", "urinare", "pelvis"],
+    terms: [
+      "vezica",
+      "vezică",
+      "urinara",
+      "urinară",
+      "urinare",
+      "bladder",
+      "urinary",
+      "urination",
+      "painful urination",
+      "burning urination",
+    ],
   },
   {
     slug: "organ:intestine",
-    label: "Intestine",
+    labelRo: "intestine",
+    labelEn: "intestines",
     bodyRegion: "abdomen",
-    terms: ["intestin", "intestine", "colon", "scaun", "diaree", "constipatie"],
+    terms: [
+      "intestin",
+      "intestine",
+      "colon",
+      "scaun",
+      "diaree",
+      "constipatie",
+      "intestines",
+      "bowel",
+      "stool",
+      "diarrhea",
+      "diarrhoea",
+      "constipation",
+    ],
   },
   {
     slug: "organ:splina",
-    label: "Splină",
+    labelRo: "splină",
+    labelEn: "spleen",
     bodyRegion: "abdomen",
-    terms: ["splina", "splină", "stanga sus", "stânga sus"],
+    terms: [
+      "splina",
+      "splină",
+      "stanga sus",
+      "stânga sus",
+      "spleen",
+      "upper left abdomen",
+      "left upper abdomen",
+    ],
+  },
+  {
+    slug: "organ:esofag",
+    labelRo: "esofag",
+    labelEn: "esophagus",
+    bodyRegion: "torace",
+    terms: ["esofag", "esofagian", "esophagus", "oesophagus", "swallowing", "heartburn"],
+  },
+  {
+    slug: "organ:trahee",
+    labelRo: "trahee",
+    labelEn: "trachea",
+    bodyRegion: "torace",
+    terms: ["trahee", "traheal", "trachea", "windpipe", "airway"],
   },
 ];
 
 function organTargetFromText(value: string | undefined) {
   const text = normalizeText(value);
-  return ORGAN_CONTEXT_TARGETS.find((target) =>
-    target.terms.some((term) => text.includes(normalizeText(term))),
-  ) ?? null;
+  return (
+    ORGAN_CONTEXT_TARGETS.find((target) =>
+      target.terms.some((term) => containsMedicalTerm(text, term)),
+    ) ?? null
+  );
 }
 
 function directMuscleTargetFromText(value: string | undefined) {
   const text = normalizeText(value);
-  if (hasAny(text, ["biceps", "triceps", "brat"])) return REGION_CONTEXT_TARGETS.brat;
-  if (hasAny(text, ["cvadriceps", "coapsa"])) return REGION_CONTEXT_TARGETS.genunchi;
-  if (hasAny(text, ["gamba", "gambei"])) return REGION_CONTEXT_TARGETS.glezna;
-  if (hasAny(text, ["spate", "lombar"])) return REGION_CONTEXT_TARGETS.spate;
-  if (hasAny(text, ["umar", "deltoid"])) return REGION_CONTEXT_TARGETS.umar;
+  if (hasAny(text, ["biceps", "triceps", "brat", "antebrat", "forearm"]))
+    return REGION_CONTEXT_TARGETS.brat;
+  if (hasAny(text, ["cvadriceps", "coapsa", "ischiogambieri", "thigh"]))
+    return REGION_CONTEXT_TARGETS.genunchi;
+  if (hasAny(text, ["gamba", "gambei", "molet", "calf"])) return REGION_CONTEXT_TARGETS.glezna;
+  if (hasAny(text, ["spate", "lombar", "coloana", "back"])) return REGION_CONTEXT_TARGETS.spate;
+  if (hasAny(text, ["umar", "deltoid", "shoulder", "coafa rotatorie", "coafa rotatorilor"]))
+    return REGION_CONTEXT_TARGETS.umar;
+  if (hasAny(text, ["pectoral", "piept", "chest"])) return REGION_CONTEXT_TARGETS.piept;
+  if (hasAny(text, ["abdomen", "abdominal", "burta", "belly"]))
+    return REGION_CONTEXT_TARGETS.abdomen;
+  if (hasAny(text, ["gat", "neck", "ceafa", "cervical"])) return REGION_CONTEXT_TARGETS.gat;
+  if (hasAny(text, ["sold", "fesier", "fesa", "hip", "gluteus"]))
+    return REGION_CONTEXT_TARGETS.sold;
+  if (hasAny(text, ["picior", "talpa", "plantar", "foot"])) return REGION_CONTEXT_TARGETS.picior;
+  if (hasAny(text, ["mana", "deget", "palm", "hand", "incheietura", "wrist"]))
+    return REGION_CONTEXT_TARGETS.mana;
   return null;
 }
 
 function directBoneTargetFromText(value: string | undefined) {
   const text = normalizeText(value);
-  if (hasAny(text, ["humerus"])) return { slug: "humerus", bodyRegion: "brat", label: "Humerus" };
-  if (hasAny(text, ["femur"])) return { slug: "femur", bodyRegion: "coapsa", label: "Femur" };
-  if (hasAny(text, ["tibia"])) return { slug: "tibia", bodyRegion: "gamba", label: "Tibia" };
-  if (hasAny(text, ["radius"])) return { slug: "radius", bodyRegion: "antebrat", label: "Radius" };
-  if (hasAny(text, ["coaste", "coasta", "stern"])) return { slug: "coaste", bodyRegion: "torace", label: "Coaste" };
-  if (hasAny(text, ["coloana", "vertebre", "vertebra"])) {
-    return { slug: "vert-lombare", bodyRegion: "spate", label: "Vertebre lombare" };
+  if (hasAny(text, ["humerus"]))
+    return { slug: "humerus", bodyRegion: "brat", labelRo: "humerus", labelEn: "humerus" };
+  if (hasAny(text, ["femur"]))
+    return { slug: "femur", bodyRegion: "coapsa", labelRo: "femur", labelEn: "femur" };
+  if (hasAny(text, ["tibia"]))
+    return { slug: "tibia", bodyRegion: "gamba", labelRo: "tibie", labelEn: "tibia" };
+  if (hasAny(text, ["radius"]))
+    return { slug: "radius", bodyRegion: "antebrat", labelRo: "radius", labelEn: "radius" };
+  if (hasAny(text, ["coaste", "coasta", "stern", "rib", "ribs", "sternum"]))
+    return { slug: "coaste", bodyRegion: "torace", labelRo: "coaste", labelEn: "ribs" };
+  if (hasAny(text, ["coloana", "vertebre", "vertebra", "spine", "vertebrae"])) {
+    return {
+      slug: "vert-lombare",
+      bodyRegion: "spate",
+      labelRo: "vertebre lombare",
+      labelEn: "lumbar vertebrae",
+    };
   }
   return null;
 }
@@ -1230,7 +1910,9 @@ export function evaluateSelectedContextFit(
 
   if (route.category === "out_of_scope") return makeNoSwitch("out_of_scope");
 
-  const organTarget = organTargetFromText([input.question, route.entities.bodyRegionLabel].filter(Boolean).join(" "));
+  const organTarget = organTargetFromText(
+    [input.question, route.entities.bodyRegionLabel].filter(Boolean).join(" "),
+  );
   if (organTarget && input.tissue !== "organ") {
     return {
       selected_context_fit: "likely_organ_but_other_selected",
@@ -1239,7 +1921,11 @@ export function evaluateSelectedContextFit(
       target_structure_slug: organTarget.slug,
       target_structure_type: "organ",
       target_body_region: organTarget.bodyRegion,
-      switch_reason: `Întrebarea pare despre ${organTarget.label}, deci modul Organe este mai potrivit.`,
+      target_display_name: input.lang === "en" ? organTarget.labelEn : organTarget.labelRo,
+      switch_reason:
+        input.lang === "en"
+          ? `The question appears to concern the ${organTarget.labelEn}, so Organs mode is more appropriate.`
+          : `Întrebarea pare despre ${organTarget.labelRo}, deci modul Organe este mai potrivit.`,
       confidence: "high",
       switch_locked_until_clarification: false,
     };
@@ -1255,7 +1941,11 @@ export function evaluateSelectedContextFit(
         target_structure_slug: directMuscleTarget.muscularSlug,
         target_structure_type: "muscle_group",
         target_body_region: directMuscleTarget.bodyRegion,
-        switch_reason: "Întrebarea menționează o grupă musculară, deci Sistemul Muscular este mai potrivit.",
+        target_display_name: input.lang === "en" ? "muscle group" : "grupă musculară",
+        switch_reason:
+          input.lang === "en"
+            ? "The question mentions a muscle group, so Muscular System mode is more appropriate."
+            : "Întrebarea menționează o grupă musculară, deci Sistemul Muscular este mai potrivit.",
         confidence: "high",
         switch_locked_until_clarification: false,
       };
@@ -1270,7 +1960,12 @@ export function evaluateSelectedContextFit(
         target_structure_slug: directBoneTarget.slug,
         target_structure_type: "bone",
         target_body_region: directBoneTarget.bodyRegion,
-        switch_reason: `Întrebarea menționează ${directBoneTarget.label}, deci modul Schelet este mai potrivit.`,
+        target_display_name:
+          input.lang === "en" ? directBoneTarget.labelEn : directBoneTarget.labelRo,
+        switch_reason:
+          input.lang === "en"
+            ? `The question mentions the ${directBoneTarget.labelEn}, so Skeleton mode is more appropriate.`
+            : `Întrebarea menționează ${directBoneTarget.labelRo}, deci modul Schelet este mai potrivit.`,
         confidence: "high",
         switch_locked_until_clarification: false,
       };
@@ -1294,8 +1989,11 @@ export function evaluateSelectedContextFit(
         target && (route.selectionConflict || input.tissue === "muschi") ? "bone" : null,
       target_body_region:
         target?.bodyRegion ?? route.entities.bodyRegion ?? input.bodyRegion ?? null,
+      target_display_name: route.entities.bodyRegionLabel,
       switch_reason:
-        "Există semne de alarmă; siguranța are prioritate, iar contextul osos/articular poate fi mai potrivit.",
+        input.lang === "en"
+          ? "Warning signs are present. Safety takes priority, and a bone or joint context may be more appropriate."
+          : "Există semne de alarmă; siguranța are prioritate, iar contextul osos/articular poate fi mai potrivit.",
       confidence: target ? "high" : "low",
       switch_locked_until_clarification: true,
     };
@@ -1321,7 +2019,11 @@ export function evaluateSelectedContextFit(
       target_structure_slug: slug ?? null,
       target_structure_type: layer === "muscular" ? "muscle_group" : "bone",
       target_body_region: target?.bodyRegion ?? route.entities.bodyRegion,
-      switch_reason: `Întrebarea este despre ${route.entities.bodyRegionLabel}, nu despre selecția curentă.`,
+      target_display_name: route.entities.bodyRegionLabel,
+      switch_reason:
+        input.lang === "en"
+          ? `The question concerns ${route.entities.bodyRegionLabel}, not the current selection.`
+          : `Întrebarea este despre ${route.entities.bodyRegionLabel}, nu despre selecția curentă.`,
       confidence: target ? "high" : "medium",
       switch_locked_until_clarification: false,
     };
@@ -1340,7 +2042,9 @@ export function evaluateSelectedContextFit(
   if (vagueOnly) {
     return makeNoSwitch(
       "unclear_need_more_questions",
-      "Mesajul este vag; trebuie clarificat înainte de schimbarea contextului.",
+      input.lang === "en"
+        ? "The message is unclear and needs clarification before changing context."
+        : "Mesajul este vag; trebuie clarificat înainte de schimbarea contextului.",
     );
   }
 
@@ -1353,8 +2057,11 @@ export function evaluateSelectedContextFit(
       target_structure_slug: target ? target.muscularSlug : null,
       target_structure_type: target ? "muscle_group" : null,
       target_body_region: target?.bodyRegion ?? input.bodyRegion ?? null,
+      target_display_name: route.entities.bodyRegionLabel,
       switch_reason:
-        "Durerea pare legată de încordare/efort, deci contextul muscular poate fi mai util.",
+        input.lang === "en"
+          ? "The pain appears related to muscle contraction or exertion, so a muscular context may be more useful."
+          : "Durerea pare legată de încordare/efort, deci contextul muscular poate fi mai util.",
       confidence: target ? "high" : "low",
       switch_locked_until_clarification: false,
     };
@@ -1369,8 +2076,11 @@ export function evaluateSelectedContextFit(
       target_structure_slug: target ? target.skeletonSlug : null,
       target_structure_type: target ? "bone" : null,
       target_body_region: target?.bodyRegion ?? input.bodyRegion ?? null,
+      target_display_name: route.entities.bodyRegionLabel,
       switch_reason:
-        "Durerea după lovitură/căzătură sau profundă poate implica osul ori articulația.",
+        input.lang === "en"
+          ? "Pain after an impact or fall, or deep pain, may involve a bone or joint."
+          : "Durerea după lovitură/căzătură sau profundă poate implica osul ori articulația.",
       confidence: target ? "high" : "low",
       switch_locked_until_clarification: false,
     };
@@ -1385,8 +2095,12 @@ function emptySymptomState(input: z.infer<typeof InputSchema>): SymptomState {
     selected_structure_type: input.tissue,
     selected_region: input.bodyRegion ?? null,
     selected_body_region: input.bodyRegion ?? null,
-    visual_layer: input.visualLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
-    ai_layer: input.aiLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
+    visual_layer:
+      input.visualLayer ??
+      (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
+    ai_layer:
+      input.aiLayer ??
+      (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
     current_topic: "anatomy",
     pain_present: false,
     pain_quality: "unknown",
@@ -1479,7 +2193,6 @@ function detectAskedFields(message: string, state: SymptomState) {
     "cazut",
     "efort",
     "accident",
-    // English
     "impact",
     "fall",
     "exertion",
@@ -1493,7 +2206,6 @@ function detectAskedFields(message: string, state: SymptomState) {
     "miscare normal",
     "ridici",
     "miscarea",
-    // English
     "can you move",
     "move the area",
     "move it normally",
@@ -1517,7 +2229,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "sala",
       "intindere",
       "crampa",
-      // English
       "muscle strain",
       "muscle use",
       "overexertion",
@@ -1535,7 +2246,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "lovitura",
       "cazatura",
       "accident",
-      // English
       "deep pain",
       "swelling",
       "deformity",
@@ -1552,7 +2262,9 @@ function detectAskedFields(message: string, state: SymptomState) {
     state.last_question_intent = "trauma_or_effort";
     state.asked_questions.push("trauma_or_effort");
   }
-  if (hasAny(text, ["brusc", "treptat", "suddenly", "gradually", "start suddenly", "did it start"])) {
+  if (
+    hasAny(text, ["brusc", "treptat", "suddenly", "gradually", "start suddenly", "did it start"])
+  ) {
     state.asked.onset = true;
     state.last_question_intent = "onset";
     state.asked_questions.push("onset");
@@ -1564,7 +2276,17 @@ function detectAskedFields(message: string, state: SymptomState) {
   }
   if (
     askedMovement &&
-    hasAny(text, ["severa", "sever", "cat de severa", "intensitate", "mild", "moderate", "how strong", "how bad", "intensity"])
+    hasAny(text, [
+      "severa",
+      "sever",
+      "cat de severa",
+      "intensitate",
+      "mild",
+      "moderate",
+      "how strong",
+      "how bad",
+      "intensity",
+    ])
   ) {
     state.asked.movement_ok = true;
     state.asked.severity = true;
@@ -1581,7 +2303,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "amorteala",
       "slabiciune",
       "deformare",
-      // English
       "swelling",
       "bruising",
       "numbness",
@@ -1600,7 +2321,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "severa",
       "cat de severa",
       "intensitate",
-      // English
       "mild",
       "moderate",
       "how strong",
@@ -1619,7 +2339,6 @@ function detectAskedFields(message: string, state: SymptomState) {
       "cand a inceput",
       "de cand",
       "cat timp",
-      // English
       "how long",
       "when did it start",
       "how many days",
@@ -1634,7 +2353,9 @@ function detectAskedFields(message: string, state: SymptomState) {
 }
 
 function isContextualAffirmative(text: string) {
-  return /\b(da|dap|normal|pot|yes|yeah|yep|yup|sure|ok|okay|correct|right|indeed|exactly)\b/.test(text);
+  return /\b(da|dap|normal|pot|yes|yeah|yep|yup|sure|ok|okay|correct|right|indeed|exactly)\b/.test(
+    text,
+  );
 }
 
 function isContextualNegative(text: string) {
@@ -1648,7 +2369,6 @@ function isMovementOkReply(text: string) {
     /\bpot\b.*\b(misca|misc|normal)\b/.test(text) ||
     /\b(misc|misca|miscarea|se misca)\b.*\bnormal\b/.test(text) ||
     text === "normal" ||
-    // English
     /\b(yes|yeah|yep)\b.*\b(can|move)\b/.test(text) ||
     /\bcan\b.*\b(move|use)\b.*\b(it|area|normally|fine|ok)\b/.test(text) ||
     hasAny(text, ["moves fine", "moving fine", "move normally", "can move", "still moving"])
@@ -1663,7 +2383,6 @@ function isMovementBlockedReply(text: string) {
     "deloc",
     "nu misc",
     "nu se misca",
-    // English
     "can't move",
     "cannot move",
     "can't use",
@@ -1678,8 +2397,23 @@ function isMovementBlockedReply(text: string) {
 }
 
 function parseSeverity(text: string): SymptomState["severity"] | null {
-  if (hasAny(text, ["putin", "usoara", "usor", "suportabil", "mild", "slight", "light", "bearable", "a little", "a bit"])) return "mild";
-  if (hasAny(text, ["moderata", "moderat", "medie", "moderate", "medium", "manageable"])) return "moderate";
+  if (
+    hasAny(text, [
+      "putin",
+      "usoara",
+      "usor",
+      "suportabil",
+      "mild",
+      "slight",
+      "light",
+      "bearable",
+      "a little",
+      "a bit",
+    ])
+  )
+    return "mild";
+  if (hasAny(text, ["moderata", "moderat", "medie", "moderate", "medium", "manageable"]))
+    return "moderate";
   if (
     hasAny(text, [
       "tare",
@@ -1691,7 +2425,6 @@ function parseSeverity(text: string): SymptomState["severity"] | null {
       "sever",
       "insuportabil",
       "nu suport",
-      // English
       "severe",
       "very bad",
       "very strong",
@@ -1752,7 +2485,6 @@ function parseOnset(text: string): SymptomState["onset"] | null {
       "dintr-o data",
       "deodata",
       "a aparut dintr o data",
-      // English
       "suddenly",
       "all of a sudden",
       "out of nowhere",
@@ -1766,7 +2498,6 @@ function parseOnset(text: string): SymptomState["onset"] | null {
     hasAny(text, [
       "treptat",
       "incet",
-      // English
       "gradually",
       "slowly",
       "over time",
@@ -1779,14 +2510,14 @@ function parseOnset(text: string): SymptomState["onset"] | null {
 }
 
 function parseDuration(text: string): SymptomState["duration"] | null {
-  if (hasAny(text, ["minute", "acum putin", "minutes", "just now", "a moment ago"])) return "minutes";
+  if (hasAny(text, ["minute", "acum putin", "minutes", "just now", "a moment ago"]))
+    return "minutes";
   if (
     hasAny(text, [
       "ore",
       "ora",
       "de azi",
       "azi",
-      // English
       "hours",
       "this morning",
       "this afternoon",
@@ -1803,7 +2534,6 @@ function parseDuration(text: string): SymptomState["duration"] | null {
       "de cateva zile",
       "cateva zile",
       "de zile",
-      // English
       "days",
       "yesterday",
       "a few days",
@@ -1820,7 +2550,6 @@ function parseDuration(text: string): SymptomState["duration"] | null {
       "cronic",
       "luni",
       "de mult",
-      // English
       "months",
       "chronic",
       "a long time",
@@ -1853,7 +2582,6 @@ function isContextualReply(question: string, state: SymptomState) {
       "moderat",
       "moderata",
       "nu pot",
-      // English
       "a bit",
       "really",
       "severe",
@@ -1894,7 +2622,6 @@ function applySymptomFactsFromText(
       "nu am",
       "fara",
       "deloc",
-      // English
       "nope",
       "nah",
       "didnt",
@@ -1928,7 +2655,6 @@ function applySymptomFactsFromText(
       "durere",
       "doare",
       "dureros",
-      // English
       "pain",
       "hurts",
       " hurt",
@@ -1953,7 +2679,6 @@ function applySymptomFactsFromText(
       "efort",
       "accident",
       "trauma",
-      // English
       "fell",
       "fall",
       "hit",
@@ -2006,7 +2731,6 @@ function applySymptomFactsFromText(
         "poti misca",
         "miscare normal",
         "durerea este severa",
-        // English
         "can you move",
         "move normally",
         "is the pain severe",
@@ -2019,7 +2743,6 @@ function applySymptomFactsFromText(
       "nu pot folosi",
       "nu pot ridica",
       "miscarea e limitata",
-      // English
       "cant use",
       "cannot use",
       "cant lift",
@@ -2075,7 +2798,6 @@ function applySymptomFactsFromText(
       "amortit",
       "slabiciune",
       "furnicaturi",
-      // English
       "numbness",
       "numb",
       "tingling",
@@ -2096,7 +2818,6 @@ function applySymptomFactsFromText(
       "slabiciune",
       "nu am forta",
       "pierdere de forta",
-      // English
       "weakness",
       "weak",
       "no strength",
@@ -2116,7 +2837,6 @@ function applySymptomFactsFromText(
       "deform",
       "stramb",
       "os iesit",
-      // English
       "deformity",
       "deformed",
       "bent",
@@ -2136,17 +2856,19 @@ function applySymptomFactsFromText(
   if (intent === "associated_signs" && isNegative) {
     if (hasAny(previous, ["umflatura", "umflat", "swelling", "swollen"])) state.swelling = "no";
     if (hasAny(previous, ["vanataie", "vanat", "bruising", "bruise"])) state.bruising = "no";
-    if (hasAny(previous, ["amorteala", "amortit", "furnicaturi", "numbness", "tingling"])) state.numbness = "no";
+    if (hasAny(previous, ["amorteala", "amortit", "furnicaturi", "numbness", "tingling"]))
+      state.numbness = "no";
     if (hasAny(previous, ["slabiciune", "forta", "weakness", "strength"])) state.weakness = "no";
-    if (hasAny(previous, ["deform", "stramb", "os iesit", "deformity", "bent"])) state.deformity = "no";
+    if (hasAny(previous, ["deform", "stramb", "os iesit", "deformity", "bent"]))
+      state.deformity = "no";
     markAnswered(state, "associated_signs");
   }
 
   if (intent === "associated_signs") {
     const askedCoreSigns =
-      hasAny(previous, ["umflatura", "umflat"]) &&
-      hasAny(previous, ["amorteala", "amortit", "furnicaturi"]) &&
-      hasAny(previous, ["vanataie", "vanat"]);
+      hasAny(previous, ["umflatura", "umflat", "swelling", "swollen"]) &&
+      hasAny(previous, ["amorteala", "amortit", "furnicaturi", "numbness", "tingling"]) &&
+      hasAny(previous, ["vanataie", "vanat", "bruise", "bruising"]);
     if (
       askedCoreSigns &&
       state.swelling !== "unknown" &&
@@ -2235,7 +2957,7 @@ function isShortSymptomFollowUp(question: string, state: SymptomState) {
 
 export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
   const text = normalizeColloquialAddressing(input.question);
-  const entities = extractQuestionEntities(text);
+  const entities = extractQuestionEntities(text, input.lang);
   const recognizableIntent = hasRecognizableIntent(text, entities);
   const selectedRegionKey = inferSelectedRegionKey(input);
   const selectionConflict =
@@ -2244,7 +2966,9 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
     !areRelatedRegions(selectedRegionKey, entities.bodyRegionKey);
   const target = targetForEntities(entities);
   const conflictNote = selectionConflict
-    ? `Ai pornit de la ${input.structureName}, dar întrebarea pare să fie despre ${entities.bodyRegionLabel}.`
+    ? input.lang === "en"
+      ? `You started from ${input.structureName}, but the question appears to concern ${entities.bodyRegionLabel}.`
+      : `Ai pornit de la ${input.structureName}, dar întrebarea pare să fie despre ${entities.bodyRegionLabel}.`
     : null;
   const shouldUpdate3dSelection =
     selectionConflict &&
@@ -2271,6 +2995,16 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
       "cazut",
       "sport",
       "alerg",
+      "pain",
+      "hurts",
+      "aching",
+      "injury",
+      "injured",
+      "hit",
+      "fell",
+      "fall",
+      "running",
+      "workout",
     ]);
   const isAppSpecific = APP_SPECIFIC_TERMS.some((term) => text.includes(term));
   const isMedical =
@@ -2298,10 +3032,6 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
   }
 
   if (!recognizableIntent) {
-    // In English mode, route unrecognized messages to the LLM (selection_specific if a
-    // structure is selected, otherwise medical_general) instead of showing a deterministic
-    // "unclear" response. The Romanian keyword patterns don't cover English input, so the
-    // LLM is a much better fallback for English users.
     if (input.lang === "en" && text.trim().length > 0) {
       if (input.structureName || input.structureSlug) {
         return {
@@ -2423,7 +3153,6 @@ export function classifyQuestion(input: z.infer<typeof InputSchema>): AiRoute {
     };
   }
 
-  // Final fallback: in English mode, send to LLM rather than unclear
   if (input.lang === "en" && text.trim().length > 0) {
     if (input.structureName || input.structureSlug) {
       return {
@@ -2941,7 +3670,7 @@ async function getFallbackAnatomyContext(
   let query = supabase
     .from("anatomy_structures")
     .select(
-      "id, slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, description_ro, function_ro",
+      "id, slug, name_ro, popular_name_ro, popular_name_en, scientific_name_ro, scientific_name_en, latin_name, description_ro, description_en, function_ro, function_en",
     )
     .eq("tissue", input.tissue)
     .limit(1);
@@ -2971,6 +3700,17 @@ async function getFallbackAnatomyContext(
       content_ro: [
         data.description_ro,
         data.function_ro ? `Funcție principală: ${data.function_ro}` : "",
+        data.scientific_name_ro ? `Denumire științifică: ${data.scientific_name_ro}.` : "",
+        data.latin_name ? `Denumire latină: ${data.latin_name}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      title_en: `Anatomical context: ${data.popular_name_en ?? input.structureName}`,
+      content_en: [
+        data.description_en,
+        data.function_en ? `Main function: ${data.function_en}` : "",
+        data.scientific_name_en ? `Scientific name: ${data.scientific_name_en}.` : "",
+        data.latin_name ? `Latin name: ${data.latin_name}.` : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2980,6 +3720,9 @@ async function getFallbackAnatomyContext(
 }
 
 function displayNameFromRow(row: Record<string, unknown> | null | undefined, fallback: string) {
+  const popularName = textFromRow(row, "popular_name_ro");
+  if (popularName) return popularName;
+
   const displayName = textFromRow(row, "display_name_ro");
   if (displayName) return displayName;
 
@@ -2993,7 +3736,6 @@ function displayNameFromRow(row: Record<string, unknown> | null | undefined, fal
 
 function subtitleFromRow(row: Record<string, unknown> | null | undefined) {
   return (
-    textFromRow(row, "subtitle_name") ??
     textFromRow(row, "scientific_name_ro") ??
     textFromRow(row, "latin_name") ??
     textFromRow(row, "name_latin") ??
@@ -3041,6 +3783,7 @@ async function createAiConversation({
     model_selection_id: scope.modelSelectionId,
     tissue: aiInput.tissue,
     title: buildConversationTitle(aiInput, route),
+    language: aiInput.lang,
   };
 
   const { data: conversation, error } = await supabase
@@ -3085,7 +3828,7 @@ async function loadAiConversationState(
 ) {
   const { data: conversation, error } = await supabase
     .from("ai_conversations")
-    .select("id, structured_state")
+    .select("id, structured_state, language")
     .eq("id", conversationId)
     .single();
 
@@ -3093,6 +3836,7 @@ async function loadAiConversationState(
     return {
       structuredState: (conversation as { structured_state?: unknown }).structured_state ?? {},
       structuredStateAvailable: true,
+      language: normalizeConversationLanguage(conversation.language),
     };
   }
 
@@ -3100,13 +3844,23 @@ async function loadAiConversationState(
     throw new Error(error?.message ?? "Nu am putut încărca conversația AI.");
   }
 
-  console.warn("ai_conversations.structured_state is missing; loading conversation without persisted AI state.");
-  const fallback = await supabase.from("ai_conversations").select("id").eq("id", conversationId).single();
+  console.warn(
+    "ai_conversations.structured_state is missing; loading conversation without persisted AI state.",
+  );
+  const fallback = await supabase
+    .from("ai_conversations")
+    .select("id, language")
+    .eq("id", conversationId)
+    .single();
   if (fallback.error || !fallback.data) {
     throw new Error(fallback.error?.message ?? "Nu am putut încărca conversația AI.");
   }
 
-  return { structuredState: {}, structuredStateAvailable: false };
+  return {
+    structuredState: {},
+    structuredStateAvailable: false,
+    language: normalizeConversationLanguage(fallback.data.language),
+  };
 }
 
 async function updateAiConversationState({
@@ -3129,9 +3883,14 @@ async function updateAiConversationState({
         updated_at: new Date().toISOString(),
       };
 
-  const { error } = await supabase.from("ai_conversations").update(payload).eq("id", conversationId);
+  const { error } = await supabase
+    .from("ai_conversations")
+    .update(payload)
+    .eq("id", conversationId);
   if (error && isMissingStructuredStateColumn(error)) {
-    console.warn("ai_conversations.structured_state is missing; saved conversation timestamp only.");
+    console.warn(
+      "ai_conversations.structured_state is missing; saved conversation timestamp only.",
+    );
     await supabase
       .from("ai_conversations")
       .update({ updated_at: new Date().toISOString() })
@@ -3142,12 +3901,39 @@ async function updateAiConversationState({
   if (error) throw new Error(error.message);
 }
 
-async function resolveStructureDisplayNameForAi(
+async function resolveStructureNamesForAi(
   supabase: ReturnType<typeof createUserSupabaseClient>,
   input: z.infer<typeof InputSchema>,
   scope: SelectionScope,
   structureSlug: string | null,
 ) {
+  if (input.tissue === "muschi" && scope.modelSelectionId) {
+    const { data: mapping, error: mappingError } = await supabase
+      .from("model_3d_mappings")
+      .select("popular_name_ro, popular_name_en, scientific_name_ro, scientific_name_en")
+      .eq("model_part_key", scope.modelSelectionId)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (!mappingError && mapping) {
+      return {
+        displayName:
+          input.lang === "en"
+            ? (mapping.popular_name_en ?? input.structureName)
+            : (mapping.popular_name_ro ?? input.structureName),
+        technicalName:
+          input.lang === "en"
+            ? (mapping.scientific_name_en ?? input.technicalStructureName ?? null)
+            : (mapping.scientific_name_ro ?? input.technicalStructureName ?? null),
+      };
+    }
+
+    return {
+      displayName: input.structureName,
+      technicalName: input.technicalStructureName ?? null,
+    };
+  }
+
   const candidates = [structureSlug, scope.modelSelectionId, scope.structureSlug].filter(
     (value): value is string => Boolean(value),
   );
@@ -3156,13 +3942,27 @@ async function resolveStructureDisplayNameForAi(
     const { data, error } = await supabase
       .from("anatomy_structures")
       .select(
-        "slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, english_name, latin_name, name_latin",
+        "slug, name_ro, popular_name_ro, popular_name_en, scientific_name_ro, scientific_name_en, latin_name",
       )
       .or(`slug.eq.${candidate},model_selection_id.eq.${candidate}`)
       .limit(1)
       .maybeSingle();
 
-    if (!error && data) return displayNameFromRow(data, input.structureName);
+    if (!error && data) {
+      return {
+        displayName:
+          input.lang === "en"
+            ? (textFromRow(data, "popular_name_en") ?? input.structureName)
+            : displayNameFromRow(data, input.structureName),
+        technicalName:
+          input.lang === "en"
+            ? (textFromRow(data, "scientific_name_en") ??
+              textFromRow(data, "latin_name") ??
+              input.technicalStructureName ??
+              null)
+            : (subtitleFromRow(data) ?? input.technicalStructureName ?? null),
+      };
+    }
   }
 
   const normalizedInputName = input.structureName.trim();
@@ -3170,16 +3970,35 @@ async function resolveStructureDisplayNameForAi(
     const { data, error } = await supabase
       .from("anatomy_structures")
       .select(
-        "slug, name_ro, common_name_ro, scientific_name_ro, display_name_ro, subtitle_name, english_name, latin_name, name_latin",
+        "slug, name_ro, popular_name_ro, popular_name_en, scientific_name_ro, scientific_name_en, latin_name",
       )
-      .ilike("english_name", `%${normalizedInputName}%`)
+      .or(
+        `popular_name_en.ilike.%${normalizedInputName}%,scientific_name_en.ilike.%${normalizedInputName}%`,
+      )
       .limit(1)
       .maybeSingle();
 
-    if (!error && data) return displayNameFromRow(data, input.structureName);
+    if (!error && data) {
+      return {
+        displayName:
+          input.lang === "en"
+            ? (textFromRow(data, "popular_name_en") ?? input.structureName)
+            : displayNameFromRow(data, input.structureName),
+        technicalName:
+          input.lang === "en"
+            ? (textFromRow(data, "scientific_name_en") ??
+              textFromRow(data, "latin_name") ??
+              input.technicalStructureName ??
+              null)
+            : (subtitleFromRow(data) ?? input.technicalStructureName ?? null),
+      };
+    }
   }
 
-  return input.structureName;
+  return {
+    displayName: input.structureName,
+    technicalName: input.technicalStructureName ?? null,
+  };
 }
 
 async function getSelectionContext(
@@ -3238,6 +4057,8 @@ function contextScore(entry: KnowledgeEntry, route: AiRoute) {
     [
       entry.title_ro,
       entry.content_ro,
+      entry.title_en,
+      entry.content_en,
       entry.body_region,
       entry.structure_slug,
       entry.model_selection_id,
@@ -3276,7 +4097,7 @@ function rankContext(context: KnowledgeEntry[], route: AiRoute, limit = 16) {
     .sort((a, b) => b.score - a.score)
     .map(({ entry }) => entry)
     .filter((entry) => {
-      const key = `${entry.title_ro}:${entry.content_ro}`;
+      const key = entry.id || `${entry.title_ro}:${entry.content_ro}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -3290,6 +4111,7 @@ function makeVirtualContext(
   title: string,
   content: string,
   priority = 4,
+  sources: MedicalSourceCitation[] = [],
 ): KnowledgeEntry {
   return {
     id: `${source}:${normalizeForScope(title).slice(0, 80)}`,
@@ -3301,6 +4123,7 @@ function makeVirtualContext(
     structure_slug: null,
     model_selection_id: null,
     body_region: null,
+    sources,
   };
 }
 
@@ -3322,6 +4145,7 @@ async function getGeneralMedicalContext(
   route: AiRoute,
   selectionContext: KnowledgeEntry[],
 ): Promise<KnowledgeEntry[]> {
+  const en = input.lang === "en";
   const ragCategories =
     route.category === "red_flag_or_urgent"
       ? ["semne_alarma", "intrebari_clarificare"]
@@ -3338,7 +4162,10 @@ async function getGeneralMedicalContext(
     ].map(normalizeForScope),
   );
   const ragFilters: RetrievalFilters = {
-    aiLayer: input.aiLayer ?? (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
+    language: input.lang,
+    aiLayer:
+      input.aiLayer ??
+      (input.tissue === "organ" ? "organs" : input.tissue === "muschi" ? "muscular" : "skeleton"),
     tissue: input.tissue,
     bodyRegion: route.entities.bodyRegion ?? input.bodyRegion ?? null,
     structureSlug: route.selectedSubjectMentioned
@@ -3355,13 +4182,18 @@ async function getGeneralMedicalContext(
     id: string;
     slug: string;
     name_ro: string;
+    name_en?: string | null;
     description_ro?: string | null;
+    description_en?: string | null;
     keywords_ro?: string[] | null;
+    keywords_en?: string[] | null;
     red_flag?: boolean | null;
   }>(
     supabase
       .from("symptoms")
-      .select("id, slug, name_ro, description_ro, keywords_ro, red_flag")
+      .select(
+        "id, slug, name_ro, name_en, description_ro, description_en, keywords_ro, keywords_en, red_flag",
+      )
       .limit(80),
   );
 
@@ -3369,18 +4201,47 @@ async function getGeneralMedicalContext(
     id: string;
     slug: string;
     name_ro: string;
-    medical_name?: string | null;
+    name_en?: string | null;
+    popular_name_ro?: string | null;
+    popular_name_en?: string | null;
+    scientific_name?: string | null;
     tissue?: string | null;
     default_level?: string | null;
     description_ro?: string | null;
+    description_en?: string | null;
     educational_note_ro?: string | null;
-  }>(
-    supabase
-      .from("conditions")
-      .select(
-        "id, slug, name_ro, medical_name, tissue, default_level, description_ro, educational_note_ro",
-      )
-      .limit(80),
+    educational_note_en?: string | null;
+    condition_category?: string | null;
+    aliases_ro?: string[] | null;
+    aliases_en?: string[] | null;
+    keywords_ro?: string[] | null;
+    keywords_en?: string[] | null;
+    typical_duration_ro?: string | null;
+    typical_duration_en?: string | null;
+    common_causes_ro?: string | null;
+    common_causes_en?: string | null;
+    self_care_ro?: string | null;
+    self_care_en?: string | null;
+    doctor_when_ro?: string | null;
+    doctor_when_en?: string | null;
+    emergency_signs_ro?: string | null;
+    emergency_signs_en?: string | null;
+    prevention_ro?: string | null;
+    prevention_en?: string | null;
+    icd10_code?: string | null;
+    triage_priority?: number | null;
+    active?: boolean | null;
+    review_status?: string | null;
+    medical_validation_status?: string | null;
+  }>(supabase.from("conditions").select("*").limit(120));
+
+  const conditionEvidenceRows = await safeSelect<{
+    condition_id: string;
+    sources?: MedicalSourceCitation[] | null;
+  }>(supabase.from("condition_evidence_catalog").select("condition_id, sources").limit(120));
+
+  const conditionSourcesById = new Map(
+    conditionEvidenceRows.map((row) => [row.condition_id, row.sources ?? []]),
   );
 
   const triageQuestionRows = await safeSelect<{
@@ -3389,26 +4250,53 @@ async function getGeneralMedicalContext(
     tissue?: string | null;
     body_region?: string | null;
     question_ro: string;
+    question_en: string;
   }>(
     supabase
       .from("triage_questions")
-      .select("id, slug, tissue, body_region, question_ro")
+      .select("id, slug, tissue, body_region, question_ro, question_en")
       .eq("active", true)
       .limit(40),
+  );
+
+  const triageOptionRows = await safeSelect<{
+    id: string;
+    question_id: string;
+    option_key: string;
+    label_ro: string;
+    label_en: string;
+    finding_ro?: string | null;
+    finding_en: string;
+    score_usor: number;
+    score_mediu: number;
+    score_consultare_doctor: number;
+    sort_order: number;
+  }>(
+    supabase
+      .from("triage_options")
+      .select(
+        "id, question_id, option_key, label_ro, label_en, finding_ro, finding_en, score_usor, score_mediu, score_consultare_doctor, sort_order",
+      )
+      .order("sort_order")
+      .limit(120),
   );
 
   const triageRuleRows = await safeSelect<{
     id: string;
     slug: string;
     name_ro: string;
+    name_en: string;
     tissue?: string | null;
     body_region?: string | null;
     level?: string | null;
     explanation_ro: string;
+    explanation_en: string;
   }>(
     supabase
       .from("triage_rules")
-      .select("id, slug, name_ro, tissue, body_region, level, explanation_ro")
+      .select(
+        "id, slug, name_ro, name_en, tissue, body_region, level, explanation_ro, explanation_en",
+      )
       .limit(40),
   );
 
@@ -3419,78 +4307,204 @@ async function getGeneralMedicalContext(
       supabase.from("pain_classifications").select("*").limit(60),
     ),
     safeSelect<Record<string, unknown>>(supabase.from("muscles").select("*").limit(80)),
+    safeSelect<Record<string, unknown>>(supabase.from("muscle_groups").select("*").limit(40)),
+    safeSelect<Record<string, unknown>>(
+      supabase.from("muscle_pain_profiles").select("*").limit(40),
+    ),
     safeSelect<Record<string, unknown>>(supabase.from("organs").select("*").limit(80)),
   ]);
 
+  const neutralContextKeys = new Set([
+    "id",
+    "slug",
+    "latin_name",
+    "name_latin",
+    "body_region",
+    "tissue",
+    "active",
+    "sort_order",
+    "default_level",
+    "level",
+    "is_group_label",
+  ]);
+
+  const localizedRecordText = (row: Record<string, unknown>) =>
+    Object.entries(row)
+      .filter(([key, value]) => {
+        if (
+          !(
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean" ||
+            (Array.isArray(value) && value.every((item) => typeof item === "string"))
+          )
+        ) {
+          return false;
+        }
+
+        if (key.endsWith("_ro")) return !en;
+        if (key.endsWith("_en")) return en;
+        if (key === "english_name") return en;
+        return neutralContextKeys.has(key);
+      })
+      .map(([key, value]) =>
+        `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`,
+      )
+      .join("; ");
+
   const optionalContext = optionalTables.flatMap((rows, tableIndex) => {
-    const tableNames = ["body_regions", "movement_patterns", "pain_classifications", "muscles", "organs"];
-    return rows.map((row, index) => {
-      const values = Object.entries(row)
-        .filter(
-          ([, value]) =>
-            typeof value === "string" || typeof value === "number" || typeof value === "boolean",
-        )
-        .map(([key, value]) => `${key}: ${String(value)}`)
-        .join("; ");
-      return makeVirtualContext(
-        tableNames[tableIndex],
-        tableNames[tableIndex],
-        `Date Santix: ${tableNames[tableIndex]} #${index + 1}`,
-        values,
-        3,
-      );
-    });
+    const tableNames = [
+      "body_regions",
+      "movement_patterns",
+      "pain_classifications",
+      "muscles",
+      "muscle_groups",
+      "muscle_pain_profiles",
+      "organs",
+    ];
+    return rows
+      .map((row, index) => {
+        const values = localizedRecordText(row);
+        if (!values) return null;
+        return makeVirtualContext(
+          tableNames[tableIndex],
+          tableNames[tableIndex],
+          `${en ? "Santix data" : "Date Santix"}: ${tableNames[tableIndex]} #${index + 1}`,
+          values,
+          3,
+        );
+      })
+      .filter((entry): entry is KnowledgeEntry => Boolean(entry));
   });
 
   const symptomContext = symptomsRows.map((row) =>
     makeVirtualContext(
       "symptoms",
       row.red_flag ? "semne_alarma" : "simptome",
-      `Simptom: ${row.name_ro}`,
-      [
-        row.description_ro,
-        row.keywords_ro?.length ? `Cuvinte cheie: ${row.keywords_ro.join(", ")}` : "",
-        row.red_flag ? "Acest simptom este marcat ca semn de alarmă." : "",
-      ]
+      en ? `Symptom: ${row.name_en ?? row.name_ro}` : `Simptom: ${row.name_ro}`,
+      (en
+        ? [
+            row.description_en,
+            row.keywords_en?.length ? `Keywords: ${row.keywords_en.join(", ")}` : "",
+            row.red_flag ? "This symptom is marked as a warning sign." : "",
+          ]
+        : [
+            row.description_ro,
+            row.keywords_ro?.length ? `Cuvinte cheie: ${row.keywords_ro.join(", ")}` : "",
+            row.red_flag ? "Acest simptom este marcat ca semn de alarmă." : "",
+          ]
+      )
         .filter(Boolean)
         .join(" "),
       row.red_flag ? 8 : 5,
     ),
   );
 
-  const conditionContext = conditionRows.map((row) =>
-    makeVirtualContext(
-      "conditions",
-      "cauze_posibile",
-      `Afecțiune posibilă: ${row.name_ro}`,
-      [
-        row.medical_name ? `Denumire medicală: ${row.medical_name}.` : "",
-        row.default_level ? `Nivel implicit: ${row.default_level}.` : "",
-        row.description_ro,
-        row.educational_note_ro,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      row.default_level === "consultare_doctor" ? 7 : 5,
-    ),
-  );
+  const conditionContext = conditionRows
+    .filter(
+      (row) =>
+        row.active !== false &&
+        row.review_status !== "archived" &&
+        ["evidence_reviewed", "clinician_verified"].includes(row.medical_validation_status ?? ""),
+    )
+    .map((row) =>
+      makeVirtualContext(
+        "conditions",
+        "cauze_posibile",
+        en
+          ? `Possible condition: ${row.popular_name_en ?? row.name_en ?? row.name_ro}`
+          : `Afecțiune posibilă: ${row.popular_name_ro ?? row.name_ro}`,
+        (en
+          ? [
+              row.medical_validation_status === "clinician_verified"
+                ? "Validation: clinician verified."
+                : "Validation: evidence reviewed; not yet clinician verified.",
+              row.scientific_name ? `Scientific name: ${row.scientific_name}.` : "",
+              row.condition_category ? `Category: ${row.condition_category}.` : "",
+              row.default_level ? `Default level: ${row.default_level}.` : "",
+              row.triage_priority ? `Triage priority: ${row.triage_priority}.` : "",
+              row.aliases_en?.length ? `Aliases: ${row.aliases_en.join(", ")}.` : "",
+              row.keywords_en?.length ? `Keywords: ${row.keywords_en.join(", ")}.` : "",
+              row.description_en,
+              row.typical_duration_en ? `Typical duration: ${row.typical_duration_en}` : "",
+              row.common_causes_en ? `Common causes: ${row.common_causes_en}` : "",
+              row.self_care_en ? `Initial self-care: ${row.self_care_en}` : "",
+              row.doctor_when_en ? `When to seek medical care: ${row.doctor_when_en}` : "",
+              row.emergency_signs_en ? `Emergency signs: ${row.emergency_signs_en}` : "",
+              row.prevention_en ? `Prevention: ${row.prevention_en}` : "",
+              row.icd10_code ? `ICD-10: ${row.icd10_code}.` : "",
+              row.educational_note_en,
+            ]
+          : [
+              row.medical_validation_status === "clinician_verified"
+                ? "Validare: verificată de clinician."
+                : "Validare: revizuită pe baza dovezilor; neverificată încă de clinician.",
+              row.scientific_name ? `Denumire științifică: ${row.scientific_name}.` : "",
+              row.condition_category ? `Categorie: ${row.condition_category}.` : "",
+              row.default_level ? `Nivel implicit: ${row.default_level}.` : "",
+              row.triage_priority ? `Prioritate triaj: ${row.triage_priority}.` : "",
+              row.aliases_ro?.length ? `Aliasuri: ${row.aliases_ro.join(", ")}.` : "",
+              row.keywords_ro?.length ? `Cuvinte cheie: ${row.keywords_ro.join(", ")}.` : "",
+              row.description_ro,
+              row.typical_duration_ro ? `Durată tipică: ${row.typical_duration_ro}` : "",
+              row.common_causes_ro ? `Cauze frecvente: ${row.common_causes_ro}` : "",
+              row.self_care_ro ? `Îngrijire inițială: ${row.self_care_ro}` : "",
+              row.doctor_when_ro ? `Când se recomandă medic: ${row.doctor_when_ro}` : "",
+              row.emergency_signs_ro ? `Semne de urgență: ${row.emergency_signs_ro}` : "",
+              row.prevention_ro ? `Prevenție: ${row.prevention_ro}` : "",
+              row.icd10_code ? `ICD-10: ${row.icd10_code}.` : "",
+              row.educational_note_ro,
+            ]
+        )
+          .filter(Boolean)
+          .join(" "),
+        row.triage_priority ?? (row.default_level === "consultare_doctor" ? 7 : 5),
+        conditionSourcesById.get(row.id) ?? [],
+      ),
+    );
+
+  const triageQuestionsById = new Map(triageQuestionRows.map((row) => [row.id, row]));
 
   const triageQuestionContext = triageQuestionRows.map((row) =>
     makeVirtualContext(
       "triage_questions",
       "intrebari_clarificare",
-      `Întrebare de triaj: ${row.slug}`,
-      row.question_ro,
+      en ? `Triage question: ${row.slug}` : `Întrebare de triaj: ${row.slug}`,
+      en ? row.question_en : row.question_ro,
       5,
     ),
   );
+
+  const triageOptionContext = triageOptionRows.flatMap((row) => {
+    const question = triageQuestionsById.get(row.question_id);
+    if (!question) return [];
+    return [
+      makeVirtualContext(
+        "triage_options",
+        "triage_option",
+        en
+          ? `Triage option for ${question.slug}: ${row.option_key}`
+          : `Opțiune de triaj pentru ${question.slug}: ${row.option_key}`,
+        en
+          ? `${question.question_en} Answer: ${row.label_en}. Finding: ${row.finding_en}.`
+          : `${question.question_ro} Răspuns: ${row.label_ro}. Concluzie: ${row.finding_ro ?? ""}.`,
+        row.score_consultare_doctor > 0 ? 8 : 5,
+      ),
+    ];
+  });
 
   const triageRuleContext = triageRuleRows.map((row) =>
     makeVirtualContext(
       "triage_rules",
       "triage_rule",
-      `Regulă de triaj: ${row.name_ro}`,
-      [row.level ? `Nivel: ${row.level}.` : "", row.explanation_ro].filter(Boolean).join(" "),
+      en ? `Triage rule: ${row.name_en}` : `Regulă de triaj: ${row.name_ro}`,
+      (
+        en
+          ? [row.level ? `Level: ${row.level}.` : "", row.explanation_en]
+          : [row.level ? `Nivel: ${row.level}.` : "", row.explanation_ro]
+      )
+        .filter(Boolean)
+        .join(" "),
       row.level === "consultare_doctor" ? 9 : 6,
     ),
   );
@@ -3499,16 +4513,19 @@ async function getGeneralMedicalContext(
     ...ragRows.map((entry) => ({
       ...entry,
       title_ro: `${entry.retrieval_source === "semantic" ? "Rezultat semantic" : "Rezultat keyword"}: ${entry.title_ro}`,
+      title_en: `${entry.retrieval_source === "semantic" ? "Semantic result" : "Keyword result"}: ${entry.title_en ?? entry.title_ro}`,
       priority: Math.min(10, (entry.priority ?? 4) + 2),
     })),
     ...symptomContext,
     ...conditionContext,
     ...triageQuestionContext,
+    ...triageOptionContext,
     ...triageRuleContext,
     ...optionalContext,
     ...selectionContext.map((entry) => ({
       ...entry,
       title_ro: `Indiciu din selecția 3D: ${entry.title_ro}`,
+      title_en: `3D selection context: ${entry.title_en ?? entry.title_ro}`,
       priority: Math.max(1, entry.priority - 2),
     })),
   ];
@@ -3518,20 +4535,70 @@ async function getGeneralMedicalContext(
 
 async function getGuardrailContext(
   supabase: ReturnType<typeof createUserSupabaseClient>,
+  lang: "ro" | "en" = "ro",
 ): Promise<KnowledgeEntry[]> {
-  const rows = await safeSelect<{ id: string; name: string; instruction_ro: string }>(
-    supabase.from("ai_guardrails").select("id, name, instruction_ro").eq("active", true).limit(20),
+  type GuardrailRow = {
+    id: string;
+    name: string;
+    instruction_ro: string;
+    instruction_en: string | null;
+    severity_level: "low" | "medium" | "critical";
+    fallback_message_ro: string | null;
+    fallback_message_en: string | null;
+    category: "safety" | "clinical" | "formatting";
+  };
+
+  const rows = await safeSelect<GuardrailRow>(
+    supabase
+      .from("ai_guardrails")
+      .select(
+        "id, name, instruction_ro, instruction_en, severity_level, fallback_message_ro, fallback_message_en, category",
+      )
+      .eq("active", true)
+      .in("category", ["safety", "clinical"])
+      .limit(20),
   );
 
-  return rows.map((row) =>
-    makeVirtualContext(
-      "ai_guardrails",
-      "guardrail",
-      `Regulă Santix: ${row.name}`,
-      row.instruction_ro,
-      10,
-    ),
+  return rows.map((row) => {
+    const instruction =
+      lang === "en" ? row.instruction_en || row.instruction_ro : row.instruction_ro;
+    const title =
+      lang === "en"
+        ? `Santix ${row.category} rule: ${row.name}`
+        : `Regulă Santix ${row.category}: ${row.name}`;
+
+    return {
+      ...makeVirtualContext("ai_guardrails", "guardrail", title, instruction, 10),
+      id: row.id,
+      metadata: {
+        name: row.name,
+        severity_level: row.severity_level,
+        category: row.category,
+        fallback_message_ro: row.fallback_message_ro,
+        fallback_message_en: row.fallback_message_en,
+      },
+    };
+  });
+}
+
+function getCriticalGuardrailFallback(
+  context: KnowledgeEntry[],
+  ruleName: string,
+  lang: "ro" | "en" = "ro",
+) {
+  const guardrail = context.find(
+    (entry) =>
+      entry.category === "guardrail" &&
+      entry.metadata?.name === ruleName &&
+      entry.metadata?.severity_level === "critical",
   );
+
+  const fallback =
+    lang === "en"
+      ? guardrail?.metadata?.fallback_message_en
+      : guardrail?.metadata?.fallback_message_ro;
+
+  return typeof fallback === "string" && fallback.trim() ? fallback.trim() : null;
 }
 
 function isVaguePainQuestion(question: string) {
@@ -3548,7 +4615,11 @@ function isAmbiguousShortReply(question: string) {
   );
 }
 
-function buildUnclearAnswer(input: z.infer<typeof InputSchema>, symptomState: SymptomState, lang: "ro" | "en" = "ro") {
+function buildUnclearAnswer(
+  input: z.infer<typeof InputSchema>,
+  symptomState: SymptomState,
+  lang: "ro" | "en" = "ro",
+) {
   if (
     (isAmbiguousShortReply(input.question) || isContextualReply(input.question, symptomState)) &&
     symptomState.last_question_intent
@@ -3568,7 +4639,10 @@ function buildUnclearAnswer(input: z.infer<typeof InputSchema>, symptomState: Sy
   return `Nu am înțeles exact întrebarea. Te referi la ${input.structureName}${region}?`;
 }
 
-function buildStructureClarificationAnswer(input: z.infer<typeof InputSchema>, lang: "ro" | "en" = "ro") {
+function buildStructureClarificationAnswer(
+  input: z.infer<typeof InputSchema>,
+  lang: "ro" | "en" = "ro",
+) {
   const structure = input.structureName;
   const region = normalizeForScope(input.bodyRegion);
 
@@ -3625,20 +4699,25 @@ function buildContextSwitchAnswer(
   }
 
   if (contextSwitch.should_switch_context && contextSwitch.target_layer === "organs") {
+    const organTarget = ORGAN_CONTEXT_TARGETS.find(
+      (target) => target.slug === contextSwitch.target_structure_slug,
+    );
     const organLabel =
-      ORGAN_CONTEXT_TARGETS.find((target) => target.slug === contextSwitch.target_structure_slug)
-        ?.label ?? (en ? "the mentioned organ" : "organul menționat");
+      contextSwitch.target_display_name ??
+      (en ? organTarget?.labelEn : organTarget?.labelRo) ??
+      (en ? "the mentioned organ" : "organul menționat");
     return en
       ? `The question seems to be about ${organLabel}. Switching to Organs. Where do you feel the pain, how severe is it, and did it appear suddenly or gradually?`
       : `Întrebarea pare despre ${organLabel}. Te mut pe Organe. Unde simți durerea, cât de severă este și a apărut brusc sau treptat?`;
   }
 
   if (contextSwitch.should_switch_context && contextSwitch.target_layer === "skeleton") {
-    const urgentPrefix = contextSwitch.selected_context_fit === "red_flag_priority"
-      ? en
-        ? "If the pain is severe, there is deformity, numbness, or you cannot move/support the area, consult a doctor urgently. "
-        : "Dacă durerea este severă, există deformare, amorțeală sau nu poți mișca/sprijini zona, consultă urgent un medic. "
-      : "";
+    const urgentPrefix =
+      contextSwitch.selected_context_fit === "red_flag_priority"
+        ? en
+          ? "If the pain is severe, there is deformity, numbness, or you cannot move/support the area, consult a doctor urgently. "
+          : "Dacă durerea este severă, există deformare, amorțeală sau nu poți mișca/sprijini zona, consultă urgent un medic. "
+        : "";
     return en
       ? `${urgentPrefix}Although you selected a muscle, the description may also involve the bone or joint. Switching to Skeleton. Is there swelling, deformity, or difficulty moving?`
       : `${urgentPrefix}Deși ai selectat un mușchi, descrierea poate implica și osul sau articulația. Te mut pe Schelet. Ai umflătură, deformare sau dificultate la mișcare?`;
@@ -3648,7 +4727,10 @@ function buildContextSwitchAnswer(
     contextSwitch.should_switch_context &&
     contextSwitch.selected_context_fit === "different_body_region_detected"
   ) {
-    const region = contextSwitch.target_body_region ?? (en ? "the mentioned area" : "zona menționată");
+    const region =
+      contextSwitch.target_display_name ??
+      contextSwitch.target_body_region ??
+      (en ? "the mentioned area" : "zona menționată");
     return en
       ? `Your question is about ${region}, not the current selection, so I'm switching context. Does the pain occur only with movement or also at rest?`
       : `Întrebarea ta este despre ${region}, nu despre selecția curentă, așa că schimb contextul. Durerea apare doar la mișcare sau și în repaus?`;
@@ -3669,7 +4751,7 @@ export function buildClarifyingAnswer(
   if (input.tissue === "organ") {
     if (symptomState.next_step === "urgent" || symptomState.red_flags_detected) {
       const reasons = symptomState.red_flag_reasons.length
-        ? ` (${symptomState.red_flag_reasons.join(", ")})`
+        ? ` (${localizeTermKeys(symptomState.red_flag_reasons, RED_FLAG_TERMS, lang).join(", ")})`
         : "";
       return en
         ? `What you describe may be a warning sign${reasons}. Urgent medical consultation is recommended. If symptoms are intense, you have breathing difficulties, chest pain, fainting, confusion, or blood in urine/stool/vomit, go to the emergency room.`
@@ -3719,8 +4801,12 @@ export function buildClarifyingAnswer(
 
   const region = normalizeForScope(input.bodyRegion);
   const urgentRegion = en
-    ? region.includes("brat") ? "the arm appears deformed and you can't move it" : "the area is deformed and you can't move it"
-    : region.includes("brat") ? "brațul pare deformat, nu îl poți mișca" : "zona este deformată, nu o poți mișca";
+    ? region.includes("brat")
+      ? "the arm appears deformed and you can't move it"
+      : "the area is deformed and you can't move it"
+    : region.includes("brat")
+      ? "brațul pare deformat, nu îl poți mișca"
+      : "zona este deformată, nu o poți mișca";
   const initialQuestion = en
     ? "I'm sorry to hear you're in pain. Did it appear after an impact/fall or more after exertion/strain?"
     : "Îmi pare rău că te doare. A apărut după lovitură/căzătură sau mai mult după efort/încordare?";
@@ -3822,51 +4908,90 @@ export function buildClarifyingAnswer(
   }
 }
 
-function buildFollowUpAnswer(input: z.infer<typeof InputSchema>, context: KnowledgeEntry[], lang: "ro" | "en" = "ro") {
+function buildFollowUpAnswer(
+  input: z.infer<typeof InputSchema>,
+  context: KnowledgeEntry[],
+  lang: "ro" | "en" = "ro",
+) {
   const en = lang === "en";
-  // For English, never embed Romanian DB content — it would produce a mixed-language response.
-  // English section bodies always use static EN strings; Ollama provides the actual EN content
-  // when available. For Romanian, use DB content as usual.
-  const causes = en ? [] : splitSentences(findContext(context, "cauze_posibile")).slice(0, 4);
-  const symptoms = en ? [] : splitSentences(findContext(context, "simptome")).slice(0, 4);
-  const recommendations = en ? [] : splitSentences(findContext(context, "recomandari")).slice(0, 4);
-  const redFlags = en ? [] : splitSentences(findContext(context, "semne_alarma")).slice(0, 4);
+  const causes = splitSentences(findContext(context, "cauze_posibile", lang)).slice(0, 4);
+  const symptoms = splitSentences(findContext(context, "simptome", lang)).slice(0, 4);
+  const recommendations = splitSentences(findContext(context, "recomandari", lang)).slice(0, 4);
+  const redFlags = splitSentences(findContext(context, "semne_alarma", lang)).slice(0, 4);
 
   const severe = en
-    ? hasAny(input.question, ["severe", "unbearable", "can't move", "cannot move", "deform", "numb", "weakness", "snap", "fell", "hit", "blood"])
-    : hasAny(input.question, ["sever", "insuportabil", "nu pot", "nu pot misca", "nu pot folosi", "deform", "amorteala", "slabiciune", "pocnet", "cazut", "lovitura", "sange"]);
+    ? hasAny(input.question, [
+        "severe",
+        "unbearable",
+        "can't move",
+        "cannot move",
+        "deform",
+        "numb",
+        "weakness",
+        "snap",
+        "fell",
+        "hit",
+        "blood",
+      ])
+    : hasAny(input.question, [
+        "sever",
+        "insuportabil",
+        "nu pot",
+        "nu pot misca",
+        "nu pot folosi",
+        "deform",
+        "amorteala",
+        "slabiciune",
+        "pocnet",
+        "cazut",
+        "lovitura",
+        "sange",
+      ]);
 
-  return formatSixSectionAnswer({
-    summary: severe
-      ? input.tissue === "organ"
-        ? en
-          ? `For ${input.structureName}, the description includes signs that may require medical evaluation, especially if sudden, severe, or associated with breathing difficulties, chest pain, or blood in urine/stool.`
-          : `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă sunt bruște, severe sau asociate cu respirație dificilă, durere în piept ori sânge în urină/scaun.`
+  return formatSixSectionAnswer(
+    {
+      summary: severe
+        ? input.tissue === "organ"
+          ? en
+            ? `For ${input.structureName}, the description includes signs that may require medical evaluation, especially if sudden, severe, or associated with breathing difficulties, chest pain, or blood in urine/stool.`
+            : `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă sunt bruște, severe sau asociate cu respirație dificilă, durere în piept ori sânge în urină/scaun.`
+          : en
+            ? `For ${input.structureName}, the description includes signs that may require medical evaluation, especially if they appeared after trauma or you cannot use the area.`
+            : `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă au apărut după traumatism sau nu poți folosi zona.`
         : en
-          ? `For ${input.structureName}, the description includes signs that may require medical evaluation, especially if they appeared after trauma or you cannot use the area.`
-          : `Pentru ${input.structureName}, descrierea include semne care pot necesita evaluare medicală, mai ales dacă au apărut după traumatism sau nu poți folosi zona.`
-      : en
-        ? `For ${input.structureName}, I can provide educational guidance based on Santix data, without a final diagnosis.`
-        : `Pentru ${input.structureName}, pot orienta educațional răspunsul pe baza datelor Santix, fără diagnostic final.`,
-    causes,
-    aggravators: symptoms.length
-      ? symptoms
-      : [en
-          ? "Increased intensity, swelling, bruising, functional limitation, or worsening over time may indicate a more significant problem."
-          : "Intensitatea crescută, umflarea, vânătaia, limitarea funcțională sau agravarea în timp pot indica o problemă mai importantă."],
-    safeActions: recommendations.length
-      ? recommendations
-      : [en ? "Avoid straining the painful area and monitor symptom progression." : "Evită solicitarea zonei dureroase și urmărește evoluția simptomelor."],
-    consult: redFlags.length
-      ? redFlags
-      : input.tissue === "organ"
-        ? [en
-            ? "Consult a doctor urgently for chest pain, breathing difficulties, severe abdominal pain, fainting, confusion, or blood in urine/stool/vomit."
-            : "Consultă urgent un medic pentru durere în piept, dificultăți de respirație, durere abdominală severă, leșin, confuzie sau sânge în urină/scaun/vărsături."]
-        : [en
-            ? "Consult a doctor for severe pain, deformity, numbness, weakness, or inability to use the area."
-            : "Consultă un medic pentru durere severă, deformare, amorțeală, slăbiciune sau imposibilitate de folosire."],
-  }, lang);
+          ? `For ${input.structureName}, I can provide educational guidance based on Santix data, without a final diagnosis.`
+          : `Pentru ${input.structureName}, pot orienta educațional răspunsul pe baza datelor Santix, fără diagnostic final.`,
+      causes,
+      aggravators: symptoms.length
+        ? symptoms
+        : [
+            en
+              ? "Increased intensity, swelling, bruising, functional limitation, or worsening over time may indicate a more significant problem."
+              : "Intensitatea crescută, umflarea, vânătaia, limitarea funcțională sau agravarea în timp pot indica o problemă mai importantă.",
+          ],
+      safeActions: recommendations.length
+        ? recommendations
+        : [
+            en
+              ? "Avoid straining the painful area and monitor symptom progression."
+              : "Evită solicitarea zonei dureroase și urmărește evoluția simptomelor.",
+          ],
+      consult: redFlags.length
+        ? redFlags
+        : input.tissue === "organ"
+          ? [
+              en
+                ? "Consult a doctor urgently for chest pain, breathing difficulties, severe abdominal pain, fainting, confusion, or blood in urine/stool/vomit."
+                : "Consultă urgent un medic pentru durere în piept, dificultăți de respirație, durere abdominală severă, leșin, confuzie sau sânge în urină/scaun/vărsături.",
+            ]
+          : [
+              en
+                ? "Consult a doctor for severe pain, deformity, numbness, weakness, or inability to use the area."
+                : "Consultă un medic pentru durere severă, deformare, amorțeală, slăbiciune sau imposibilitate de folosire.",
+            ],
+    },
+    lang,
+  );
 }
 
 function buildSelectionSpecificAnswer(
@@ -3875,38 +5000,50 @@ function buildSelectionSpecificAnswer(
   lang: "ro" | "en" = "ro",
 ) {
   const en = lang === "en";
-  // For English, skip Romanian DB content to avoid mixed-language responses.
-  const anatomy = en ? [] : splitSentences(findContext(context, "anatomie")).slice(0, 3);
-  const recommendations = en ? [] : splitSentences(findContext(context, "recomandari")).slice(0, 2);
-  const symptoms = en ? [] : splitSentences(findContext(context, "simptome")).slice(0, 2);
+  const anatomy = splitSentences(findContext(context, "anatomie", lang)).slice(0, 3);
+  const recommendations = splitSentences(findContext(context, "recomandari", lang)).slice(0, 2);
+  const symptoms = splitSentences(findContext(context, "simptome", lang)).slice(0, 2);
 
-  return formatSixSectionAnswer({
-    summary: en
-      ? `${input.structureName} is the subject of the current selection.`
-      : `${input.structureName} este subiectul selecției curente.`,
-    causes: anatomy.length
-      ? anatomy
-      : [en
-          ? `It is a structure of type ${input.tissue}, included in the Santix model for the selected region.`
-          : `Este o structură de tip ${input.tissue}, încadrată în modelul Santix pentru regiunea selectată.`],
-    aggravators: symptoms.length
-      ? symptoms
-      : [en
-          ? "Santix data does not indicate specific aggravating factors for this structure."
-          : "Datele Santix nu indică factori agravanți specifici pentru această structură."],
-    safeActions: recommendations.length
-      ? recommendations
-      : input.tissue === "organ"
-        ? [en
-            ? "Use this information as educational guidance and monitor associated general symptoms, without self-diagnosis."
-            : "Folosește informația ca orientare educațională și urmărește simptomele generale asociate, fără autodiagnostic."]
-        : [en
-            ? "Use this information as educational guidance and avoid overloading the area if pain occurs."
-            : "Folosește informația ca orientare educațională și evită suprasolicitarea zonei dacă apare durere."],
-    consult: [en
-      ? "Consult a doctor if the pain is severe, persists, worsens, or warning signs appear."
-      : "Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă."],
-  }, lang);
+  return formatSixSectionAnswer(
+    {
+      summary: en
+        ? `${input.structureName} is the subject of the current selection.`
+        : `${input.structureName} este subiectul selecției curente.`,
+      causes: anatomy.length
+        ? anatomy
+        : [
+            en
+              ? `It is a structure of type ${input.tissue}, included in the Santix model for the selected region.`
+              : `Este o structură de tip ${input.tissue}, încadrată în modelul Santix pentru regiunea selectată.`,
+          ],
+      aggravators: symptoms.length
+        ? symptoms
+        : [
+            en
+              ? "Santix data does not indicate specific aggravating factors for this structure."
+              : "Datele Santix nu indică factori agravanți specifici pentru această structură.",
+          ],
+      safeActions: recommendations.length
+        ? recommendations
+        : input.tissue === "organ"
+          ? [
+              en
+                ? "Use this information as educational guidance and monitor associated general symptoms, without self-diagnosis."
+                : "Folosește informația ca orientare educațională și urmărește simptomele generale asociate, fără autodiagnostic.",
+            ]
+          : [
+              en
+                ? "Use this information as educational guidance and avoid overloading the area if pain occurs."
+                : "Folosește informația ca orientare educațională și evită suprasolicitarea zonei dacă apare durere.",
+            ],
+      consult: [
+        en
+          ? "Consult a doctor if the pain is severe, persists, worsens, or warning signs appear."
+          : "Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă.",
+      ],
+    },
+    lang,
+  );
 }
 
 function buildOutOfScopeAnswer(lang: "ro" | "en" = "ro") {
@@ -3922,13 +5059,12 @@ function buildAppSpecificAnswer(context: KnowledgeEntry[], lang: "ro" | "en" = "
       : "Nu am informații suficiente în baza Santix despre acest aspect al aplicației. Nu vreau să inventez servicii, prețuri, abonamente sau funcții care nu sunt documentate.";
   }
 
-  if (lang === "en") {
-    return "I can only answer based on available Santix information. Please ask a specific question about the selected structure and I will do my best to help.";
-  }
   return [
-    "Pot răspunde doar pe baza informațiilor Santix disponibile:",
+    lang === "en"
+      ? "I can answer only from the available Santix information:"
+      : "Pot răspunde doar pe baza informațiilor Santix disponibile:",
     "",
-    ...context.slice(0, 4).map((entry, index) => `${index + 1}. ${entry.content_ro}`),
+    ...context.slice(0, 4).map((entry, index) => `${index + 1}. ${knowledgeContent(entry, lang)}`),
   ].join("\n");
 }
 
@@ -3940,13 +5076,23 @@ function buildGeneralMedicalFallback(
 ) {
   const en = lang === "en";
   const redFlags = unique([
-    ...route.entities.redFlags,
-    ...splitSentences(findContext(context, "semne_alarma"), [
-      "deformare vizibilă",
-      "durere severă",
-      "amorțeală sau slăbiciune",
-      "imposibilitatea de a mișca sau sprijini zona",
-    ]),
+    ...localizeTermKeys(route.entities.redFlags, RED_FLAG_TERMS, lang),
+    ...splitSentences(
+      findContext(context, "semne_alarma", lang),
+      en
+        ? [
+            "visible deformity",
+            "severe pain",
+            "numbness or weakness",
+            "inability to move or bear weight on the area",
+          ]
+        : [
+            "deformare vizibilă",
+            "durere severă",
+            "amorțeală sau slăbiciune",
+            "imposibilitatea de a mișca sau sprijini zona",
+          ],
+    ),
   ]).slice(0, 5);
   const hasTraumaContext = route.entities.contexts.some((item) =>
     ["căzătură", "lovitură", "sport"].includes(item),
@@ -3954,21 +5100,39 @@ function buildGeneralMedicalFallback(
   const hasMovementPain =
     route.entities.symptoms.includes("limitare de mișcare") ||
     hasAny(input.question, ["miscare", "misc", "ridic", "indoi", "alerg", "merg"]);
-  const questions = input.tissue === "organ"
-    ? en
-      ? ["Where do you feel the pain or discomfort?", "Is it mild, moderate, or severe, and did it appear suddenly or gradually?", "Do you have fever, nausea, vomiting, breathing difficulties, chest pain, or blood in urine/stool?"]
-      : ["Unde simți durerea sau disconfortul?", "Este ușoară, moderată sau severă și a apărut brusc sau treptat?", "Ai febră, greață, vărsături, dificultăți de respirație, durere în piept sau sânge în urină/scaun?"]
-    : hasTraumaContext
-    ? en
-      ? ["How severe is the pain: mild, moderate, or severe?", "Is there deformity, numbness, weakness, or can you move the area normally?"]
-      : ["Cât de severă este durerea: ușoară, moderată sau severă?", "Ai deformare, amorțeală, slăbiciune sau nu poți mișca zona normal?"]
-    : hasMovementPain
+  const questions =
+    input.tissue === "organ"
       ? en
-        ? ["What movement worsens the pain?", "Does the pain occur only with movement or also at rest?"]
-        : ["Ce mișcare accentuează durerea?", "Durerea apare doar la mișcare sau și în repaus?"]
-      : en
-        ? ["When did the pain appear?", "Is it mild, moderate, or severe?"]
-        : ["Când a apărut durerea?", "Este ușoară, moderată sau severă?"];
+        ? [
+            "Where do you feel the pain or discomfort?",
+            "Is it mild, moderate, or severe, and did it appear suddenly or gradually?",
+            "Do you have fever, nausea, vomiting, breathing difficulties, chest pain, or blood in urine/stool?",
+          ]
+        : [
+            "Unde simți durerea sau disconfortul?",
+            "Este ușoară, moderată sau severă și a apărut brusc sau treptat?",
+            "Ai febră, greață, vărsături, dificultăți de respirație, durere în piept sau sânge în urină/scaun?",
+          ]
+      : hasTraumaContext
+        ? en
+          ? [
+              "How severe is the pain: mild, moderate, or severe?",
+              "Is there deformity, numbness, weakness, or can you move the area normally?",
+            ]
+          : [
+              "Cât de severă este durerea: ușoară, moderată sau severă?",
+              "Ai deformare, amorțeală, slăbiciune sau nu poți mișca zona normal?",
+            ]
+        : hasMovementPain
+          ? en
+            ? [
+                "What movement worsens the pain?",
+                "Does the pain occur only with movement or also at rest?",
+              ]
+            : ["Ce mișcare accentuează durerea?", "Durerea apare doar la mișcare sau și în repaus?"]
+          : en
+            ? ["When did the pain appear?", "Is it mild, moderate, or severe?"]
+            : ["Când a apărut durerea?", "Este ușoară, moderată sau severă?"];
 
   const urgentIntro =
     route.category === "red_flag_or_urgent"
@@ -3987,31 +5151,52 @@ function buildGeneralMedicalFallback(
           ? "I can provide educational guidance, without diagnosis. Pain after exertion, a fall, or impact can have different causes — from contusion/overuse to sprain, dislocation, or fracture — depending on context."
           : "Pot să te orientez educațional, fără diagnostic. Durerea după efort, căzătură sau lovitură poate avea cauze diferite, de la contuzie/suprasolicitare până la entorsă, luxație sau fractură, în funcție de context.";
 
-  return formatSixSectionAnswer({
-    summary: [route.conflictNote, urgentIntro].filter(Boolean).join(" "),
-    causes: [
-      route.entities.bodyRegionLabel
-        ? en ? `Indicated area: ${route.entities.bodyRegionLabel}.` : `Zona indicată: ${route.entities.bodyRegionLabel}.`
-        : en ? "The indicated area is not yet clear." : "Zona indicată nu este clară încă.",
-      route.entities.symptoms.length
-        ? en ? `Detected symptoms: ${route.entities.symptoms.join(", ")}.` : `Simptome detectate: ${route.entities.symptoms.join(", ")}.`
-        : en ? "Detected symptoms: non-specific pain/discomfort." : "Simptome detectate: durere/disconfort nespecific.",
-      route.entities.contexts.length
-        ? en ? `Detected context: ${route.entities.contexts.join(", ")}.` : `Context detectat: ${route.entities.contexts.join(", ")}.`
-        : en ? "Detected context: unclear." : "Context detectat: neclar.",
-    ],
-    aggravators: redFlags.length
-      ? redFlags
-      : [en
-          ? "Severe pain, worsening symptoms, or inability to use the area may indicate increased risk."
-          : "Durerea severă, agravarea simptomelor sau imposibilitatea folosirii zonei pot indica risc crescut."],
-    safeActions: questions.map((question) => en ? `Clarification: ${question}` : `Clarificare: ${question}`),
-    consult: redFlags.length
-      ? redFlags
-      : [en
-          ? "Consult a doctor if the pain is severe, persists, worsens, or appears after trauma."
-          : "Consultă un medic dacă durerea este severă, persistă, se agravează sau apare după traumatism."],
-  }, lang);
+  return formatSixSectionAnswer(
+    {
+      summary: [route.conflictNote, urgentIntro].filter(Boolean).join(" "),
+      causes: [
+        route.entities.bodyRegionLabel
+          ? en
+            ? `Indicated area: ${route.entities.bodyRegionLabel}.`
+            : `Zona indicată: ${route.entities.bodyRegionLabel}.`
+          : en
+            ? "The indicated area is not yet clear."
+            : "Zona indicată nu este clară încă.",
+        route.entities.symptoms.length
+          ? en
+            ? `Detected symptoms: ${localizeTermKeys(route.entities.symptoms, SYMPTOM_TERMS, lang).join(", ")}.`
+            : `Simptome detectate: ${route.entities.symptoms.join(", ")}.`
+          : en
+            ? "Detected symptoms: non-specific pain/discomfort."
+            : "Simptome detectate: durere/disconfort nespecific.",
+        route.entities.contexts.length
+          ? en
+            ? `Detected context: ${localizeTermKeys(route.entities.contexts, CONTEXT_TERMS, lang).join(", ")}.`
+            : `Context detectat: ${route.entities.contexts.join(", ")}.`
+          : en
+            ? "Detected context: unclear."
+            : "Context detectat: neclar.",
+      ],
+      aggravators: redFlags.length
+        ? redFlags
+        : [
+            en
+              ? "Severe pain, worsening symptoms, or inability to use the area may indicate increased risk."
+              : "Durerea severă, agravarea simptomelor sau imposibilitatea folosirii zonei pot indica risc crescut.",
+          ],
+      safeActions: questions.map((question) =>
+        en ? `Clarification: ${question}` : `Clarificare: ${question}`,
+      ),
+      consult: redFlags.length
+        ? redFlags
+        : [
+            en
+              ? "Consult a doctor if the pain is severe, persists, worsens, or appears after trauma."
+              : "Consultă un medic dacă durerea este severă, persistă, se agravează sau apare după traumatism.",
+          ],
+    },
+    lang,
+  );
 }
 
 function buildDbAnswer(
@@ -4025,7 +5210,28 @@ function buildDbAnswer(
   void isFirstMessage;
   const lang = input.lang ?? "ro";
 
-  if (route.category === "out_of_scope") return buildOutOfScopeAnswer(lang);
+  if (route.category === "out_of_scope") {
+    return (
+      getCriticalGuardrailFallback(context, "medical_scope_only", lang) ??
+      buildOutOfScopeAnswer(lang)
+    );
+  }
+  if (
+    hasAny(input.question, [
+      "diagnostic sigur",
+      "diagnostic cert",
+      "pune diagnostic",
+      "diagnosticheaza",
+      "diagnostichează",
+      "give me a diagnosis",
+      "diagnose me",
+      "final diagnosis",
+      "definitive diagnosis",
+    ])
+  ) {
+    const diagnosisFallback = getCriticalGuardrailFallback(context, "no_real_diagnosis", lang);
+    if (diagnosisFallback) return diagnosisFallback;
+  }
   if (route.category === "app_specific") return buildAppSpecificAnswer(context, lang);
   if (isStructureClarificationReply(route, symptomState))
     return buildStructureClarificationAnswer(input, lang);
@@ -4047,10 +5253,11 @@ function buildDbAnswer(
     symptomState.pain_present &&
     symptomState.next_step !== "recommend" &&
     route.category !== "selection_specific";
-  // Once the pain flow has reached "recommend", don't keep replaying the recommendation
-  // on every subsequent short message — let the conversation continue normally via LLM.
   const alreadyRecommended = symptomState.next_step === "recommend";
-  if (!alreadyRecommended && (vagueQuestion || shortSymptomFollowUp || contextualReply || deterministicPainStep)) {
+  if (
+    !alreadyRecommended &&
+    (vagueQuestion || shortSymptomFollowUp || contextualReply || deterministicPainStep)
+  ) {
     return buildClarifyingAnswer(input, symptomState, lang);
   }
 
@@ -4059,23 +5266,35 @@ function buildDbAnswer(
   }
 
   if (context.length === 0) {
-    return formatSixSectionAnswer({
-      summary: lang === "en"
-        ? `I haven't found enough information in the Santix database yet for ${input.structureName}.`
-        : `Nu am găsit încă informații suficiente în baza Santix pentru ${input.structureName}.`,
-      causes: [lang === "en"
-        ? "I don't have enough information in the Santix database to answer this question with certainty."
-        : "Nu am suficiente informații în baza de date Santix pentru a răspunde sigur la această întrebare."],
-      aggravators: [lang === "en"
-        ? "I cannot evaluate aggravating factors without relevant Santix context."
-        : "Nu pot evalua factorii agravanți fără context Santix relevant."],
-      safeActions: [lang === "en"
-        ? "Rephrase the question or select a structure for which medical data exists in the Santix database."
-        : "Reformulează întrebarea sau selectează o structură pentru care există date medicale în baza Santix."],
-      consult: [lang === "en"
-        ? "Consult a doctor if symptoms are severe, persistent, worsening, or warning signs appear."
-        : "Consultă un medic dacă simptomele sunt severe, persistente, se agravează sau apar semnale de alarmă."],
-    }, lang);
+    return formatSixSectionAnswer(
+      {
+        summary:
+          lang === "en"
+            ? `I haven't found enough information in the Santix database yet for ${input.structureName}.`
+            : `Nu am găsit încă informații suficiente în baza Santix pentru ${input.structureName}.`,
+        causes: [
+          lang === "en"
+            ? "I don't have enough information in the Santix database to answer this question with certainty."
+            : "Nu am suficiente informații în baza de date Santix pentru a răspunde sigur la această întrebare.",
+        ],
+        aggravators: [
+          lang === "en"
+            ? "I cannot evaluate aggravating factors without relevant Santix context."
+            : "Nu pot evalua factorii agravanți fără context Santix relevant.",
+        ],
+        safeActions: [
+          lang === "en"
+            ? "Rephrase the question or select a structure for which medical data exists in the Santix database."
+            : "Reformulează întrebarea sau selectează o structură pentru care există date medicale în baza Santix.",
+        ],
+        consult: [
+          lang === "en"
+            ? "Consult a doctor if symptoms are severe, persistent, worsening, or warning signs appear."
+            : "Consultă un medic dacă simptomele sunt severe, persistente, se agravează sau apar semnale de alarmă.",
+        ],
+      },
+      lang,
+    );
   }
 
   const anatomyQuestion = hasAny(input.question, [
@@ -4093,27 +5312,41 @@ function buildDbAnswer(
   return buildFollowUpAnswer(input, context, lang);
 }
 
-function formatContextForPrompt(context: KnowledgeEntry[]) {
+function formatContextForPrompt(context: KnowledgeEntry[], lang: "ro" | "en" = "ro") {
+  const en = lang === "en";
   return context
     .map((entry, index) => {
+      const citations = (entry.sources ?? [])
+        .map((source) => {
+          const title = en
+            ? (source.title_en ?? source.title_ro)
+            : (source.title_ro ?? source.title_en);
+          return [title, source.publisher, source.url].filter(Boolean).join(" — ");
+        })
+        .filter(Boolean)
+        .join("; ");
       return [
-        `[${index + 1}] ${entry.title_ro}`,
-        `Țesut sursă: ${entry.tissue ?? "necunoscut"}`,
-        `Structură/Regiune sursă: ${entry.structure_slug ?? entry.model_selection_id ?? entry.body_region ?? "general"}`,
-        `Categorie: ${entry.category}`,
-        `Conținut: ${entry.content_ro}`,
+        `[${index + 1}] ${knowledgeTitle(entry, lang)}`,
+        `${en ? "Source tissue" : "Țesut sursă"}: ${entry.tissue ?? (en ? "unknown" : "necunoscut")}`,
+        `${en ? "Source structure/region" : "Structură/Regiune sursă"}: ${entry.structure_slug ?? entry.model_selection_id ?? entry.body_region ?? "general"}`,
+        `${en ? "Category" : "Categorie"}: ${entry.category}`,
+        `${en ? "Content" : "Conținut"}: ${knowledgeContent(entry, lang)}`,
+        `${en ? "Medical references" : "Referințe medicale"}: ${citations || (en ? "not linked" : "neatașate")}`,
       ].join("\n");
     })
     .join("\n\n");
 }
 
-function formatSixSectionAnswer(sections: {
-  summary: string;
-  causes?: string[];
-  aggravators?: string[];
-  safeActions?: string[];
-  consult?: string[];
-}, lang: "ro" | "en" = "ro") {
+function formatSixSectionAnswer(
+  sections: {
+    summary: string;
+    causes?: string[];
+    aggravators?: string[];
+    safeActions?: string[];
+    consult?: string[];
+  },
+  lang: "ro" | "en" = "ro",
+) {
   const en = lang === "en";
   return [
     en ? "1. Brief summary" : "1. Rezumat scurt",
@@ -4122,28 +5355,40 @@ function formatSixSectionAnswer(sections: {
     en ? "2. Possible causes based on Santix data" : "2. Posibile cauze pe baza datelor Santix",
     ...(sections.causes?.length
       ? sections.causes.map((item, index) => `${index + 1}. ${item}`)
-      : [en
-          ? "1. I don't have enough information in the Santix database to indicate a certain cause."
-          : "1. Nu am suficiente informații în baza de date Santix pentru a indica o cauză sigură."]),
+      : [
+          en
+            ? "1. I don't have enough information in the Santix database to indicate a certain cause."
+            : "1. Nu am suficiente informații în baza de date Santix pentru a indica o cauză sigură.",
+        ]),
     "",
     en ? "3. What could aggravate the problem" : "3. Ce ar putea agrava problema",
     ...(sections.aggravators?.length
       ? sections.aggravators.map((item, index) => `${index + 1}. ${item}`)
-      : [en
-          ? "1. Straining the painful area, movements that increase pain, or ignoring persistent symptoms."
-          : "1. Solicitarea zonei dureroase, mișcările care cresc durerea sau ignorarea simptomelor persistente."]),
+      : [
+          en
+            ? "1. Straining the painful area, movements that increase pain, or ignoring persistent symptoms."
+            : "1. Solicitarea zonei dureroase, mișcările care cresc durerea sau ignorarea simptomelor persistente.",
+        ]),
     "",
-    en ? "4. What the user can generally and safely do" : "4. Ce poate face utilizatorul în mod general și sigur",
+    en
+      ? "4. What the user can generally and safely do"
+      : "4. Ce poate face utilizatorul în mod general și sigur",
     ...(sections.safeActions?.length
       ? sections.safeActions.map((item, index) => `${index + 1}. ${item}`)
-      : [en ? "1. Reduce strain on the area and monitor symptom progression." : "1. Redu solicitarea zonei și urmărește evoluția simptomelor."]),
+      : [
+          en
+            ? "1. Reduce strain on the area and monitor symptom progression."
+            : "1. Redu solicitarea zonei și urmărește evoluția simptomelor.",
+        ]),
     "",
     en ? "5. When to consult a doctor" : "5. Când ar trebui să consulte un medic",
     ...(sections.consult?.length
       ? sections.consult.map((item, index) => `${index + 1}. ${item}`)
-      : [en
-          ? "1. Consult a doctor if the pain is severe, persists, worsens, or warning signs appear."
-          : "1. Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă."]),
+      : [
+          en
+            ? "1. Consult a doctor if the pain is severe, persists, worsens, or warning signs appear."
+            : "1. Consultă un medic dacă durerea este severă, persistă, se agravează sau apar semnale de alarmă.",
+        ]),
     "",
     en ? "6. Informational limit" : "6. Limită informativă",
     en
@@ -4231,12 +5476,15 @@ function buildOllamaPrompt(
       "SELECTED STRUCTURE:",
       input.structureName,
       "",
+      "INTERNAL ANATOMICAL IDENTIFIER — use for reasoning only:",
+      input.technicalStructureName ?? "Not available",
+      "",
       "SELECTED CATEGORY:",
       tissueLabel,
       "",
       "SANTIX DATABASE CONTEXT:",
       context.length
-        ? formatContextForPrompt(context)
+        ? formatContextForPrompt(context, "en")
         : "No relevant Santix context was retrieved for this question.",
       "",
       "CONVERSATION HISTORY:",
@@ -4266,6 +5514,8 @@ function buildOllamaPrompt(
       "18. If warning signs are present, the recommendation to seek urgent medical care takes priority over clarifying questions.",
       "19. Use the history and SYMPTOM_STATE. If the user has already answered a question, do not repeat it.",
       "20. If the user replies briefly, interpret the answer in the context of the last Santix question.",
+      "21. Use the plain-language selected structure in every user-facing reply.",
+      "22. Never expose the internal anatomical identifier unless the user explicitly asks for the medical or anatomical name.",
       "",
       "BEHAVIOUR FOR VAGUE MESSAGES:",
       "If the user writes 'it hurts', 'I have pain', 'pain', 'what could it be' or a very short message:",
@@ -4303,12 +5553,15 @@ function buildOllamaPrompt(
     "ZONA SELECTATĂ:",
     input.structureName,
     "",
+    "IDENTIFICATOR ANATOMIC INTERN — folosește-l doar pentru raționament:",
+    input.technicalStructureName ?? "Nu este disponibil",
+    "",
     "CATEGORIE SELECTATĂ:",
     tissueLabel,
     "",
     "CONTEXT DIN BAZA DE DATE SANTIX:",
     context.length
-      ? formatContextForPrompt(context)
+      ? formatContextForPrompt(context, "ro")
       : "Nu există context Santix relevant recuperat pentru această întrebare.",
     "",
     "ISTORIC RELEVANT:",
@@ -4338,6 +5591,8 @@ function buildOllamaPrompt(
     "18. Dacă există semnale de alarmă, recomandarea de consult medical rapid sau urgență are prioritate peste întrebările de clarificare.",
     "19. Folosește istoricul și SYMPTOM_STATE. Dacă utilizatorul a răspuns deja la o întrebare, nu o repeta.",
     "20. Dacă utilizatorul răspunde scurt, interpretează răspunsul în contextul ultimei întrebări Santix.",
+    "21. În orice răspuns pentru utilizator folosește denumirea simplă a zonei selectate.",
+    "22. Nu afișa identificatorul anatomic intern decât dacă utilizatorul cere explicit denumirea medicală sau anatomică.",
     "",
     "COMPORTAMENT PENTRU MESAJE VAGI:",
     'Dacă utilizatorul scrie "mă doare", "am durere", "doare", "ce poate fi" sau un mesaj foarte scurt:',
@@ -4381,8 +5636,8 @@ async function askOllama(
         role: "system",
         content:
           input.lang === "en"
-            ? "You are Santix AI, an educational medical assistant. Respond strictly based on the provided context. Do not invent information or give final diagnoses. Recommend medical consultation when necessary. For pain or injuries, ask at most 1-2 questions per message. Respond in clear, short English. Do not use Markdown or bullet lists."
-            : "Ești Santix AI, un asistent medical educațional. Răspunzi strict pe baza contextului primit. Nu inventezi informații. Nu pui diagnostice finale. Recomanzi consult medical când e necesar. Pentru durere, simptome sau accidentări, pune maximum 1-2 întrebări per mesaj și continuă gradual. Răspunzi în română, clar și scurt. Nu folosi Markdown, simboluri de formatare sau liste cu liniuță.",
+            ? "You are Santix AI, an educational medical assistant. Respond strictly based on the provided context. Do not invent information or give final diagnoses. Recommend medical consultation when necessary. For pain or injuries, ask at most 1-2 questions per message. Use plain language and the user-facing structure name. Keep anatomical terminology internal unless the user explicitly asks for it. Respond in clear, short English. Do not use Markdown or bullet lists."
+            : "Ești Santix AI, un asistent medical educațional. Răspunzi strict pe baza contextului primit. Nu inventezi informații. Nu pui diagnostice finale. Recomanzi consult medical când e necesar. Pentru durere, simptome sau accidentări, pune maximum 1-2 întrebări per mesaj și continuă gradual. Folosești limbaj simplu și denumirea populară a structurii; terminologia anatomică rămâne internă dacă utilizatorul nu o cere explicit. Răspunzi în română, clar și scurt. Nu folosi Markdown, simboluri de formatare sau liste cu liniuță.",
       },
       {
         role: "user",
@@ -4435,15 +5690,33 @@ export const askSelectionAi = createServerFn({ method: "POST" })
     let conversationId = data.conversationId;
     let persistedStructuredState: unknown = {};
     let structuredStateAvailable = true;
-    const rawScope = inferSelectionScope(rawAiInput);
+    let conversationLanguage = lockConversationLanguage(rawAiInput.lang);
+
+    if (conversationId) {
+      const conversationState = await loadAiConversationState(supabase, conversationId);
+      persistedStructuredState = conversationState.structuredState;
+      structuredStateAvailable = conversationState.structuredStateAvailable;
+      conversationLanguage = lockConversationLanguage(rawAiInput.lang, conversationState.language);
+    }
+
+    const languageLockedInput = {
+      ...rawAiInput,
+      lang: conversationLanguage,
+    };
+    const rawScope = inferSelectionScope(languageLockedInput);
     const structureSlug = await resolveExistingStructureSlug(supabase, rawScope);
-    const displayStructureName = await resolveStructureDisplayNameForAi(
+    const resolvedStructureNames = await resolveStructureNamesForAi(
       supabase,
-      rawAiInput,
+      languageLockedInput,
       rawScope,
       structureSlug,
     );
-    const aiInput = { ...rawAiInput, structureName: displayStructureName };
+    const aiInput = {
+      ...languageLockedInput,
+      structureName: resolvedStructureNames.displayName,
+      technicalStructureName:
+        resolvedStructureNames.technicalName ?? languageLockedInput.technicalStructureName,
+    };
     const route = classifyQuestion(aiInput);
     const scope = inferSelectionScope(aiInput);
 
@@ -4460,10 +5733,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       conversationId = conversation.id;
       persistedStructuredState = conversation.structuredState;
       structuredStateAvailable = conversation.structuredStateAvailable;
-    } else {
-      const conversationState = await loadAiConversationState(supabase, conversationId);
-      persistedStructuredState = conversationState.structuredState;
-      structuredStateAvailable = conversationState.structuredStateAvailable;
     }
 
     let selectionContext: KnowledgeEntry[] = [];
@@ -4482,10 +5751,8 @@ export const askSelectionAi = createServerFn({ method: "POST" })
           ? []
           : selectionContext;
     const guardrailContext =
-      route.category !== "out_of_scope" &&
-      route.category !== "app_specific" &&
-      route.category !== "unclear_message"
-        ? await getGuardrailContext(supabase)
+      route.category !== "app_specific" && route.category !== "unclear_message"
+        ? await getGuardrailContext(supabase, aiInput.lang)
         : [];
     const context = [...guardrailContext, ...baseContext];
 
@@ -4496,12 +5763,17 @@ export const askSelectionAi = createServerFn({ method: "POST" })
 
     const { data: previousMessagesData } = await supabase
       .from("ai_messages")
-      .select("role, content_ro")
+      .select("role, content_ro, content_en")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(8);
 
-    const previousMessages = ((previousMessagesData ?? []) as ConversationMessage[]).reverse();
+    const previousMessages = (previousMessagesData ?? [])
+      .map((message) => ({
+        role: message.role,
+        content_ro: localizedMessageContent(message, conversationLanguage),
+      }))
+      .reverse() as ConversationMessage[];
     const symptomState = mergePersistedStateIntoLegacy(
       inferSymptomState(aiInput, previousMessages),
       persistedStructuredState,
@@ -4520,7 +5792,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       symptomState.pain_present &&
       symptomState.next_step !== "recommend" &&
       route.category !== "selection_specific";
-    // Once next_step === "recommend" the pain flow is done — don't keep it deterministic.
     const alreadyRecommended = symptomState.next_step === "recommend";
     const shouldUseDeterministicAnswer =
       route.category === "out_of_scope" ||
@@ -4533,10 +5804,6 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       (!alreadyRecommended && isShortSymptomFollowUp(aiInput.question, symptomState)) ||
       (!alreadyRecommended && isContextualReply(aiInput.question, symptomState));
 
-    // For English, always try Ollama for content-heavy routes — the DB content is Romanian
-    // and the deterministic builders embed it verbatim, producing mixed-language responses.
-    // Ollama is already prompted to respond in English. The deterministic answer serves as
-    // fallback only if Ollama throws.
     const isEnContentRoute =
       aiInput.lang === "en" &&
       (route.category === "selection_specific" ||
@@ -4544,13 +5811,8 @@ export const askSelectionAi = createServerFn({ method: "POST" })
         route.category === "symptom_or_injury" ||
         route.category === "red_flag_or_urgent");
 
-    // If the bot previously asked a clarifying question and the user replied with something
-    // the keyword classifier didn't recognize (e.g. "articulatia de sus" after "upper/middle/lower?"),
-    // the user is almost certainly answering the bot's question. Ollama sees the full conversation
-    // history and can respond intelligently instead of returning "Nu am înțeles".
     const isContextualUnclear =
-      route.category === "unclear_message" &&
-      Boolean(symptomState.last_question_intent);
+      route.category === "unclear_message" && Boolean(symptomState.last_question_intent);
 
     try {
       if (!shouldUseDeterministicAnswer || isEnContentRoute || isContextualUnclear) {
@@ -4561,13 +5823,19 @@ export const askSelectionAi = createServerFn({ method: "POST" })
     }
 
     const safeAnswer = sanitizeTextForStorage(answer, 2_400);
-    const structured = buildStructuredResponse(safeAnswer, route, symptomState, contextSwitch, context);
+    const structured = buildStructuredResponse(
+      safeAnswer,
+      route,
+      symptomState,
+      contextSwitch,
+      context,
+    );
 
     const { error: messageError } = await supabase.from("ai_messages").insert([
       {
         conversation_id: conversationId,
         role: "user",
-        content_ro: safeQuestion.text,
+        ...localizedMessageColumns(safeQuestion.text, conversationLanguage),
         retrieved_context: [
           {
             route: route.category,
@@ -4582,7 +5850,7 @@ export const askSelectionAi = createServerFn({ method: "POST" })
       {
         conversation_id: conversationId,
         role: "assistant",
-        content_ro: safeAnswer,
+        ...localizedMessageColumns(safeAnswer, conversationLanguage),
         retrieved_context: {
           route: route.category,
           mode: route.mode,
@@ -4595,6 +5863,14 @@ export const askSelectionAi = createServerFn({ method: "POST" })
             priority: entry.priority,
             source:
               entry.structure_slug ?? entry.model_selection_id ?? entry.body_region ?? "general",
+            medical_sources: (entry.sources ?? []).map((source) => ({
+              id: source.id,
+              title_ro: source.title_ro,
+              title_en: source.title_en,
+              publisher: source.publisher,
+              url: source.url,
+              is_primary: source.is_primary,
+            })),
           })),
         },
       },
@@ -4618,6 +5894,7 @@ export const askSelectionAi = createServerFn({ method: "POST" })
 
     return {
       conversationId: activeConversationId,
+      language: conversationLanguage,
       answer: safeAnswer,
       contextCount: context.length,
       structured,

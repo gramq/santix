@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { translations } from "@/lib/translations";
 
 export type Language = "ro" | "en";
 
 export function getStoredLanguage(): Language {
   if (typeof window === "undefined") return "ro";
-  return (window.localStorage.getItem("santix-lang") as Language) ?? "ro";
+  return window.localStorage.getItem("santix-lang") === "en" ? "en" : "ro";
 }
 
 export function LanguageToggle() {
@@ -25,7 +26,7 @@ export function LanguageToggle() {
   return (
     <div
       role="group"
-      aria-label="Schimbă limba"
+      aria-label={translations[lang].nav_lang}
       className="flex h-9 items-center rounded-2xl border border-primary/20 bg-white/[0.03] p-0.5"
     >
       {(["ro", "en"] as Language[]).map((l) => {

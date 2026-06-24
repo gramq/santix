@@ -13,12 +13,15 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     category: "Cardiovascular system",
     bodyRegion: "chest",
     description:
-      "A muscular organ located in the chest, between the lungs, with a central role in blood circulation.",
-    function: "Pumps blood to the lungs and to the rest of the body.",
+      "A muscular organ in the chest, about the size of a fist, made of four chambers that receive and pump blood.",
+    function:
+      "Pumps blood to the lungs for oxygenation and then to the rest of the body, maintaining circulation.",
     technical: {
       origin: "Located in the mediastinum, slightly left of the midline.",
-      insertion: "Connected to the great vessels: aorta, venae cavae, pulmonary artery and pulmonary veins.",
-      innervation: "Regulated by the autonomic nervous system through sympathetic and parasympathetic fibers.",
+      insertion:
+        "Connected to the great vessels: aorta, venae cavae, pulmonary artery and pulmonary veins.",
+      innervation:
+        "Regulated by the autonomic nervous system through sympathetic and parasympathetic fibers.",
       action: "Produces rhythmic contractions that maintain blood circulation.",
     },
     quiz: [
@@ -40,12 +43,15 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Lungs",
     category: "Respiratory system",
     bodyRegion: "chest",
-    description: "Paired organs in the chest responsible for gas exchange between air and blood.",
-    function: "Allow blood oxygenation and carbon dioxide elimination.",
+    description:
+      "Two spongy organs in the chest, one on each side of the heart, containing airways and tiny air sacs.",
+    function:
+      "Move oxygen from the air into the blood and remove carbon dioxide from the blood through breathing.",
     technical: {
       origin: "Placed on both sides of the heart inside the thoracic cavity.",
       insertion: "Communicate with the trachea through the main bronchi.",
-      innervation: "Regulated by autonomic fibers involved in bronchial diameter and breathing rhythm.",
+      innervation:
+        "Regulated by autonomic fibers involved in bronchial diameter and breathing rhythm.",
       action: "Support inspiration and expiration through oxygen and carbon dioxide exchange.",
     },
     quiz: [
@@ -67,11 +73,13 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Liver",
     category: "Digestive system",
     bodyRegion: "abdomen",
-    description: "A large organ in the upper right abdomen.",
-    function: "Processes nutrients, produces bile and contributes to detoxification.",
+    description: "A large organ located mainly in the upper-right abdomen, below the diaphragm.",
+    function:
+      "Produces bile, processes nutrients, and helps remove or transform many substances in the body.",
     technical: {
       origin: "Located under the diaphragm, mainly in the upper right abdomen.",
-      insertion: "Functionally connected with the gallbladder, hepatic vessels and digestive system.",
+      insertion:
+        "Functionally connected with the gallbladder, hepatic vessels and digestive system.",
       innervation: "Receives autonomic fibers through abdominal nerve plexuses.",
       action: "Metabolizes substances, produces bile and supports metabolic balance.",
     },
@@ -94,8 +102,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Stomach",
     category: "Digestive system",
     bodyRegion: "abdomen",
-    description: "A hollow digestive organ located in the upper abdomen.",
-    function: "Mixes food with gastric juices and begins protein digestion.",
+    description:
+      "A hollow muscular organ in the upper abdomen, between the esophagus and small intestine.",
+    function:
+      "Temporarily stores food, mixes it with acid and digestive enzymes, and gradually passes it to the small intestine.",
     technical: {
       origin: "Located in the upper abdomen, mostly toward the left side.",
       insertion: "Receives food through the esophagus and continues into the duodenum.",
@@ -121,8 +131,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Kidneys",
     category: "Urinary system",
     bodyRegion: "abdomen",
-    description: "Paired organs that filter blood and help form urine.",
-    function: "Remove metabolic waste and regulate water and salt balance.",
+    description:
+      "Two bean-shaped organs in the back of the abdomen, one on each side of the spine.",
+    function:
+      "Filter the blood, remove waste and extra water in urine, and help balance minerals and control blood pressure.",
     technical: {
       origin: "Located posteriorly in the abdomen, on both sides of the lumbar spine.",
       insertion: "Continue through the ureters toward the urinary bladder.",
@@ -148,8 +160,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Intestines",
     category: "Digestive system",
     bodyRegion: "abdomen",
-    description: "Digestive segments in the abdomen involved in nutrient absorption and elimination.",
-    function: "Complete digestion, absorb nutrients and form fecal matter.",
+    description:
+      "The small and large intestines form the longest part of the digestive tract, between the stomach and anus.",
+    function:
+      "The small intestine completes digestion and absorbs most nutrients, while the large intestine absorbs water and turns waste into stool.",
     technical: {
       origin: "Located in the abdominal cavity, below the stomach.",
       insertion: "Continue from the duodenum into the small intestine, colon and rectum.",
@@ -175,8 +189,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Spleen",
     category: "Lymphatic system",
     bodyRegion: "abdomen",
-    description: "A lymphoid organ located in the upper left abdomen.",
-    function: "Filters blood and contributes to immune response.",
+    description:
+      "An organ of the lymphatic and blood systems in the upper-left abdomen, beneath the ribs.",
+    function:
+      "Filters blood, removes old or damaged red blood cells, and contributes to defense against infection.",
     technical: {
       origin: "Located under the left hemidiaphragm, lateral to the stomach.",
       insertion: "Vascularly connected through the splenic artery and vein.",
@@ -202,8 +218,9 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Pancreas",
     category: "Digestive and endocrine system",
     bodyRegion: "abdomen",
-    description: "An elongated organ behind the stomach with digestive and endocrine roles.",
-    function: "Produces digestive enzymes and hormones involved in blood sugar regulation.",
+    description: "An elongated gland in the upper abdomen, behind the stomach.",
+    function:
+      "Produces enzymes that aid digestion and hormones, including insulin, that help regulate blood glucose.",
     technical: {
       origin: "Placed transversely in the upper abdomen, behind the stomach.",
       insertion: "Functionally connected to the duodenum through pancreatic secretions.",
@@ -229,8 +246,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Urinary bladder",
     category: "Urinary system",
     bodyRegion: "pelvis",
-    description: "A hollow pelvic organ that stores urine.",
-    function: "Stores urine before elimination.",
+    description:
+      "A hollow muscular organ in the pelvis that fills as it receives urine from the kidneys.",
+    function:
+      "Stores urine and releases it through the urethra when the bladder muscle contracts and the sphincters relax.",
     technical: {
       origin: "Located in the pelvis, below the lower abdomen.",
       insertion: "Receives urine through the ureters and continues into the urethra.",
@@ -256,8 +275,10 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Esophagus",
     category: "Digestive system",
     bodyRegion: "neck and chest",
-    description: "A muscular tube that carries food from the pharynx to the stomach.",
-    function: "Moves the food bolus toward the stomach through peristaltic movements.",
+    description:
+      "A muscular tube connecting the throat to the stomach through which swallowed food and liquids pass.",
+    function:
+      "Moves food and liquids toward the stomach through coordinated contractions of its wall.",
     technical: {
       origin: "Starts in the pharyngeal area and descends through the neck and chest.",
       insertion: "Opens into the stomach.",
@@ -283,8 +304,9 @@ const organEnglishText: Record<string, LocalizedOrganText> = {
     name: "Trachea",
     category: "Respiratory system",
     bodyRegion: "neck and chest",
-    description: "A respiratory airway connecting the larynx to the bronchi.",
-    function: "Allows air to pass toward the lungs.",
+    description:
+      "A flexible airway tube that begins below the larynx and divides into the two main bronchi.",
+    function: "Carries air between the throat and lungs and helps keep the airway open.",
     technical: {
       origin: "Starts below the larynx in the neck region.",
       insertion: "Splits into the main bronchi that enter the lungs.",
@@ -319,6 +341,8 @@ export function localizeInternalOrgan(
   return {
     ...organ,
     ...localized,
+    popularName: organ.popularNameEn,
+    scientificName: organ.scientificNameEn,
     technical: {
       ...organ.technical,
       ...localized.technical,

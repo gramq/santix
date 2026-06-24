@@ -18,6 +18,9 @@ export default defineConfig(({ command }) => ({
     dedupe: ["react", "react-dom", "@tanstack/react-router", "@tanstack/react-start"],
   },
   server: {
+    host: "127.0.0.1",
+    port: 5174,
+    strictPort: true,
     headers: securityHeaders,
   },
   preview: {

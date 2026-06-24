@@ -1,18 +1,25 @@
 import { classifyConversationMessage } from "./classifier";
 import { normalizeSantixMessage } from "./normalizer";
 import { resolveNextStep } from "./next-step";
-import { applyNextStepToState, createInitialConversationState, mergeConversationState } from "./state";
+import { normalizeConversationLanguage, type ConversationLanguage } from "./conversationLanguage";
+import {
+  applyNextStepToState,
+  createInitialConversationState,
+  mergeConversationState,
+} from "./state";
 import { extractSignals } from "./signal-extractor";
 import type { AIProvider, ConversationState, RetrievalContext, StructuredAIOutput } from "./types";
 
 export type SantixAiServiceInput = {
   message: string;
+  language?: ConversationLanguage;
   state?: Partial<ConversationState>;
   provider?: AIProvider;
   retrievalContext?: RetrievalContext;
 };
 
 export async function runSantixAiTurn(input: SantixAiServiceInput): Promise<StructuredAIOutput> {
+  const language = normalizeConversationLanguage(input.language);
   const stateBefore = createInitialConversationState(input.state);
   const normalized = normalizeSantixMessage(input.message);
   const signals = extractSignals(normalized, {
@@ -20,8 +27,12 @@ export async function runSantixAiTurn(input: SantixAiServiceInput): Promise<Stru
   });
   const classification = classifyConversationMessage(normalized, signals);
   const mergedState = mergeConversationState(stateBefore, signals);
-  const decision = resolveNextStep(mergedState, classification);
-  const stateAfter = applyNextStepToState(mergedState, decision.nextStep, decision.lastQuestionIntent);
+  const decision = resolveNextStep(mergedState, classification, language);
+  const stateAfter = applyNextStepToState(
+    mergedState,
+    decision.nextStep,
+    decision.lastQuestionIntent,
+  );
 
   return {
     reply: decision.reply,

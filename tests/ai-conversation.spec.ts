@@ -3,10 +3,15 @@ import {
   buildClarifyingAnswer,
   classifyQuestion,
   evaluateSelectedContextFit,
+  extractQuestionEntities,
   inferSymptomState,
   normalizeMedicalText,
 } from "../src/lib/ai-chat.functions";
-import { keywordSearchKnowledge, semanticSearchKnowledge, type KnowledgeEntry } from "../src/lib/ai/retrieval";
+import {
+  keywordSearchKnowledge,
+  semanticSearchKnowledge,
+  type KnowledgeEntry,
+} from "../src/lib/ai/retrieval";
 
 const baseInput = {
   accessToken: "test-access-token-1234567890",
@@ -121,6 +126,100 @@ test("different body region triggers context switch target", () => {
   expect(contextSwitch.target_structure_slug).not.toContain("biceps");
 });
 
+test("English symptom, context, and body-region entities are detected", () => {
+  const entities = extractQuestionEntities(
+    "My left ankle is swollen and bruised after I fell while running.",
+    "en",
+  );
+
+  expect(entities.bodyRegionLabel).toBe("ankle");
+  expect(entities.symptoms).toEqual(expect.arrayContaining(["umflare", "vânătaie"]));
+  expect(entities.contexts).toEqual(expect.arrayContaining(["căzătură", "alergare"]));
+});
+
+test("English breathing difficulty and chest pain are treated as warning signs", () => {
+  const englishInput = {
+    ...baseInput,
+    lang: "en",
+    question: "I have severe chest pain and I can't breathe.",
+  } as Parameters<typeof inferSymptomState>[0];
+  const route = classifyQuestion(englishInput);
+
+  expect(route.category).toBe("red_flag_or_urgent");
+  expect(route.entities.redFlags).toEqual(
+    expect.arrayContaining(["durere toracică", "dificultăți de respirație"]),
+  );
+});
+
+test("ordinary urination symptoms do not imply loss of bladder control", () => {
+  const entities = extractQuestionEntities("I have pain when urinating.", "en");
+
+  expect(entities.redFlags).not.toContain("control urinar/fecal afectat");
+});
+
+test("explicit loss of bladder or bowel control remains a warning sign", () => {
+  const entities = extractQuestionEntities(
+    "I suddenly can't control my bladder or my bowels.",
+    "en",
+  );
+
+  expect(entities.redFlags).toContain("control urinar/fecal afectat");
+});
+
+test("English organ context uses an English redirect label", () => {
+  const englishInput = {
+    ...baseInput,
+    lang: "en",
+    question: "My heart hurts and I have chest pain.",
+  } as Parameters<typeof inferSymptomState>[0];
+  const route = classifyQuestion(englishInput);
+  const state = inferSymptomState(englishInput, []);
+  const contextSwitch = evaluateSelectedContextFit(englishInput, route, state);
+
+  expect(contextSwitch.target_layer).toBe("organs");
+  expect(contextSwitch.target_structure_slug).toBe("organ:inima");
+  expect(contextSwitch.target_display_name).toBe("heart");
+  expect(contextSwitch.switch_reason).toContain("heart");
+});
+
+test("lower-back pain alone does not redirect to the kidneys", () => {
+  const backInput = {
+    ...baseInput,
+    question: "mă doare zona lombară",
+  } as Parameters<typeof inferSymptomState>[0];
+  const route = classifyQuestion(backInput);
+  const state = inferSymptomState(backInput, []);
+  const contextSwitch = evaluateSelectedContextFit(backInput, route, state);
+
+  expect(contextSwitch.target_structure_slug).not.toBe("organ:rinichi");
+});
+
+test("chest muscle wording does not redirect to the heart", () => {
+  const chestInput = {
+    ...baseInput,
+    lang: "en",
+    tissue: "muschi",
+    structureName: "Pectoralis major",
+    structureSlug: "muschi:pectoralis-major",
+    modelSelectionId: "muschi:pectoralis-major",
+    bodyRegion: "torace",
+    visualLayer: "muscular",
+    aiLayer: "muscular",
+    question: "My chest muscle hurts after lifting weights.",
+  } as Parameters<typeof inferSymptomState>[0];
+  const route = classifyQuestion(chestInput);
+  const state = inferSymptomState(chestInput, []);
+  const contextSwitch = evaluateSelectedContextFit(chestInput, route, state);
+
+  expect(contextSwitch.target_structure_slug).not.toBe("organ:inima");
+});
+
+test("word fragments do not create a false fall context", () => {
+  const entities = extractQuestionEntities("The pain started following exercise.", "en");
+
+  expect(entities.contexts).not.toContain("căzătură");
+});
+
 test("out of scope investment request is refused by classification", () => {
   const route = classifyQuestion(input("fă-mi un plan de investiții"));
 
@@ -220,7 +319,11 @@ const knowledgeFixture: KnowledgeEntry[] = [
     body_region: "mana",
     category: "cauze_posibile",
     title_ro: "Durere după fotbal sau căzătură",
-    content_ro: "Durerea după sport, fotbal, lovitură sau căzătură poate fi asociată cu contuzie, entorsă, luxație sau fractură.",
+    content_ro:
+      "Durerea după sport, fotbal, lovitură sau căzătură poate fi asociată cu contuzie, entorsă, luxație sau fractură.",
+    title_en: "Pain after football or a fall",
+    content_en:
+      "Pain after sport, football, an impact, or a fall may be associated with a contusion, sprain, dislocation, or fracture.",
     priority: 8,
     tags: ["sport", "trauma", "durere"],
   },
@@ -231,7 +334,8 @@ const knowledgeFixture: KnowledgeEntry[] = [
     body_region: "brat",
     category: "simptome",
     title_ro: "Durere musculară la încordarea brațului",
-    content_ro: "Durerea când încordezi brațul sau după efort poate sugera suprasolicitare musculară, întindere sau crampă.",
+    content_ro:
+      "Durerea când încordezi brațul sau după efort poate sugera suprasolicitare musculară, întindere sau crampă.",
     priority: 8,
     tags: ["efort", "incordare", "brat"],
   },
@@ -242,7 +346,8 @@ const knowledgeFixture: KnowledgeEntry[] = [
     body_region: "mana",
     category: "semne_alarma",
     title_ro: "Nu pot mișca degetele",
-    content_ro: "Imposibilitatea de a mișca degetele, amorțeala sau pierderea sensibilității pot fi semne de alarmă și necesită consult rapid.",
+    content_ro:
+      "Imposibilitatea de a mișca degetele, amorțeala sau pierderea sensibilității pot fi semne de alarmă și necesită consult rapid.",
     priority: 10,
     tags: ["red-flag", "degete", "miscare"],
   },
@@ -253,7 +358,8 @@ const knowledgeFixture: KnowledgeEntry[] = [
     body_region: "genunchi",
     category: "simptome",
     title_ro: "Durere de genunchi la alergare",
-    content_ro: "Durerea de genunchi când alergi poate fi legată de efort, suprasolicitare musculară, tendon sau articulație.",
+    content_ro:
+      "Durerea de genunchi când alergi poate fi legată de efort, suprasolicitare musculară, tendon sau articulație.",
     priority: 8,
     tags: ["genunchi", "alergare", "efort"],
   },
@@ -264,7 +370,8 @@ const knowledgeFixture: KnowledgeEntry[] = [
     body_region: "glezna",
     category: "semne_alarma",
     title_ro: "Gleznă umflată",
-    content_ro: "Umflarea gleznei după traumatism sau imposibilitatea de a călca poate indica entorsă, fractură sau altă leziune care necesită evaluare.",
+    content_ro:
+      "Umflarea gleznei după traumatism sau imposibilitatea de a călca poate indica entorsă, fractură sau altă leziune care necesită evaluare.",
     priority: 9,
     tags: ["glezna", "umflare", "trauma"],
   },
@@ -272,11 +379,21 @@ const knowledgeFixture: KnowledgeEntry[] = [
 
 class FakeQueryBuilder {
   constructor(private rows: KnowledgeEntry[]) {}
-  eq() { return this; }
-  in() { return this; }
-  or() { return this; }
-  order() { return this; }
-  limit() { return this; }
+  eq() {
+    return this;
+  }
+  in() {
+    return this;
+  }
+  or() {
+    return this;
+  }
+  order() {
+    return this;
+  }
+  limit() {
+    return this;
+  }
   then(resolve: (value: { data: KnowledgeEntry[]; error: null }) => void) {
     return Promise.resolve(resolve({ data: this.rows, error: null }));
   }
@@ -316,6 +433,17 @@ test("keyword retrieval finds fall and hand trauma context", async () => {
   });
 
   expect(results[0].id).toBe("sport-trauma");
+});
+
+test("keyword retrieval searches the English medical content for English conversations", async () => {
+  const results = await keywordSearchKnowledge(fakeSupabase, "pain after a football impact", {
+    language: "en",
+    aiLayer: "skeleton",
+    bodyRegion: "mana",
+  });
+
+  expect(results[0].id).toBe("sport-trauma");
+  expect(results[0].content_en).toContain("sprain");
 });
 
 test("keyword retrieval finds muscular arm effort context", async () => {

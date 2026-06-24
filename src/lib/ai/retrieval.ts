@@ -9,14 +9,31 @@ export type KnowledgeEntry = {
   category: string;
   title_ro: string;
   content_ro: string;
+  title_en?: string | null;
+  content_en?: string | null;
   priority: number;
   tags?: string[] | null;
   metadata?: Record<string, unknown> | null;
+  sources?: MedicalSourceCitation[] | null;
   similarity?: number | null;
   retrieval_source?: "semantic" | "keyword" | "selection" | "virtual";
 };
 
+export type MedicalSourceCitation = {
+  id?: string;
+  title_ro?: string | null;
+  title_en?: string | null;
+  publisher?: string | null;
+  url?: string | null;
+  is_primary?: boolean;
+  evidence_scope?: string | null;
+  source_checked_at?: string | null;
+  review_status?: "mapped" | "clinically_verified" | "rejected" | null;
+  clinically_verified_at?: string | null;
+};
+
 export type RetrievalFilters = {
+  language?: "ro" | "en";
   aiLayer?: "skeleton" | "muscular" | "organs" | null;
   tissue?: "os" | "muschi" | "tendon" | "organ" | "nerv" | "articulatie" | null;
   bodyRegion?: string | null;
@@ -27,14 +44,32 @@ export type RetrievalFilters = {
   matchThreshold?: number;
 };
 
+export function knowledgeTitle(entry: KnowledgeEntry, language: "ro" | "en" = "ro") {
+  const preferred = language === "en" ? entry.title_en : entry.title_ro;
+  const fallback = language === "en" ? entry.title_ro : entry.title_en;
+  return preferred?.trim() || fallback?.trim() || "";
+}
+
+export function knowledgeContent(entry: KnowledgeEntry, language: "ro" | "en" = "ro") {
+  const preferred = language === "en" ? entry.content_en : entry.content_ro;
+  const fallback = language === "en" ? entry.content_ro : entry.content_en;
+  return preferred?.trim() || fallback?.trim() || "";
+}
+
 type SupabaseLike = {
-  rpc: (fn: string, args?: Record<string, unknown>) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
   from: (table: string) => {
     select: (columns: string) => QueryBuilderLike;
   };
 };
 
-type QueryBuilderLike = PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }> & {
+type QueryBuilderLike = PromiseLike<{
+  data: unknown[] | null;
+  error: { message?: string } | null;
+}> & {
   eq: (column: string, value: unknown) => QueryBuilderLike;
   in: (column: string, values: unknown[]) => QueryBuilderLike;
   or: (filters: string) => QueryBuilderLike;
@@ -50,35 +85,59 @@ function normalizeText(value: string | undefined | null) {
 }
 
 function normalizeToken(value: string) {
-  return normalizeText(value).replace(/[^a-z0-9]+/g, " ").trim();
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-export function buildKnowledgeEmbeddingText(entry: Pick<KnowledgeEntry, "title_ro" | "content_ro" | "category" | "body_region" | "structure_slug" | "tags" | "metadata">) {
+export function buildKnowledgeEmbeddingText(
+  entry: Pick<
+    KnowledgeEntry,
+    | "title_ro"
+    | "content_ro"
+    | "title_en"
+    | "content_en"
+    | "category"
+    | "body_region"
+    | "structure_slug"
+    | "tags"
+    | "metadata"
+  >,
+) {
   const metadataText = entry.metadata
     ? Object.entries(entry.metadata)
-        .filter(([, value]) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+        .filter(
+          ([, value]) =>
+            typeof value === "string" || typeof value === "number" || typeof value === "boolean",
+        )
         .map(([key, value]) => `${key}: ${String(value)}`)
         .join("; ")
     : "";
 
   return [
     entry.title_ro,
+    entry.title_en,
     `Categorie: ${entry.category}`,
     entry.structure_slug ? `Structură: ${entry.structure_slug}` : "",
     entry.body_region ? `Regiune: ${entry.body_region}` : "",
     entry.tags?.length ? `Tag-uri: ${entry.tags.join(", ")}` : "",
     metadataText,
     entry.content_ro,
-  ].filter(Boolean).join("\n");
+    entry.content_en,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function queryTerms(query: string, filters: RetrievalFilters) {
   return unique([
-    ...normalizeToken(query).split(/\s+/g).filter((term) => term.length >= 3),
+    ...normalizeToken(query)
+      .split(/\s+/g)
+      .filter((term) => term.length >= 3),
     ...(filters.bodyRegion ? normalizeToken(filters.bodyRegion).split(/\s+/g) : []),
     ...(filters.structureSlug ? normalizeToken(filters.structureSlug).split(/\s+/g) : []),
     ...(filters.tags ?? []).flatMap((tag) => normalizeToken(tag).split(/\s+/g)),
@@ -86,15 +145,20 @@ function queryTerms(query: string, filters: RetrievalFilters) {
 }
 
 function scoreKeywordEntry(entry: KnowledgeEntry, query: string, filters: RetrievalFilters) {
-  const searchable = normalizeText([
-    entry.title_ro,
-    entry.content_ro,
-    entry.category,
-    entry.body_region,
-    entry.structure_slug,
-    entry.model_selection_id,
-    entry.tags?.join(" "),
-  ].filter(Boolean).join(" "));
+  const language = filters.language ?? "ro";
+  const searchable = normalizeText(
+    [
+      knowledgeTitle(entry, language),
+      knowledgeContent(entry, language),
+      entry.category,
+      entry.body_region,
+      entry.structure_slug,
+      entry.model_selection_id,
+      entry.tags?.join(" "),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
   let score = entry.priority ?? 1;
 
   if (filters.structureSlug && entry.structure_slug === filters.structureSlug) score += 16;
@@ -113,7 +177,9 @@ function scoreKeywordEntry(entry: KnowledgeEntry, query: string, filters: Retrie
   return score;
 }
 
-async function safeRows<T>(query: PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>): Promise<T[]> {
+async function safeRows<T>(
+  query: PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<T[]> {
   try {
     const { data, error } = await query;
     if (error) return [];
@@ -154,8 +220,10 @@ export async function keywordSearchKnowledge(
   filters: RetrievalFilters = {},
 ) {
   let builder = supabase
-    .from("ai_knowledge_entries")
-    .select("id, tissue, structure_slug, model_selection_id, body_region, category, title_ro, content_ro, priority, tags, metadata")
+    .from("ai_knowledge_with_sources")
+    .select(
+      "id, tissue, structure_slug, model_selection_id, body_region, category, title_ro, content_ro, title_en, content_en, priority, tags, metadata, sources",
+    )
     .eq("active", true);
 
   if (filters.tissue) {
@@ -168,9 +236,7 @@ export async function keywordSearchKnowledge(
   if (filters.categories?.length) builder = builder.in("category", filters.categories);
 
   const rows = await safeRows<KnowledgeEntry>(
-    builder
-      .order("priority", { ascending: false })
-      .limit(160),
+    builder.order("priority", { ascending: false }).limit(160),
   );
 
   return rows
@@ -191,7 +257,10 @@ export async function hybridSearchKnowledge(
 ) {
   const [semanticRows, keywordRows] = await Promise.all([
     semanticSearchKnowledge(supabase, query, filters).catch(() => []),
-    keywordSearchKnowledge(supabase, query, { ...filters, limit: Math.max(filters.limit ?? 12, 16) }),
+    keywordSearchKnowledge(supabase, query, {
+      ...filters,
+      limit: Math.max(filters.limit ?? 12, 16),
+    }),
   ]);
 
   const seen = new Set<string>();
@@ -199,7 +268,11 @@ export async function hybridSearchKnowledge(
     .sort((a, b) => {
       const aSemanticBoost = a.retrieval_source === "semantic" ? 100 : 0;
       const bSemanticBoost = b.retrieval_source === "semantic" ? 100 : 0;
-      return (bSemanticBoost + (b.similarity ?? b.priority ?? 0)) - (aSemanticBoost + (a.similarity ?? a.priority ?? 0));
+      return (
+        bSemanticBoost +
+        (b.similarity ?? b.priority ?? 0) -
+        (aSemanticBoost + (a.similarity ?? a.priority ?? 0))
+      );
     })
     .filter((entry) => {
       const key = entry.id || `${entry.title_ro}:${entry.content_ro}`;
@@ -215,7 +288,7 @@ export async function hybridSearchKnowledge(
       filters,
       semantic_count: semanticRows.length,
       results: merged.map((entry) => ({
-        title: entry.title_ro,
+        title: knowledgeTitle(entry, filters.language),
         similarity: entry.similarity,
         source: entry.retrieval_source,
       })),
