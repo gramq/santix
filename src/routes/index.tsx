@@ -1,5 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef, useEffect, type MouseEvent } from "react";
+import { SkeletonAssembly } from "@/components/landing/SkeletonAssembly";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  useInView,
+  AnimatePresence,
+} from "framer-motion";
 import {
   Activity,
   ArrowRight,
@@ -11,7 +19,103 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LanguageToggle } from "@/components/layout/LanguageToggle";
+import { TextSizeToggle } from "@/components/layout/TextSizeToggle";
 import { useLanguage } from "@/lib/useLanguage";
+
+/* ── Reusable animation variants ─────────────────────────────────────────── */
+
+const fadeUpBlur = {
+  hidden: { opacity: 0, y: 44, filter: "blur(14px)" },
+  visible: {
+    opacity: 1, y: 0, filter: "blur(0px)",
+    transition: { type: "spring" as const, stiffness: 160, damping: 22 },
+  },
+};
+
+const staggerContainer = (stagger = 0.1, delay = 0) => ({
+  hidden: {},
+  visible: { transition: { staggerChildren: stagger, delayChildren: delay } },
+});
+
+/* ── 3D Tilt Card ─────────────────────────────────────────────────────────── */
+
+function TiltCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotateX = useTransform(y, [-0.5, 0.5], [8, -8]);
+  const rotateY = useTransform(x, [-0.5, 0.5], [-8, 8]);
+  const glareX = useTransform(x, [-0.5, 0.5], ["0%", "100%"]);
+  const glareY = useTransform(y, [-0.5, 0.5], ["0%", "100%"]);
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    x.set((e.clientX - r.left) / r.width - 0.5);
+    y.set((e.clientY - r.top) / r.height - 0.5);
+  };
+  const handleMouseLeave = () => { x.set(0); y.set(0); };
+
+  return (
+    <motion.div
+      ref={ref}
+      style={{ rotateX, rotateY, transformPerspective: 1000, transformStyle: "preserve-3d" }}
+      whileHover={{ scale: 1.03, transition: { type: "spring", stiffness: 300, damping: 28 } }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      className={`relative ${className ?? ""}`}
+    >
+      {/* glare overlay */}
+      <motion.div
+        className="pointer-events-none absolute inset-0 rounded-3xl"
+        style={{
+          background: `radial-gradient(circle at ${glareX} ${glareY}, rgba(0,242,254,0.09) 0%, transparent 55%)`,
+          opacity: 0,
+        }}
+        whileHover={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+      />
+      {children}
+    </motion.div>
+  );
+}
+
+/* ── Count-up stat ────────────────────────────────────────────────────────── */
+
+function AnimatedStat({ value, label }: { value: string; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-60px" });
+  const numMatch = value.match(/^\d+$/);
+  const [displayed, setDisplayed] = useState(numMatch ? "0" : value);
+
+  useEffect(() => {
+    if (!isInView) return;
+    if (!numMatch) { setDisplayed(value); return; }
+    const target = parseInt(numMatch[0], 10);
+    const duration = 1200;
+    const start = Date.now();
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayed(String(Math.round(eased * target)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [isInView]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 28 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      transition={{ type: "spring", stiffness: 180, damping: 20, delay: 0.1 }}
+    >
+      <div className="text-3xl font-black text-white">{displayed}</div>
+      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>
+    </motion.div>
+  );
+}
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,22 +129,24 @@ export const Route = createFileRoute("/")({
   component: SantixLanding,
 });
 
+// x/y: pixel positions over the 3D skeleton canvas (card 390px wide, canvas ≈ 540px tall)
+// Calibrated to the skeleton-intro.glb proportions rendered at fov=28, camera z=11.
 const skeletonZonesRo = [
-  { id: "skull", label: "Craniu", description: "Protecție cerebrală și punct de pornire pentru simptome precum cefalee sau amețeală.", x: 170, y: 62 },
-  { id: "chest", label: "Torace", description: "Coaste, stern și respirație. Ideal pentru explorarea durerilor toracice educaționale.", x: 170, y: 142 },
-  { id: "arm", label: "Braț", description: "Umăr, humerus, cot și antebraț, cu accent pe mobilitate și traumatisme.", x: 114, y: 198 },
-  { id: "pelvis", label: "Bazin", description: "Centura pelviană conectează coloana cu membrele inferioare.", x: 170, y: 272 },
-  { id: "knee", label: "Genunchi", description: "Articulație complexă pentru stabilitate, mers și testarea durerilor mecanice.", x: 142, y: 350 },
-  { id: "ankle", label: "Gleznă", description: "Stabilitate, propulsie și entorse frecvente în mișcare.", x: 198, y: 408 },
+  { id: "skull",  label: "Craniu",   description: "Protecție cerebrală și punct de pornire pentru simptome precum cefalee sau amețeală.", x: 194, y: 55  },
+  { id: "chest",  label: "Torace",   description: "Coaste, stern și respirație. Ideal pentru explorarea durerilor toracice educaționale.", x: 194, y: 155 },
+  { id: "arm",    label: "Braț",     description: "Umăr, humerus, cot și antebraț, cu accent pe mobilitate și traumatisme.", x: 100, y: 185 },
+  { id: "pelvis", label: "Bazin",    description: "Centura pelviană conectează coloana cu membrele inferioare.", x: 194, y: 270 },
+  { id: "knee",   label: "Genunchi", description: "Articulație complexă pentru stabilitate, mers și testarea durerilor mecanice.", x: 155, y: 370 },
+  { id: "ankle",  label: "Gleznă",   description: "Stabilitate, propulsie și entorse frecvente în mișcare.", x: 220, y: 450 },
 ] as const;
 
 const skeletonZonesEn = [
-  { id: "skull", label: "Skull", description: "Brain protection and starting point for symptoms such as headache or dizziness.", x: 170, y: 62 },
-  { id: "chest", label: "Thorax", description: "Ribs, sternum and breathing. Ideal for exploring educational chest pain.", x: 170, y: 142 },
-  { id: "arm", label: "Arm", description: "Shoulder, humerus, elbow and forearm, with a focus on mobility and injuries.", x: 114, y: 198 },
-  { id: "pelvis", label: "Pelvis", description: "The pelvic girdle connects the spine to the lower limbs.", x: 170, y: 272 },
-  { id: "knee", label: "Knee", description: "Complex joint for stability, walking and testing mechanical pain.", x: 142, y: 350 },
-  { id: "ankle", label: "Ankle", description: "Stability, propulsion and frequent sprains during movement.", x: 198, y: 408 },
+  { id: "skull",  label: "Skull",   description: "Brain protection and starting point for symptoms such as headache or dizziness.", x: 194, y: 55  },
+  { id: "chest",  label: "Thorax",  description: "Ribs, sternum and breathing. Ideal for exploring educational chest pain.", x: 194, y: 155 },
+  { id: "arm",    label: "Arm",     description: "Shoulder, humerus, elbow and forearm, with a focus on mobility and injuries.", x: 100, y: 185 },
+  { id: "pelvis", label: "Pelvis",  description: "The pelvic girdle connects the spine to the lower limbs.", x: 194, y: 270 },
+  { id: "knee",   label: "Knee",    description: "Complex joint for stability, walking and testing mechanical pain.", x: 155, y: 370 },
+  { id: "ankle",  label: "Ankle",   description: "Stability, propulsion and frequent sprains during movement.", x: 220, y: 450 },
 ] as const;
 
 function SantixLanding() {
@@ -48,11 +154,38 @@ function SantixLanding() {
 
   return (
     <div className="santix-intro min-h-screen overflow-hidden bg-[#050709] text-white">
+      {/* Background layers */}
       <div className="pointer-events-none absolute inset-0 santix-grid" />
       <div className="pointer-events-none absolute inset-0 santix-aura" />
       <div className="pointer-events-none absolute left-0 right-0 top-0 h-px santix-scan" />
 
-      <header className="relative z-10 flex items-center gap-4 px-6 py-5 md:px-10">
+      {/* Animated ambient orbs */}
+      <motion.div
+        className="pointer-events-none absolute left-[8%] top-[14%] h-72 w-72 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(0,242,254,0.12) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.9, 0.5] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="pointer-events-none absolute right-[10%] top-[30%] h-56 w-56 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(0,144,254,0.10) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.7, 0.4] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+      />
+      <motion.div
+        className="pointer-events-none absolute bottom-[20%] left-[40%] h-80 w-80 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(120,0,254,0.07) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 4 }}
+      />
+
+      {/* Header */}
+      <motion.header
+        className="relative z-10 flex items-center gap-4 px-6 py-5 md:px-10"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.05 }}
+      >
         <Link to="/" aria-label="Santix" className="flex items-center">
           <span className="text-xl font-black tracking-[0.08em]">
             San<span className="text-cyan-300">tix</span>
@@ -64,133 +197,214 @@ function SantixLanding() {
           <Link to="/quiz" className="transition hover:text-white">{t.nav_quiz}</Link>
         </nav>
 
-        <Link
-          to="/explorator"
-          className="ml-auto inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_30px_rgba(0,242,254,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_0_44px_rgba(0,242,254,0.42)] md:ml-0"
-        >
-          {t.landing_start}
-          <ArrowRight className="size-4" />
-        </Link>
+        <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="md:ml-0 ml-auto">
+          <Link
+            to="/explorator"
+            className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_30px_rgba(0,242,254,0.26)] hover:shadow-[0_0_50px_rgba(0,242,254,0.55)] transition-shadow"
+          >
+            {t.landing_start}
+            <ArrowRight className="size-4" />
+          </Link>
+        </motion.div>
+        <TextSizeToggle />
         <LanguageToggle />
         <ThemeToggle />
-      </header>
+      </motion.header>
 
       <main className="relative z-10">
+        {/* ── HERO ── */}
         <section className="mx-auto grid min-h-[calc(100vh-84px)] max-w-7xl items-center gap-12 px-6 pb-20 pt-10 md:grid-cols-[1.02fr_0.98fr] md:px-10">
-          <div className="max-w-3xl">
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-300">
-              <span className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(0,242,254,0.9)]" />
-              {t.landing_hero_title}
-            </div>
 
-            <h1 className="max-w-4xl text-5xl font-black leading-[0.96] tracking-tight text-white md:text-7xl lg:text-8xl">
+          {/* Left column — animated stagger */}
+          <motion.div
+            className="max-w-3xl"
+            variants={staggerContainer(0.1, 0.1)}
+            initial="hidden"
+            animate="visible"
+          >
+            {/* Title */}
+            <motion.h1
+              variants={fadeUpBlur}
+              className="max-w-4xl text-5xl font-black leading-[0.96] tracking-tight text-white md:text-7xl lg:text-8xl"
+            >
               San<span className="santix-title-gradient">tix</span>
-            </h1>
+            </motion.h1>
 
-            <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">{t.landing_account_desc}</p>
+            {/* Description */}
+            <motion.p
+              variants={fadeUpBlur}
+              className="mt-7 max-w-xl text-lg leading-8 text-slate-400"
+            >
+              {t.landing_account_desc}
+            </motion.p>
 
-            <div className="mt-10 flex flex-wrap gap-3">
-              <Link
-                to="/explorator"
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] transition hover:-translate-y-1 hover:shadow-[0_0_54px_rgba(0,242,254,0.45)]"
-              >
-                {t.landing_start}
-                <MousePointerClick className="size-4" />
-              </Link>
-              <a
+            {/* CTA buttons */}
+            <motion.div variants={fadeUpBlur} className="mt-10 flex flex-wrap gap-3">
+              <motion.div whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  to="/explorator"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] hover:shadow-[0_0_60px_rgba(0,242,254,0.55)] transition-shadow"
+                >
+                  {t.landing_start}
+                  <MousePointerClick className="size-4" />
+                </Link>
+              </motion.div>
+              <motion.a
                 href="#flux"
-                className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-white/[0.02] px-7 py-4 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/55 hover:bg-cyan-300/5 hover:text-white"
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-white/[0.02] px-7 py-4 text-sm font-semibold text-slate-300 hover:border-cyan-300/55 hover:bg-cyan-300/5 hover:text-white transition-all"
               >
                 {t.landing_how}
                 <Sparkles className="size-4 text-cyan-300" />
-              </a>
-            </div>
+              </motion.a>
+            </motion.div>
 
-            <div className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
-              <IntroStat value={t.landing_stat1_val} label={t.landing_stat1_label} />
-              <IntroStat value={t.landing_stat2_val} label={t.landing_stat2_label} />
-              <IntroStat value={t.landing_stat3_val} label={t.landing_stat3_label} />
-            </div>
-          </div>
+            {/* Stats */}
+            <motion.div variants={fadeUpBlur} className="mt-16 grid max-w-2xl grid-cols-3 gap-6">
+              <AnimatedStat value={t.landing_stat1_val} label={t.landing_stat1_label} />
+              <AnimatedStat value={t.landing_stat2_val} label={t.landing_stat2_label} />
+              <AnimatedStat value={t.landing_stat3_val} label={t.landing_stat3_label} />
+            </motion.div>
+          </motion.div>
 
-          <div className="relative hidden min-h-[620px] items-center justify-center md:flex">
+          {/* Right column — skeleton preview */}
+          <motion.div
+            className="relative hidden min-h-[620px] items-center justify-center md:flex"
+            initial={{ opacity: 0, x: 60, filter: "blur(16px)" }}
+            animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+            transition={{ type: "spring", stiffness: 100, damping: 22, delay: 0.4 }}
+          >
             <NeonSkeletonPreview lang={lang} selectedZoneLabel={t.landing_selected_zone} />
-          </div>
+          </motion.div>
         </section>
 
-        <section id="anatomie" className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
-          <div className="mx-auto mb-10 max-w-7xl">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_features_title}</p>
-            <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
-              {t.landing_feature1_desc}
-            </h2>
-          </div>
+        {/* ── FEATURES ── */}
+        <FeatureSection t={t} />
 
-          <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
-            <Feature icon={Layers} title={t.landing_feature1_title} text={t.landing_feature2_desc} />
-            <Feature icon={Brain} title={t.landing_feature2_title} text={t.landing_feature3_desc} />
-            <Feature icon={ShieldCheck} title={t.landing_feature3_title} text={t.landing_feature4_desc} />
-          </div>
-        </section>
-
-        <section id="flux" className="px-6 pb-28 md:px-10">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-10 flex items-end justify-between gap-6">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_how_title}</p>
-                <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
-                  {t.landing_how_subtitle}
-                </h2>
-              </div>
-              <Link
-                to="/explorator"
-                className="hidden items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-black transition hover:-translate-y-0.5 md:inline-flex"
-              >
-                {t.landing_start}
-                <ArrowRight className="size-4" />
-              </Link>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-3">
-              <Step number={t.landing_step1_num} title={t.landing_step1_title} text={t.landing_step1_desc} />
-              <Step number={t.landing_step2_num} title={t.landing_step2_title} text={t.landing_step2_desc} />
-              <Step number={t.landing_step3_num} title={t.landing_step3_title} text={t.landing_step3_desc} />
-            </div>
-          </div>
-        </section>
+        {/* ── STEPS ── */}
+        <StepsSection t={t} />
       </main>
     </div>
   );
 }
 
-function IntroStat({ value, label }: { value: string; label: string }) {
+/* ── Feature section (staggered, 3D tilt cards) ──────────────────────────── */
+
+type TranslationBag = ReturnType<typeof useLanguage>["t"];
+
+function FeatureSection({ t }: { t: TranslationBag }) {
+  const ref = useRef<HTMLElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-120px" });
+
   return (
-    <div>
-      <div className="text-3xl font-black text-white">{value}</div>
-      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>
-    </div>
+    <section id="anatomie" ref={ref} className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
+      <motion.div
+        className="mx-auto mb-12 max-w-7xl"
+        initial={{ opacity: 0, y: 36 }}
+        animate={isInView ? { opacity: 1, y: 0 } : {}}
+        transition={{ type: "spring", stiffness: 160, damping: 22 }}
+      >
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_features_title}</p>
+        <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
+          {t.landing_feature1_desc}
+        </h2>
+      </motion.div>
+
+      <motion.div
+        className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3"
+        variants={staggerContainer(0.14)}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+      >
+        {[
+          { icon: Layers, title: t.landing_feature1_title, text: t.landing_feature2_desc },
+          { icon: Brain,  title: t.landing_feature2_title, text: t.landing_feature3_desc },
+          { icon: ShieldCheck, title: t.landing_feature3_title, text: t.landing_feature4_desc },
+        ].map(({ icon: Icon, title, text }) => (
+          <motion.div key={title} variants={fadeUpBlur}>
+            <TiltCard>
+              <article className="group rounded-3xl border border-cyan-300/10 bg-white/[0.035] p-7 shadow-[0_18px_70px_rgba(0,0,0,0.28)]">
+                <motion.div
+                  className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300"
+                  whileHover={{ scale: 1.15, rotate: 6 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                >
+                  <Icon className="size-5" />
+                </motion.div>
+                <h3 className="text-xl font-black tracking-tight text-white group-hover:text-cyan-100 transition-colors">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400 group-hover:text-slate-300 transition-colors">{text}</p>
+              </article>
+            </TiltCard>
+          </motion.div>
+        ))}
+      </motion.div>
+    </section>
   );
 }
 
-function Feature({ icon: Icon, title, text }: { icon: typeof Activity; title: string; text: string }) {
+/* ── Steps section (staggered entrance) ──────────────────────────────────── */
+
+function StepsSection({ t }: { t: TranslationBag }) {
+  const ref = useRef<HTMLElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-100px" });
+
   return (
-    <article className="group rounded-3xl border border-cyan-300/10 bg-white/[0.035] p-7 shadow-[0_18px_70px_rgba(0,0,0,0.28)] transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/35 hover:bg-cyan-300/[0.055] hover:shadow-[0_26px_90px_rgba(0,242,254,0.16)]">
-      <div className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300 transition-all duration-300 group-hover:scale-110 group-hover:border-cyan-300/45 group-hover:bg-cyan-300/15 group-hover:shadow-[0_0_34px_rgba(0,242,254,0.28)]">
-        <Icon className="size-5" />
+    <section id="flux" ref={ref} className="px-6 pb-28 md:px-10">
+      <div className="mx-auto max-w-7xl">
+        <motion.div
+          className="mb-10 flex items-end justify-between gap-6"
+          initial={{ opacity: 0, y: 32 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ type: "spring", stiffness: 160, damping: 22 }}
+        >
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">{t.landing_how_title}</p>
+            <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">
+              {t.landing_how_subtitle}
+            </h2>
+          </div>
+          <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="hidden md:block">
+            <Link
+              to="/explorator"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-black hover:-translate-y-0.5 transition-transform"
+            >
+              {t.landing_start}
+              <ArrowRight className="size-4" />
+            </Link>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          className="grid gap-5 md:grid-cols-3"
+          variants={staggerContainer(0.18)}
+          initial="hidden"
+          animate={isInView ? "visible" : "hidden"}
+        >
+          {[
+            { number: t.landing_step1_num, title: t.landing_step1_title, text: t.landing_step1_desc },
+            { number: t.landing_step2_num, title: t.landing_step2_title, text: t.landing_step2_desc },
+            { number: t.landing_step3_num, title: t.landing_step3_title, text: t.landing_step3_desc },
+          ].map(({ number, title, text }) => (
+            <motion.div key={title} variants={fadeUpBlur}>
+              <TiltCard>
+                <article className="group rounded-3xl border border-white/10 bg-white/[0.03] p-7 h-full">
+                  <motion.div
+                    className="text-5xl font-black text-cyan-300/20"
+                    whileHover={{ scale: 1.08, color: "rgba(0,242,254,0.45)" }}
+                    transition={{ type: "spring", stiffness: 300, damping: 22 }}
+                  >
+                    {number}
+                  </motion.div>
+                  <h3 className="mt-5 text-xl font-black text-white group-hover:text-cyan-100 transition-colors">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-400 group-hover:text-slate-300 transition-colors">{text}</p>
+                </article>
+              </TiltCard>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
-      <h3 className="text-xl font-black tracking-tight text-white transition-colors group-hover:text-cyan-100">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
-    </article>
-  );
-}
-
-function Step({ number, title, text }: { number: string; title: string; text: string }) {
-  return (
-    <article className="group rounded-3xl border border-white/10 bg-white/[0.03] p-7 transition-all duration-300 hover:-translate-y-2 hover:border-cyan-300/30 hover:bg-white/[0.055] hover:shadow-[0_24px_80px_rgba(0,242,254,0.12)]">
-      <div className="text-5xl font-black text-cyan-300/15 transition-all duration-300 group-hover:text-cyan-300/35">{number}</div>
-      <h3 className="mt-5 text-xl font-black text-white transition-colors group-hover:text-cyan-100">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-400 transition-colors group-hover:text-slate-300">{text}</p>
-    </article>
+    </section>
   );
 }
 
@@ -198,71 +412,218 @@ function NeonSkeletonPreview({ lang, selectedZoneLabel }: { lang: "ro" | "en"; s
   const zones = lang === "en" ? skeletonZonesEn : skeletonZonesRo;
   const [activeZone, setActiveZone] = useState<(typeof zones)[number]>(zones[0]);
 
+  // Derive once — avoids repeating activeZone.id === "X" dozens of times in JSX
+  const az = activeZone.id;
+
   return (
-    <div className="relative h-[620px] w-[390px]">
+    <div className="relative h-[640px] w-[390px]">
       <div className="absolute inset-0 rounded-full bg-cyan-300/[0.045] blur-3xl" />
       <div className="absolute -left-5 top-40 size-20 rounded-full border border-cyan-300/12 bg-cyan-300/[0.015]" />
       <div className="absolute -right-4 bottom-24 size-16 rounded-full border border-cyan-300/12 bg-cyan-300/[0.015]" />
 
       <div className="relative h-full overflow-hidden rounded-[2rem] border border-cyan-300/10 bg-[#03090b]/80 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-        <svg
-          className="absolute inset-x-0 top-0 h-[500px] w-full santix-neon-skeleton"
-          viewBox="0 0 340 560"
-          role="img"
-          aria-label="Santix interactive skeleton"
-        >
+        {/* 3D skeleton with cinematic cascade assembly + 3D-anchored zone dots */}
+        <div className="absolute inset-x-0 top-0" style={{ height: "calc(100% - 100px)" }}>
+          <SkeletonAssembly
+            zones={zones}
+            activeId={az}
+            onSelect={(id) => {
+              const next = zones.find((z) => z.id === id);
+              if (next) setActiveZone(next as (typeof zones)[number]);
+            }}
+          />
+        </div>
+        {/* keep SVG below as invisible placeholder to avoid layout shift — hidden */}
+        <svg aria-hidden="true" className="hidden" viewBox="0 0 340 500">
+
           <defs>
-            <filter id="santix-neon-glow" x="-70%" y="-70%" width="240%" height="240%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0.95  0 0 0 0 1  0 0 0 0.8 0" />
-              <feMerge>
-                <feMergeNode />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
+            <filter id="ng" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="3" result="b" />
+              <feColorMatrix in="b" type="matrix" values="0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 1 0 0 0 0.7 0" result="g" />
+              <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="ngs" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="4.5" result="b" />
+              <feColorMatrix in="b" type="matrix" values="0 0 0 0 0 0 0 0 0 0.95 0 0 0 0 1 0 0 0 0.88 0" result="g" />
+              <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
           </defs>
 
-          <g className="santix-bone-lines" filter="url(#santix-neon-glow)">
-            <circle className={activeZone.id === "skull" ? "is-active" : ""} cx="170" cy="76" r="24" />
-            <circle cx="170" cy="76" r="14" />
-            <path d="M166 98h8v28h-8z" />
-            <path className={activeZone.id === "chest" ? "is-active" : ""} d="M132 130h76v112h-76z" />
-            <path d="M170 130v112" />
-            <path d="M136 148c19 4 31 11 34 22M204 148c-19 4-31 11-34 22" />
-            <path d="M136 170c19 4 31 11 34 22M204 170c-19 4-31 11-34 22" />
-            <path d="M137 192c18 4 30 11 33 22M203 192c-18 4-30 11-33 22" />
-            <path d="M142 122l28 8 28-8" />
-            <path className={activeZone.id === "arm" ? "is-active" : ""} d="M126 142h-19v76h19zM233 142h-19v76h19zM110 222h13v82h-13zM217 222h13v82h-13z" />
-            <path d="M99 236h10v68H99zM230 236h10v68h-10z" />
-            <path d="M96 304h31v15H96zM213 304h31v15h-31z" />
-            <path className={activeZone.id === "pelvis" ? "is-active" : ""} d="M134 282c15-14 57-14 72 0 8 24-8 46-36 52-28-6-44-28-36-52z" />
-            <path d="M148 304c10 8 34 8 44 0" />
-            <path className={activeZone.id === "knee" ? "is-active" : ""} d="M142 338h20v96h-20zM178 338h20v96h-20z" />
-            <path d="M137 434h28v18h-28zM175 434h28v18h-28z" />
-            <path className={activeZone.id === "ankle" ? "is-active" : ""} d="M141 452h16v52h-16zM183 452h16v52h-16zM132 504h33l9 14h-50zM176 504h33l11 14h-51z" />
+          {/* ── SKULL ── */}
+          <g filter={az==="skull" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            {/* cranium */}
+            <ellipse cx="170" cy="42" rx="26" ry="30"
+              fill={az==="skull" ? "rgba(0,242,254,.13)" : "rgba(0,242,254,.04)"}
+              stroke={az==="skull" ? "rgba(0,242,254,.92)" : "rgba(0,242,254,.38)"} strokeWidth="1.4"/>
+            {/* orbital arches — subtle arched lines, not big holes */}
+            <path d="M157 40 Q161 36 165 40" fill="none"
+              stroke={az==="skull" ? "rgba(0,242,254,.75)" : "rgba(0,242,254,.28)"} strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M175 40 Q179 36 183 40" fill="none"
+              stroke={az==="skull" ? "rgba(0,242,254,.75)" : "rgba(0,242,254,.28)"} strokeWidth="1.2" strokeLinecap="round"/>
+            {/* nasal aperture */}
+            <path d="M168 48 L170 52 L172 48" fill="none"
+              stroke={az==="skull" ? "rgba(0,242,254,.6)" : "rgba(0,242,254,.2)"} strokeWidth="1" strokeLinecap="round"/>
+            {/* cheekbones */}
+            <path d="M145 44 Q152 50 156 52" fill="none"
+              stroke={az==="skull" ? "rgba(0,242,254,.55)" : "rgba(0,242,254,.18)"} strokeWidth="1" strokeLinecap="round"/>
+            <path d="M195 44 Q188 50 184 52" fill="none"
+              stroke={az==="skull" ? "rgba(0,242,254,.55)" : "rgba(0,242,254,.18)"} strokeWidth="1" strokeLinecap="round"/>
+            {/* mandible */}
+            <path d="M147 58 Q148 72 170 75 Q192 72 193 58"
+              fill={az==="skull" ? "rgba(0,242,254,.09)" : "rgba(0,242,254,.02)"}
+              stroke={az==="skull" ? "rgba(0,242,254,.85)" : "rgba(0,242,254,.32)"} strokeWidth="1.4"/>
+            {/* midface suture line */}
+            <line x1="170" y1="13" x2="170" y2="55"
+              stroke={az==="skull" ? "rgba(0,242,254,.35)" : "rgba(0,242,254,.1)"} strokeWidth="0.7" strokeDasharray="3,3"/>
+          </g>
+
+          {/* ── CERVICAL SPINE + CLAVICLES ── */}
+          <g filter="url(#ng)" opacity={az==="skull"||az==="chest" ? 0.88 : 0.52}>
+            {[76,83,90].map(y=>(
+              <rect key={y} x="166" y={y} width="8" height="5" rx="1.5"
+                fill="rgba(0,242,254,.05)" stroke="rgba(0,242,254,.38)" strokeWidth="1"/>
+            ))}
+            <path d="M170 99 Q148 97 126 108" fill="none" stroke="rgba(0,242,254,.48)" strokeWidth="1.7" strokeLinecap="round"/>
+            <path d="M170 99 Q192 97 214 108" fill="none" stroke="rgba(0,242,254,.48)" strokeWidth="1.7" strokeLinecap="round"/>
+          </g>
+
+          {/* ── RIBCAGE ── */}
+          <g filter={az==="chest" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            <rect x="167" y="108" width="6" height="62" rx="3"
+              fill={az==="chest" ? "rgba(0,242,254,.18)" : "rgba(0,242,254,.06)"}
+              stroke={az==="chest" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.4)"} strokeWidth="1.2"/>
+            {[0,1,2,3,4,5,6].map(i => {
+              const y=113+i*9; const w=34-i*2; const a=az==="chest";
+              return <g key={i}>
+                <path d={`M170 ${y} Q${170-w*.5} ${y+2} ${170-w} ${y+6} Q${170-w-5} ${y+10} ${170-w-3} ${y+14}`}
+                  fill="none" stroke={a?"rgba(0,242,254,.82)":"rgba(0,242,254,.3)"} strokeWidth="1.3" strokeLinecap="round"/>
+                <path d={`M170 ${y} Q${170+w*.5} ${y+2} ${170+w} ${y+6} Q${170+w+5} ${y+10} ${170+w+3} ${y+14}`}
+                  fill="none" stroke={a?"rgba(0,242,254,.82)":"rgba(0,242,254,.3)"} strokeWidth="1.3" strokeLinecap="round"/>
+              </g>;
+            })}
+          </g>
+
+          {/* ── ARMS ── */}
+          <g filter={az==="arm" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            {/* scapula hints */}
+            <path d="M126 108 Q116 118 118 136 Q122 143 128 140" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.75)" : "rgba(0,242,254,.27)"} strokeWidth="1.3" strokeLinecap="round"/>
+            <path d="M214 108 Q224 118 222 136 Q218 143 212 140" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.75)" : "rgba(0,242,254,.27)"} strokeWidth="1.3" strokeLinecap="round"/>
+            {/* humerus */}
+            <path d="M120 113 Q110 142 108 174" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.88)" : "rgba(0,242,254,.4)"} strokeWidth="5" strokeLinecap="round"/>
+            <path d="M220 113 Q230 142 232 174" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.88)" : "rgba(0,242,254,.4)"} strokeWidth="5" strokeLinecap="round"/>
+            {/* elbow */}
+            <circle cx="107" cy="176" r="5"
+              fill={az==="arm" ? "rgba(0,242,254,.2)" : "rgba(0,242,254,.06)"}
+              stroke={az==="arm" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.38)"} strokeWidth="1.2"/>
+            <circle cx="233" cy="176" r="5"
+              fill={az==="arm" ? "rgba(0,242,254,.2)" : "rgba(0,242,254,.06)"}
+              stroke={az==="arm" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.38)"} strokeWidth="1.2"/>
+            {/* radius + ulna */}
+            <path d="M104 181 Q97 208 95 243" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.8)" : "rgba(0,242,254,.3)"} strokeWidth="3.5" strokeLinecap="round"/>
+            <path d="M110 181 Q106 209 106 244" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.65)" : "rgba(0,242,254,.22)"} strokeWidth="2.2" strokeLinecap="round"/>
+            <path d="M236 181 Q243 208 245 243" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.8)" : "rgba(0,242,254,.3)"} strokeWidth="3.5" strokeLinecap="round"/>
+            <path d="M230 181 Q234 209 234 244" fill="none"
+              stroke={az==="arm" ? "rgba(0,242,254,.65)" : "rgba(0,242,254,.22)"} strokeWidth="2.2" strokeLinecap="round"/>
+            {/* fingers */}
+            <path d="M91 245 Q88 252 89 258 M95 246 Q93 253 94 259 M100 246 Q98 254 99 260 M105 246 Q105 253 106 259"
+              fill="none" stroke={az==="arm" ? "rgba(0,242,254,.62)" : "rgba(0,242,254,.2)"}
+              strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M249 245 Q252 252 251 258 M245 246 Q247 253 246 259 M240 246 Q242 254 241 260 M235 246 Q235 253 234 259"
+              fill="none" stroke={az==="arm" ? "rgba(0,242,254,.62)" : "rgba(0,242,254,.2)"}
+              strokeWidth="1.5" strokeLinecap="round"/>
+          </g>
+
+          {/* ── LUMBAR SPINE ── */}
+          <g filter="url(#ng)" opacity="0.48">
+            {[0,1,2,3,4].map(i=>(
+              <rect key={i} x="164" y={174+i*9} width="12" height="7" rx="2"
+                fill="rgba(0,242,254,.05)" stroke="rgba(0,242,254,.33)" strokeWidth="1"/>
+            ))}
+          </g>
+
+          {/* ── PELVIS ── */}
+          <g filter={az==="pelvis" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            <path d="M170 224 Q140 220 128 238 Q121 255 133 270 Q148 282 170 284 Q192 282 207 270 Q219 255 212 238 Q200 220 170 224Z"
+              fill={az==="pelvis" ? "rgba(0,242,254,.12)" : "rgba(0,242,254,.04)"}
+              stroke={az==="pelvis" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.36)"} strokeWidth="1.4"/>
+            <path d="M149 278 Q170 288 191 278" fill="none"
+              stroke={az==="pelvis" ? "rgba(0,242,254,.72)" : "rgba(0,242,254,.26)"} strokeWidth="1.2"/>
+            <path d="M163 226 Q167 248 168 268 M177 226 Q173 248 172 268" fill="none"
+              stroke={az==="pelvis" ? "rgba(0,242,254,.6)" : "rgba(0,242,254,.2)"} strokeWidth="1"/>
+          </g>
+
+          {/* ── FEMURS + KNEES + LOWER LEGS ── */}
+          <g filter={az==="knee" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            {/* femur */}
+            <path d="M153 284 Q147 325 144 360" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.88)" : "rgba(0,242,254,.42)"} strokeWidth="6" strokeLinecap="round"/>
+            <path d="M187 284 Q193 325 196 360" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.88)" : "rgba(0,242,254,.42)"} strokeWidth="6" strokeLinecap="round"/>
+            {/* patella */}
+            <ellipse cx="143" cy="364" rx="8" ry="6"
+              fill={az==="knee" ? "rgba(0,242,254,.22)" : "rgba(0,242,254,.07)"}
+              stroke={az==="knee" ? "rgba(0,242,254,.92)" : "rgba(0,242,254,.4)"} strokeWidth="1.4"/>
+            <ellipse cx="197" cy="364" rx="8" ry="6"
+              fill={az==="knee" ? "rgba(0,242,254,.22)" : "rgba(0,242,254,.07)"}
+              stroke={az==="knee" ? "rgba(0,242,254,.92)" : "rgba(0,242,254,.4)"} strokeWidth="1.4"/>
+            {/* tibia */}
+            <path d="M140 370 Q136 403 134 434" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.85)" : "rgba(0,242,254,.38)"} strokeWidth="5" strokeLinecap="round"/>
+            <path d="M200 370 Q204 403 206 434" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.85)" : "rgba(0,242,254,.38)"} strokeWidth="5" strokeLinecap="round"/>
+            {/* fibula */}
+            <path d="M148 372 Q146 406 145 435" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.58)" : "rgba(0,242,254,.22)"} strokeWidth="2" strokeLinecap="round"/>
+            <path d="M192 372 Q194 406 195 435" fill="none"
+              stroke={az==="knee" ? "rgba(0,242,254,.58)" : "rgba(0,242,254,.22)"} strokeWidth="2" strokeLinecap="round"/>
+          </g>
+
+          {/* ── ANKLE + FOOT ── */}
+          <g filter={az==="ankle" ? "url(#ngs)" : "url(#ng)"} style={{transition:"filter .25s"}}>
+            <ellipse cx="137" cy="437" rx="7" ry="5"
+              fill={az==="ankle" ? "rgba(0,242,254,.2)" : "rgba(0,242,254,.05)"}
+              stroke={az==="ankle" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.33)"} strokeWidth="1.2"/>
+            <ellipse cx="203" cy="437" rx="7" ry="5"
+              fill={az==="ankle" ? "rgba(0,242,254,.2)" : "rgba(0,242,254,.05)"}
+              stroke={az==="ankle" ? "rgba(0,242,254,.9)" : "rgba(0,242,254,.33)"} strokeWidth="1.2"/>
+            {/* foot shape */}
+            <path d="M133 441 L123 453 Q119 457 146 457 L148 450 L136 442Z"
+              fill={az==="ankle" ? "rgba(0,242,254,.13)" : "rgba(0,242,254,.04)"}
+              stroke={az==="ankle" ? "rgba(0,242,254,.82)" : "rgba(0,242,254,.28)"} strokeWidth="1.2" strokeLinejoin="round"/>
+            <path d="M207 441 L217 453 Q221 457 194 457 L192 450 L204 442Z"
+              fill={az==="ankle" ? "rgba(0,242,254,.13)" : "rgba(0,242,254,.04)"}
+              stroke={az==="ankle" ? "rgba(0,242,254,.82)" : "rgba(0,242,254,.28)"} strokeWidth="1.2" strokeLinejoin="round"/>
+            {/* toes */}
+            <path d="M123 453 L121 460 M128 455 L127 461 M133 456 L132 462 M138 456 L137 461 M143 455 L143 460"
+              fill="none" stroke={az==="ankle" ? "rgba(0,242,254,.68)" : "rgba(0,242,254,.2)"}
+              strokeWidth="1.4" strokeLinecap="round"/>
+            <path d="M217 453 L219 460 M212 455 L213 461 M207 456 L208 462 M202 456 L203 461 M197 455 L197 460"
+              fill="none" stroke={az==="ankle" ? "rgba(0,242,254,.68)" : "rgba(0,242,254,.2)"}
+              strokeWidth="1.4" strokeLinecap="round"/>
           </g>
         </svg>
 
-        {zones.map((zone) => (
-          <button
-            key={zone.id}
-            type="button"
-            onClick={() => setActiveZone(zone as typeof zones[number])}
-            onMouseEnter={() => setActiveZone(zone as typeof zones[number])}
-            className={["santix-zone-button", activeZone.id === zone.id ? "is-active" : ""].join(" ")}
-            style={{ left: `${zone.x}px`, top: `${zone.y}px` }}
-            aria-pressed={activeZone.id === zone.id}
-          >
-            <span className="santix-zone-ring" />
-            <span className="santix-zone-dot" />
-            <span className="santix-zone-label">{zone.label}</span>
-          </button>
-        ))}
-
-        <div className="santix-selection-panel absolute bottom-5 left-5 right-5 rounded-2xl border border-cyan-300/15 bg-black/55 p-4 backdrop-blur-xl">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">{selectedZoneLabel}</div>
-          <div className="santix-selection-title mt-2 text-lg font-black text-white">{activeZone.label}</div>
-          <p className="santix-selection-copy mt-1 text-xs leading-5 text-slate-400">{activeZone.description}</p>
+        <div className="santix-selection-panel absolute bottom-3 left-4 right-4 rounded-2xl border border-cyan-300/15 bg-black/55 px-4 py-3 backdrop-blur-xl">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">{selectedZoneLabel}</div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={az}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              <div className="santix-selection-title mt-1 text-base font-black text-white">{activeZone.label}</div>
+              <p className="santix-selection-copy mt-1 text-xs leading-5 text-slate-400">{activeZone.description}</p>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

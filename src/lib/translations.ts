@@ -12,12 +12,17 @@ export const translations = {
     sidebar_explorator: "Explorator Anatomie",
     sidebar_ghid: "Ghid de utilizare",
     sidebar_quiz: "Test Rapid",
+    sidebar_optica: "Optică & Vedere",
 
     // Theme toggle
     theme_activate_dark: "Activează modul întunecat",
     theme_activate_light: "Activează modul luminos",
     theme_dark: "Întunecat",
     theme_light: "Luminos",
+    text_size_aria: "Mărește textul",
+    text_size_normal: "Text normal",
+    text_size_large: "Text mare",
+    text_size_xlarge: "Text foarte mare",
 
     // References
     ref_button: "Referințe",
@@ -79,6 +84,11 @@ export const translations = {
 
     // Explorator page
     exp_hint: "Apasă pe un os, mușchi sau organ pentru detalii",
+    exp_pain_button: "Mă doare ceva",
+    exp_pain_title: "Unde te doare?",
+    exp_pain_subtitle: "Alege zona — te ghidăm cu câteva întrebări simple.",
+    exp_search_placeholder: "Caută: umăr, genunchi, inimă...",
+    exp_search_empty: "Niciun rezultat. Încearcă alt termen (ex: spate, talpă).",
     exp_skeleton_label: "Schelet interactiv",
     exp_muscles: [
       "Mușchii brațului",
@@ -182,6 +192,13 @@ export const translations = {
       "Descrierea menționează lovitură, articulație, os sau durere profundă. Modul Schelet poate fi mai potrivit.",
     bone_ctx_bone_go: "Mergi la Schelet",
     bone_hide_rec: "Ascunde recomandarea",
+    bone_card_causes: "Cauze posibile",
+    bone_card_aggravators: "Ce poate agrava",
+    bone_card_safe: "Ce poți face",
+    bone_card_consult: "Mergi la doctor dacă",
+    bone_card_urgent: "Aceste semne pot necesita consult medical rapid.",
+    bone_progress_label: (current: number, total: number) => `Întrebarea ${current} din ${total}`,
+    bone_progress_done: "Triaj complet · vezi recomandarea",
     bone_reading: "Citesc baza Santix pentru selecția curentă...",
     bone_full_mode_notice:
       "Anatomie Completă este o vizualizare combinată. Pentru întrebări AI, folosește Schelet, Sistem Muscular sau Organe.",
@@ -275,12 +292,17 @@ export const translations = {
     sidebar_explorator: "Anatomy Explorer",
     sidebar_ghid: "Usage Guide",
     sidebar_quiz: "Quick Test",
+    sidebar_optica: "Optics & Vision",
 
     // Theme toggle
     theme_activate_dark: "Enable dark mode",
     theme_activate_light: "Enable light mode",
     theme_dark: "Dark",
     theme_light: "Light",
+    text_size_aria: "Increase text size",
+    text_size_normal: "Normal text",
+    text_size_large: "Large text",
+    text_size_xlarge: "Extra large text",
 
     // References
     ref_button: "References",
@@ -342,6 +364,11 @@ export const translations = {
 
     // Explorator page
     exp_hint: "Click on a bone, muscle or organ for details",
+    exp_pain_button: "Something hurts",
+    exp_pain_title: "Where does it hurt?",
+    exp_pain_subtitle: "Pick the area — we'll guide you with a few simple questions.",
+    exp_search_placeholder: "Search: shoulder, knee, heart...",
+    exp_search_empty: "No results. Try another term (e.g. back, foot).",
     exp_skeleton_label: "Interactive skeleton",
     exp_muscles: [
       "Arm muscles",
@@ -445,6 +472,13 @@ export const translations = {
       "The description mentions impact, joint, bone or deep pain. Skeleton mode may be more appropriate.",
     bone_ctx_bone_go: "Go to Skeleton",
     bone_hide_rec: "Hide recommendation",
+    bone_card_causes: "Possible causes",
+    bone_card_aggravators: "What may worsen it",
+    bone_card_safe: "What you can do",
+    bone_card_consult: "See a doctor if",
+    bone_card_urgent: "These signs may require prompt medical attention.",
+    bone_progress_label: (current: number, total: number) => `Question ${current} of ${total}`,
+    bone_progress_done: "Triage complete · see recommendation",
     bone_reading: "Reading Santix database for current selection...",
     bone_full_mode_notice:
       "Full Anatomy is a combined view. For AI questions, use Skeleton, Muscular System or Organs.",

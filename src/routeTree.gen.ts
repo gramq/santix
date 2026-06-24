@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as QuizRouteImport } from './routes/quiz'
+import { Route as OpticaRouteImport } from './routes/optica'
 import { Route as GlosarRouteImport } from './routes/glosar'
 import { Route as ExploratorRouteImport } from './routes/explorator'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 const QuizRoute = QuizRouteImport.update({
   id: '/quiz',
   path: '/quiz',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpticaRoute = OpticaRouteImport.update({
+  id: '/optica',
+  path: '/optica',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlosarRoute = GlosarRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
+  '/optica': typeof OpticaRoute
   '/quiz': typeof QuizRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
+  '/optica': typeof OpticaRoute
   '/quiz': typeof QuizRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
@@ -60,21 +68,36 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/explorator': typeof ExploratorRoute
   '/glosar': typeof GlosarRoute
+  '/optica': typeof OpticaRoute
   '/quiz': typeof QuizRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
+  fullPaths:
+    | '/'
+    | '/explorator'
+    | '/glosar'
+    | '/optica'
+    | '/quiz'
+    | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
-  id: '__root__' | '/' | '/explorator' | '/glosar' | '/quiz' | '/auth/callback'
+  to: '/' | '/explorator' | '/glosar' | '/optica' | '/quiz' | '/auth/callback'
+  id:
+    | '__root__'
+    | '/'
+    | '/explorator'
+    | '/glosar'
+    | '/optica'
+    | '/quiz'
+    | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ExploratorRoute: typeof ExploratorRoute
   GlosarRoute: typeof GlosarRoute
+  OpticaRoute: typeof OpticaRoute
   QuizRoute: typeof QuizRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -86,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/quiz'
       fullPath: '/quiz'
       preLoaderRoute: typeof QuizRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/optica': {
+      id: '/optica'
+      path: '/optica'
+      fullPath: '/optica'
+      preLoaderRoute: typeof OpticaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/glosar': {
@@ -123,6 +153,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ExploratorRoute: ExploratorRoute,
   GlosarRoute: GlosarRoute,
+  OpticaRoute: OpticaRoute,
   QuizRoute: QuizRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

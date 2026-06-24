@@ -6,10 +6,12 @@ import {
   Scripts,
   useLocation,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { applyTextSize, readTextSize } from "@/components/layout/TextSizeToggle";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 function NotFoundComponent() {
@@ -78,6 +80,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const location = useLocation();
   const isLanding = location.pathname === "/";
+
+  // Apply the saved text-size preference on every page (the toggle lives in the
+  // header, but the choice must persist across all routes, including landing).
+  useEffect(() => {
+    applyTextSize(readTextSize());
+  }, []);
 
   return (
     <AuthProvider>

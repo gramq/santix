@@ -1,11 +1,13 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, UserCircle } from "lucide-react";
-import { useState } from "react";
+import { motion } from "framer-motion";
+import { useState, useMemo } from "react";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageToggle } from "./LanguageToggle";
+import { TextSizeToggle } from "./TextSizeToggle";
 import { useLanguage } from "@/lib/useLanguage";
 
 export function Header() {
@@ -14,11 +16,14 @@ export function Header() {
   const [authOpen, setAuthOpen] = useState(false);
   const { t } = useLanguage();
 
-  const links = [
-    { to: "/explorator", label: t.nav_explorator },
-    { to: "/glosar", label: t.nav_ghid },
-    { to: "/quiz", label: t.nav_quiz },
-  ] as const;
+  const links = useMemo(
+    () => [
+      { to: "/explorator" as const, label: t.nav_explorator },
+      { to: "/glosar" as const, label: t.nav_ghid },
+      { to: "/quiz" as const, label: t.nav_quiz },
+    ],
+    [t],
+  );
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -26,7 +31,7 @@ export function Header() {
 
   return (
     <>
-      <header className="glass rounded-3xl mx-4 mt-4 px-5 py-3 flex items-center gap-4 fade-up">
+      <header className="glass glass-highlight rounded-3xl mx-4 mt-4 px-5 py-3 flex items-center gap-4 fade-up">
         <Link to="/" aria-label="Santix" className="shrink-0">
           <span className="group flex items-center rounded-2xl border border-primary/10 bg-white/[0.035] px-4 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.06]">
             <span className="text-sm font-black tracking-[0.12em] text-foreground transition-colors group-hover:text-primary">
@@ -41,19 +46,28 @@ export function Header() {
               <Link
                 key={to}
                 to={to}
-                className={`px-4 py-2 rounded-2xl text-sm font-medium tracking-tight transition-all duration-300 ${
+                className={`relative px-4 py-2 rounded-2xl text-sm font-medium tracking-tight transition-all duration-200 ${
                   active
-                    ? "bg-primary/12 text-primary"
+                    ? "text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
                 }`}
               >
-                {label}
+                {active && (
+                  <motion.span
+                    layoutId="header-active"
+                    className="absolute inset-0 rounded-2xl bg-primary/10"
+                    style={{ boxShadow: "inset 0 0 0 1px oklch(0.82 0.17 205 / 0.22)" }}
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <span className="relative z-10">{label}</span>
               </Link>
             );
           })}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <TextSizeToggle />
           <LanguageToggle />
           <ThemeToggle />
           {user ? (

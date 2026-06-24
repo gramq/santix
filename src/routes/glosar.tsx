@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bone,
   ChevronLeft,
@@ -216,19 +217,34 @@ function GhidSantixPage() {
           </div>
         </div>
 
-        <main className="grid gap-4 p-6 lg:grid-cols-2">
+        <motion.main
+          className="grid gap-4 p-6 lg:grid-cols-2"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.09 } } }}
+          initial="hidden"
+          animate="visible"
+        >
           {guideSections.map(({ Icon, eyebrow, title, body, example, examples }, index) => (
-            <button
+            <motion.button
               type="button"
               key={title}
               onClick={() => openCard(index)}
-              className="santix-guide-card glass rounded-3xl p-5 text-left fade-up"
-              style={{ animationDelay: `${Math.min(index * 35, 220)}ms` }}
+              variants={{
+                hidden: { opacity: 0, y: 40, scale: 0.96, filter: "blur(8px)" },
+                visible: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)",
+                  transition: { type: "spring" as const, stiffness: 180, damping: 22 } },
+              }}
+              whileHover={{ y: -6, scale: 1.02, transition: { type: "spring", stiffness: 300, damping: 24 } }}
+              whileTap={{ scale: 0.98 }}
+              className="santix-guide-card glass rounded-3xl p-5 text-left"
             >
               <div className="mb-4 flex items-start gap-3">
-                <div className="santix-guide-icon flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
+                <motion.div
+                  className="santix-guide-icon flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10"
+                  whileHover={{ scale: 1.15, rotate: 8, boxShadow: "0 0 20px oklch(0.82 0.17 205 / 0.45)" }}
+                  transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                >
                   <Icon className="size-5 text-primary" />
-                </div>
+                </motion.div>
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{eyebrow}</p>
                   <h2 className="mt-1 text-xl font-bold tracking-tight">{title}</h2>
@@ -254,16 +270,34 @@ function GhidSantixPage() {
                   ))}
                 </div>
               )}
-            </button>
+            </motion.button>
           ))}
 
-        </main>
+        </motion.main>
       </div>
 
+      {/* ── Flash card modal with AnimatePresence ── */}
+      <AnimatePresence>
       {activeCard && (
-        <div className="santix-flash-overlay absolute inset-0 z-30 flex items-center justify-center p-4" onClick={closeCard}>
-          <div className="santix-flash-stage w-full max-w-2xl" onClick={(event) => event.stopPropagation()}>
-            <article key={activeCardIndex} className="santix-flash-card glass-strong rounded-3xl p-6 md:p-7">
+        <motion.div
+          key="overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="santix-flash-overlay absolute inset-0 z-30 flex items-center justify-center p-4"
+          onClick={closeCard}
+        >
+          <motion.div
+            key={activeCardIndex}
+            initial={{ opacity: 0, scale: 0.85, y: 48, filter: "blur(18px)", rotateX: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)", rotateX: 0 }}
+            exit={{ opacity: 0, scale: 0.88, y: -32, filter: "blur(12px)" }}
+            transition={{ type: "spring", stiffness: 220, damping: 26 }}
+            className="santix-flash-stage w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <article className="santix-flash-card glass-strong rounded-3xl p-6 md:p-7">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="santix-guide-icon flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
@@ -274,14 +308,17 @@ function GhidSantixPage() {
                     <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">{activeCard.title}</h2>
                   </div>
                 </div>
-                <button
+                <motion.button
                   type="button"
                   onClick={closeCard}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-muted-foreground transition hover:text-foreground"
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-muted-foreground hover:text-foreground"
                   aria-label={t.ghid_close}
                 >
                   <X className="size-5" />
-                </button>
+                </motion.button>
               </div>
 
               <div className="space-y-3 text-sm leading-relaxed text-foreground/85 md:text-base">
@@ -307,28 +344,33 @@ function GhidSantixPage() {
                   {activeCardIndex! + 1} / {flashCards.length}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <motion.button
                     type="button"
                     onClick={previousCard}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-muted-foreground transition hover:border-primary/35 hover:text-foreground"
+                    whileHover={{ scale: 1.05, x: -3 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-muted-foreground hover:border-primary/35 hover:text-foreground transition-colors"
                   >
                     <ChevronLeft className="size-4" />
                     {t.ghid_prev}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
                     onClick={nextCard}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/15"
+                    whileHover={{ scale: 1.05, x: 3 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors"
                   >
                     {t.ghid_next}
                     <ChevronRight className="size-4" />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             </article>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

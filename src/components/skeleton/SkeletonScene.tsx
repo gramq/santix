@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
-import { Canvas, useFrame, useLoader, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Environment, ContactShadows, Html, useGLTF, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -1241,6 +1241,101 @@ function LoadingFallback() {
   );
 }
 
+type FocusControls = {
+  target: THREE.Vector3;
+  getAzimuthalAngle: () => number;
+  setAzimuthalAngle: (v: number) => void;
+  update: () => void;
+  addEventListener: (type: string, cb: () => void) => void;
+  removeEventListener: (type: string, cb: () => void) => void;
+};
+
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 0.15, 10);
+const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
+export const RESET_VIEW_EVENT = "santix-reset-anatomy-view";
+
+// Smoothly turns the camera to face and frame the selected structure.
+// Works for any selection (bone / muscle region / organ) by finding the matching
+// meshes in the scene and easing OrbitControls toward their bounding-box centre.
+function CameraFocus({ selection }: { selection: BoneSelection | null }) {
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as FocusControls | null;
+  const goal = useRef<{ target: THREE.Vector3; cameraPosition?: THREE.Vector3 } | null>(null);
+
+  useEffect(() => {
+    if (!controls) return;
+    const cancel = () => { goal.current = null; };
+    controls.addEventListener("start", cancel);
+    return () => controls.removeEventListener("start", cancel);
+  }, [controls]);
+
+  useEffect(() => {
+    if (!controls) return;
+    if (!selection) return;
+    const box = new THREE.Box3();
+    let found = false;
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.visible) return;
+      const ud = mesh.userData;
+      const match =
+        (typeof ud.selectionId === "string" && ud.selectionId === selection.id) ||
+        (!!selection.regionId && ud.selectionRegionId === selection.regionId) ||
+        (typeof ud.boneId === "string" && ud.boneId === selection.id);
+      if (match) {
+        box.expandByObject(mesh);
+        found = true;
+      }
+    });
+    if (!found || box.isEmpty()) {
+      goal.current = null;
+      return;
+    }
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    // Zoom IN on the selected part and centre on it. The camera moves much
+    // closer (magnify) and only partially follows the part's height, so it
+    // reads as "zooming into the area" rather than the camera rising/falling.
+    const ZOOM_DISTANCE = 6.8; // default view sits at ~10
+    goal.current = {
+      target: center,
+      cameraPosition: new THREE.Vector3(center.x * 0.5, 0.15 + center.y * 0.45, ZOOM_DISTANCE),
+    };
+  }, [selection, scene, controls]);
+
+  useEffect(() => {
+    if (!controls) return;
+    const resetView = () => {
+      goal.current = {
+        target: DEFAULT_CAMERA_TARGET.clone(),
+        cameraPosition: DEFAULT_CAMERA_POSITION.clone(),
+      };
+    };
+
+    window.addEventListener(RESET_VIEW_EVENT, resetView);
+    return () => window.removeEventListener(RESET_VIEW_EVENT, resetView);
+  }, [controls]);
+
+  useFrame(() => {
+    if (!controls || !goal.current) return;
+    const k = 0.08;
+    controls.target.lerp(goal.current.target, k);
+    if (goal.current.cameraPosition) {
+      camera.position.lerp(goal.current.cameraPosition, k);
+    }
+    controls.update();
+    const targetDone = controls.target.distanceTo(goal.current.target) < 0.01;
+    const cameraDone =
+      !goal.current.cameraPosition || camera.position.distanceTo(goal.current.cameraPosition) < 0.03;
+    if (targetDone && cameraDone) {
+      goal.current = null;
+    }
+  });
+
+  return null;
+}
+
 interface SkeletonSceneProps {
   selection: BoneSelection | null;
   onSelect: (sel: BoneSelection | null) => void;
@@ -1264,9 +1359,10 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 0.15, 10], fov: 30 }}
+      camera={{ position: DEFAULT_CAMERA_POSITION.toArray(), fov: 30 }}
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
+      onWheel={(event) => event.stopPropagation()}
     >
       <color attach="background" args={[isLightMode ? "#eef7f8" : "#03090b"]} />
       <fog attach="fog" args={[isLightMode ? "#dff4f6" : "#051318", 9, 22]} />
@@ -1324,13 +1420,21 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
       </Suspense>
 
       <OrbitControls
-        enablePan={false}
-        minDistance={5.8}
-        maxDistance={15}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 1.6}
-        target={[0, 0, 0]}
+        makeDefault
+        enablePan
+        enableZoom
+        enableDamping
+        dampingFactor={0.05}
+        zoomSpeed={0.95}
+        panSpeed={0.85}
+        screenSpacePanning
+        minDistance={0.8}
+        maxDistance={28}
+        minPolarAngle={0.05}
+        maxPolarAngle={Math.PI - 0.05}
+        target={DEFAULT_CAMERA_TARGET.toArray()}
       />
+      <CameraFocus selection={selection} />
     </Canvas>
   );
 }

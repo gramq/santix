@@ -38,6 +38,9 @@ import {
 } from "@/lib/aiHistory";
 import type { BoneSelection, TissueType } from "./SkeletonScene";
 import type { LayerMode } from "./LayersToggle";
+import { parseStructuredAiAnswer, StructuredAiAnswer } from "./StructuredAiAnswer";
+import { TriageProgress } from "./TriageProgress";
+import type { SantixStructuredAiOutput } from "@/lib/ai/structured-output";
 import { getInternalOrgan, type InternalOrgan } from "@/data/internalOrgans";
 import { localizeInternalOrgan } from "@/data/organLocalization";
 import { useLanguage } from "@/lib/useLanguage";
@@ -187,7 +190,7 @@ export function BoneInfoPanel({
   const [result, setResult] = useState<SymptomAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiMessages, setAiMessages] = useState<
-    Array<{ role: "assistant" | "user"; content: string }>
+    Array<{ role: "assistant" | "user"; content: string; structured?: SantixStructuredAiOutput }>
   >([]);
   const [aiInput, setAiInput] = useState("");
   const [aiConversationId, setAiConversationId] = useState<string | undefined>();
@@ -495,7 +498,10 @@ export function BoneInfoPanel({
 
       setAiConversationId(response.conversationId);
       dispatchAiHistoryRefresh();
-      setAiMessages((current) => [...current, { role: "assistant", content: response.answer }]);
+      setAiMessages((current) => [
+        ...current,
+        { role: "assistant", content: response.answer, structured: response.structured },
+      ]);
 
       const contextSwitch = response.contextSwitch;
       if (!options.suppressSuggestion && contextSwitch && shouldShowContextSuggestion(contextSwitch)) {
@@ -692,30 +698,67 @@ export function BoneInfoPanel({
                   />
                 )}
 
+                {(() => {
+                  const lastAssistant = [...aiMessages]
+                    .reverse()
+                    .find((m) => m.role === "assistant" && m.structured);
+                  if (!lastAssistant?.structured) return null;
+                  return (
+                    <div className="mb-2">
+                      <TriageProgress
+                        nextQuestionIntent={lastAssistant.structured.next_question_intent}
+                        label={t.bone_progress_label}
+                        doneLabel={t.bone_progress_done}
+                      />
+                    </div>
+                  );
+                })()}
+
                 <div className="max-h-[250px] space-y-2 overflow-y-auto pr-1">
                   {aiMessages.length === 0 ? (
                     <div className="rounded-xl border border-primary/10 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                       {tissue === "organ" ? t.bone_placeholder_organ : tissue === "os" ? t.bone_placeholder_injury : t.bone_placeholder_movement}
                     </div>
                   ) : (
-                    aiMessages.map((message, index) => (
-                      <div
-                        key={`${message.role}-${index}`}
-                        className={[
-                          "flex gap-2 rounded-xl border px-3 py-2 text-xs leading-relaxed",
-                          message.role === "user"
-                            ? "border-primary/25 bg-primary/10 text-foreground"
-                            : "border-white/10 bg-background/45 text-foreground/90",
-                        ].join(" ")}
-                      >
-                        {message.role === "user" ? (
-                          <UserRound className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                        ) : (
-                          <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                        )}
-                        <span className="whitespace-pre-line">{message.content}</span>
-                      </div>
-                    ))
+                    aiMessages.map((message, index) => {
+                      const parsed =
+                        message.role === "assistant"
+                          ? parseStructuredAiAnswer(message.content, lang)
+                          : null;
+                      return (
+                        <div
+                          key={`${message.role}-${index}`}
+                          className={[
+                            "flex gap-2 rounded-xl border px-3 py-2 text-xs leading-relaxed",
+                            message.role === "user"
+                              ? "border-primary/25 bg-primary/10 text-foreground"
+                              : "border-white/10 bg-background/45 text-foreground/90",
+                          ].join(" ")}
+                        >
+                          {message.role === "user" ? (
+                            <UserRound className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                          ) : (
+                            <Bot className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                          )}
+                          {parsed ? (
+                            <StructuredAiAnswer
+                              parsed={parsed}
+                              structured={message.structured}
+                              labels={{
+                                causes: t.bone_card_causes,
+                                aggravators: t.bone_card_aggravators,
+                                safeActions: t.bone_card_safe,
+                                consult: t.bone_card_consult,
+                                urgent: t.bone_card_urgent,
+                                disclaimer: t.bone_triage_disclaimer,
+                              }}
+                            />
+                          ) : (
+                            <span className="whitespace-pre-line">{message.content}</span>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                   {aiLoading && (
                     <div className="flex gap-2 rounded-xl border border-white/10 bg-background/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
