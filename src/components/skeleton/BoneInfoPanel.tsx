@@ -376,9 +376,7 @@ export function BoneInfoPanel({
   const displayInfo = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName, lang });
   const displayName = selectedOrgan?.name ?? displayInfo.display_name;
   const displayTitle = selectedOrgan?.name ?? displayInfo.title;
-  const displaySubtitle = selectedOrgan?.latinName ?? displayInfo.subtitle;
   const aiStructureName = displayTitle;
-  const displayLatin = selectedOrgan?.latinName ?? displayInfo.latin_name ?? (tissue === "tendon" ? "Tendo" : "");
   const categoryLabelsLang = lang === "en" ? categoryLabelsEn : categoryLabels;
   const categoryText = selectedOrgan?.category ?? (bone ? categoryLabelsLang[bone.category] : curriculum.group);
 
@@ -593,9 +591,6 @@ export function BoneInfoPanel({
       </div>
 
       <h2 className="text-3xl font-bold tracking-tight leading-tight mb-1">{displayTitle}</h2>
-      {(displaySubtitle || displayLatin) && (
-        <p className="text-sm italic text-muted-foreground mb-5">{displaySubtitle ?? displayLatin}</p>
-      )}
 
       {bone && (
         <div className="flex items-center gap-2 mb-5 px-3 py-2 rounded-2xl bg-bone-glow/10 border border-bone-glow/20 w-fit">
