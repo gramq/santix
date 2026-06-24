@@ -99,9 +99,10 @@ function ExploratorPage() {
     const nextTissue: BoneSelection["tissue"] =
       action.target_layer === "organs" || action.target_structure_type === "organ"
         ? "organ"
-        : action.target_structure_type === "muscle" || action.target_structure_type === "muscle_group"
-        ? "muschi"
-        : "os";
+        : action.target_structure_type === "muscle" ||
+            action.target_structure_type === "muscle_group"
+          ? "muschi"
+          : "os";
     const targetBone =
       nextTissue === "os" ? bones.find((item) => item.id === action.target_structure_slug) : null;
     const muscleLabels: Record<string, string> = {
@@ -117,7 +118,8 @@ function ExploratorPage() {
       "muschi:muschii-capului-gatului": "Mușchii capului și gâtului",
       "muschi:muschii-toracelui": "Mușchii toracelui",
     };
-    const organ = nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
+    const organ =
+      nextTissue === "organ" ? getInternalOrgan(action.target_structure_slug) : undefined;
 
     setPreserveAiStateOnSelectionChange(true);
     setContextSwitchCount((count) => count + 1);
@@ -126,18 +128,27 @@ function ExploratorPage() {
       id: action.target_structure_slug,
       side: "male",
       tissue: nextTissue,
-      regionId: nextTissue === "muschi" || nextTissue === "organ" ? action.target_structure_slug : undefined,
+      regionId:
+        nextTissue === "muschi" || nextTissue === "organ"
+          ? action.target_structure_slug
+          : undefined,
       regionLabel:
         nextTissue === "muschi"
           ? muscleLabels[action.target_structure_slug]
           : nextTissue === "organ"
             ? (organ?.category ?? action.target_body_region ?? undefined)
-          : (action.target_body_region ?? undefined),
+            : (action.target_body_region ?? undefined),
       label:
-        organ?.name ??
+        action.target_display_name ??
+        organ?.popularName ??
         targetBone?.name ??
         muscleLabels[action.target_structure_slug] ??
         action.target_body_region ??
+        action.target_structure_slug,
+      labelEn:
+        organ?.popularNameEn ??
+        action.target_display_name ??
+        targetBone?.latin ??
         action.target_structure_slug,
     });
     window.setTimeout(() => setPreserveAiStateOnSelectionChange(false), 0);
@@ -155,9 +166,7 @@ function ExploratorPage() {
       {!selection && (
         <div className="absolute left-6 top-6 flex items-center gap-2.5 rounded-2xl px-4 py-3 glass fade-up">
           <MousePointerClick className="size-4 text-primary" />
-          <span className="text-xs tracking-tight text-muted-foreground">
-            {t.exp_hint}
-          </span>
+          <span className="text-xs tracking-tight text-muted-foreground">{t.exp_hint}</span>
         </div>
       )}
 

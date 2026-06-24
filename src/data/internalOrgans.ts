@@ -73,6 +73,10 @@ export type InternalOrgan = {
   slug: string;
   modelSelectionId: string;
   name: string;
+  popularName: string;
+  popularNameEn: string;
+  scientificName: string;
+  scientificNameEn: string;
   latinName: string;
   category: string;
   bodyRegion: string;
@@ -102,15 +106,22 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-inima",
     modelSelectionId: "organ:inima",
     name: "Inimă",
+    popularName: "Inimă",
+    popularNameEn: "Heart",
+    scientificName: "Inimă",
+    scientificNameEn: "Heart",
     latinName: "Cor",
     category: "Aparat cardiovascular",
     bodyRegion: "torace",
     difficulty: "incepator",
-    description: "Organ muscular situat în torace, între plămâni, cu rol central în circulația sângelui.",
-    function: "Pompează sângele către plămâni și către restul corpului.",
+    description:
+      "Organ muscular aflat în torace, aproximativ de mărimea unui pumn, alcătuit din patru camere care primesc și împing sângele.",
+    function:
+      "Pompează sângele către plămâni pentru oxigenare și apoi către restul corpului, menținând circulația.",
     technical: {
       origin: "Situată în mediastin, ușor spre stânga liniei mediane.",
-      insertion: "Conectată cu vasele mari: aorta, venele cave, artera pulmonară și venele pulmonare.",
+      insertion:
+        "Conectată cu vasele mari: aorta, venele cave, artera pulmonară și venele pulmonare.",
       innervation: "Reglată de sistemul nervos autonom prin fibre simpatice și parasimpatice.",
       action: "Realizează contracții ritmice care mențin circulația sângelui.",
     },
@@ -149,7 +160,12 @@ export const internalOrgans: InternalOrgan[] = [
       { kind: "ellipsoid", position: [0.09, 1.14, 0.55], size: [0.42, 0.48, 0.24] },
     ],
     visualParts: [
-      { kind: "sphere", position: [0.04, 0.75, 0.08], scale: [0.09, 0.14, 0.06], rotation: [0.25, 0, -0.3] },
+      {
+        kind: "sphere",
+        position: [0.04, 0.75, 0.08],
+        scale: [0.09, 0.14, 0.06],
+        rotation: [0.25, 0, -0.3],
+      },
       { kind: "sphere", position: [-0.01, 0.82, 0.08], scale: [0.045, 0.065, 0.04] },
     ],
   },
@@ -158,16 +174,23 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-plamani",
     modelSelectionId: "organ:plamani",
     name: "Plămâni",
+    popularName: "Plămâni",
+    popularNameEn: "Lungs",
+    scientificName: "Plămâni",
+    scientificNameEn: "Lungs",
     latinName: "Pulmones",
     category: "Aparat respirator",
     bodyRegion: "torace",
     difficulty: "incepator",
-    description: "Organe pereche din torace, responsabile de schimbul de gaze dintre aer și sânge.",
-    function: "Permit oxigenarea sângelui și eliminarea dioxidului de carbon.",
+    description:
+      "Două organe spongioase aflate în torace, de o parte și de alta a inimii, care conțin căile respiratorii și mici saci de aer.",
+    function:
+      "Transferă oxigenul din aer în sânge și elimină dioxidul de carbon din sânge prin respirație.",
     technical: {
       origin: "Așezați de o parte și de alta a inimii, în cavitatea toracică.",
       insertion: "Comunică cu traheea prin bronhiile principale.",
-      innervation: "Reglați de fibre autonome implicate în calibrul bronhiilor și ritmul respirator.",
+      innervation:
+        "Reglați de fibre autonome implicate în calibrul bronhiilor și ritmul respirator.",
       action: "Participă la inspirație și expirație prin schimbul de oxigen și dioxid de carbon.",
     },
     quiz: [
@@ -208,10 +231,30 @@ export const internalOrgans: InternalOrgan[] = [
       { kind: "ellipsoid", position: [-0.28, 1.1, 0.36], size: [0.52, 1, 0.24] },
     ],
     visualParts: [
-      { kind: "sphere", position: [-0.16, 0.99, 0.04], scale: [0.13, 0.24, 0.06], rotation: [0, 0, 0.08] },
-      { kind: "sphere", position: [-0.18, 0.74, 0.04], scale: [0.11, 0.2, 0.055], rotation: [0, 0, -0.02] },
-      { kind: "sphere", position: [0.16, 0.99, 0.04], scale: [0.13, 0.24, 0.06], rotation: [0, 0, -0.08] },
-      { kind: "sphere", position: [0.18, 0.74, 0.04], scale: [0.11, 0.2, 0.055], rotation: [0, 0, 0.02] },
+      {
+        kind: "sphere",
+        position: [-0.16, 0.99, 0.04],
+        scale: [0.13, 0.24, 0.06],
+        rotation: [0, 0, 0.08],
+      },
+      {
+        kind: "sphere",
+        position: [-0.18, 0.74, 0.04],
+        scale: [0.11, 0.2, 0.055],
+        rotation: [0, 0, -0.02],
+      },
+      {
+        kind: "sphere",
+        position: [0.16, 0.99, 0.04],
+        scale: [0.13, 0.24, 0.06],
+        rotation: [0, 0, -0.08],
+      },
+      {
+        kind: "sphere",
+        position: [0.18, 0.74, 0.04],
+        scale: [0.11, 0.2, 0.055],
+        rotation: [0, 0, 0.02],
+      },
     ],
   },
   {
@@ -219,12 +262,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-ficat",
     modelSelectionId: "organ:ficat",
     name: "Ficat",
+    popularName: "Ficat",
+    popularNameEn: "Liver",
+    scientificName: "Ficat",
+    scientificNameEn: "Liver",
     latinName: "Hepar",
     category: "Aparat digestiv",
     bodyRegion: "abdomen",
     difficulty: "incepator",
-    description: "Organ voluminos din partea dreaptă superioară a abdomenului.",
-    function: "Procesează nutrienți, produce bilă și participă la detoxifierea organismului.",
+    description:
+      "Organ mare aflat în principal în partea dreaptă de sus a abdomenului, sub diafragmă.",
+    function:
+      "Produce bilă, prelucrează substanțele nutritive și participă la eliminarea sau transformarea multor substanțe din organism.",
     technical: {
       origin: "Localizat sub diafragmă, predominant în partea dreaptă a abdomenului superior.",
       insertion: "Conectat funcțional cu vezica biliară, vasele hepatice și sistemul digestiv.",
@@ -255,15 +304,34 @@ export const internalOrgans: InternalOrgan[] = [
         anchor: "right-upper-abdomen",
         targetSize: [1, 1, 1],
         preserveScenePosition: true,
-        nodeNames: ["VH_M_liver_capsule", "VH_M_caudate_lobe_of_liver", "VH_M_quadrate_lobe_of_liver"],
+        nodeNames: [
+          "VH_M_liver_capsule",
+          "VH_M_caudate_lobe_of_liver",
+          "VH_M_quadrate_lobe_of_liver",
+        ],
       },
     ],
     interactionZones: [
-      { kind: "ellipsoid", position: [-0.18, 0.76, 0.38], size: [0.58, 0.44, 0.24], rotation: [0.05, 0, 0.05] },
+      {
+        kind: "ellipsoid",
+        position: [-0.18, 0.76, 0.38],
+        size: [0.58, 0.44, 0.24],
+        rotation: [0.05, 0, 0.05],
+      },
     ],
     visualParts: [
-      { kind: "sphere", position: [-0.13, 0.32, 0.07], scale: [0.24, 0.095, 0.055], rotation: [0.05, 0, 0.06] },
-      { kind: "sphere", position: [0.08, 0.28, 0.07], scale: [0.095, 0.065, 0.045], rotation: [0.05, 0, -0.08] },
+      {
+        kind: "sphere",
+        position: [-0.13, 0.32, 0.07],
+        scale: [0.24, 0.095, 0.055],
+        rotation: [0.05, 0, 0.06],
+      },
+      {
+        kind: "sphere",
+        position: [0.08, 0.28, 0.07],
+        scale: [0.095, 0.065, 0.045],
+        rotation: [0.05, 0, -0.08],
+      },
     ],
   },
   {
@@ -271,12 +339,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-stomac",
     modelSelectionId: "organ:stomac",
     name: "Stomac",
+    popularName: "Stomac",
+    popularNameEn: "Stomach",
+    scientificName: "Stomac",
+    scientificNameEn: "Stomach",
     latinName: "Ventriculus",
     category: "Aparat digestiv",
     bodyRegion: "abdomen",
     difficulty: "incepator",
-    description: "Organ cavitar al digestiei, situat în abdomenul superior.",
-    function: "Amestecă alimentele cu sucuri gastrice și începe digestia proteinelor.",
+    description:
+      "Organ muscular gol aflat în partea superioară a abdomenului, între esofag și intestinul subțire.",
+    function:
+      "Păstrează temporar alimentele, le amestecă cu acid și enzime digestive și le trimite treptat către intestinul subțire.",
     technical: {
       origin: "Localizat în abdomenul superior, mai ales spre partea stângă.",
       insertion: "Primește alimente prin esofag și continuă către duoden.",
@@ -302,7 +376,12 @@ export const internalOrgans: InternalOrgan[] = [
     aiEnabled: false,
     positionStatus: "missing",
     visualParts: [
-      { kind: "sphere", position: [0.13, 0.17, 0.08], scale: [0.105, 0.14, 0.05], rotation: [0, 0, 0.45] },
+      {
+        kind: "sphere",
+        position: [0.13, 0.17, 0.08],
+        scale: [0.105, 0.14, 0.05],
+        rotation: [0, 0, 0.45],
+      },
     ],
   },
   {
@@ -310,12 +389,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-rinichi",
     modelSelectionId: "organ:rinichi",
     name: "Rinichi",
+    popularName: "Rinichi",
+    popularNameEn: "Kidneys",
+    scientificName: "Rinichi",
+    scientificNameEn: "Kidneys",
     latinName: "Renes",
     category: "Aparat urinar",
     bodyRegion: "abdomen",
     difficulty: "incepator",
-    description: "Organe pereche care filtrează sângele și contribuie la formarea urinei.",
-    function: "Elimină produse de metabolism și reglează echilibrul de apă și săruri.",
+    description:
+      "Două organe în formă de boabă, aflate în partea din spate a abdomenului, de o parte și de alta a coloanei.",
+    function:
+      "Filtrează sângele, elimină deșeurile și apa în exces prin urină și ajută la echilibrul mineralelor și la controlul tensiunii arteriale.",
     technical: {
       origin: "Situați posterior în abdomen, de o parte și de alta a coloanei lombare.",
       insertion: "Se continuă prin uretere către vezica urinară.",
@@ -346,23 +431,51 @@ export const internalOrgans: InternalOrgan[] = [
         anchor: "retroperitoneal-right",
         targetSize: [1, 1, 1],
         preserveScenePosition: true,
-        nodeNames: ["VH_M_kidney_capsule_R", "VH_M_hilum_of_kidney_R", "VH_M_outer_cortex_of_kidney_R"],
+        nodeNames: [
+          "VH_M_kidney_capsule_R",
+          "VH_M_hilum_of_kidney_R",
+          "VH_M_outer_cortex_of_kidney_R",
+        ],
       },
       {
         url: "/anatomy/hra/VH_M_Kidney_L.glb",
         anchor: "retroperitoneal-left",
         targetSize: [1, 1, 1],
         preserveScenePosition: true,
-        nodeNames: ["VH_M_kidney_capsule_L", "VH_M_hilum_of_kidney_L", "VH_M_outer_cortex_of_kidney_L"],
+        nodeNames: [
+          "VH_M_kidney_capsule_L",
+          "VH_M_hilum_of_kidney_L",
+          "VH_M_outer_cortex_of_kidney_L",
+        ],
       },
     ],
     interactionZones: [
-      { kind: "ellipsoid", position: [-0.34, 0.48, 0.58], size: [0.38, 0.54, 0.28], rotation: [0, 0, -0.12] },
-      { kind: "ellipsoid", position: [0.4, 0.5, 0.58], size: [0.38, 0.54, 0.28], rotation: [0, 0, 0.12] },
+      {
+        kind: "ellipsoid",
+        position: [-0.34, 0.48, 0.58],
+        size: [0.38, 0.54, 0.28],
+        rotation: [0, 0, -0.12],
+      },
+      {
+        kind: "ellipsoid",
+        position: [0.4, 0.5, 0.58],
+        size: [0.38, 0.54, 0.28],
+        rotation: [0, 0, 0.12],
+      },
     ],
     visualParts: [
-      { kind: "sphere", position: [-0.19, 0.08, -0.01], scale: [0.055, 0.105, 0.034], rotation: [0, 0, 0.14] },
-      { kind: "sphere", position: [0.19, 0.08, -0.01], scale: [0.055, 0.105, 0.034], rotation: [0, 0, -0.14] },
+      {
+        kind: "sphere",
+        position: [-0.19, 0.08, -0.01],
+        scale: [0.055, 0.105, 0.034],
+        rotation: [0, 0, 0.14],
+      },
+      {
+        kind: "sphere",
+        position: [0.19, 0.08, -0.01],
+        scale: [0.055, 0.105, 0.034],
+        rotation: [0, 0, -0.14],
+      },
     ],
   },
   {
@@ -370,12 +483,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-intestine",
     modelSelectionId: "organ:intestine",
     name: "Intestine",
+    popularName: "Intestine",
+    popularNameEn: "Intestines",
+    scientificName: "Intestine",
+    scientificNameEn: "Intestines",
     latinName: "Intestina",
     category: "Aparat digestiv",
     bodyRegion: "abdomen",
     difficulty: "incepator",
-    description: "Segmente digestive aflate în abdomen, implicate în absorbția nutrienților și eliminare.",
-    function: "Finalizează digestia, absoarbe nutrienți și formează materiile fecale.",
+    description:
+      "Intestinul subțire și intestinul gros formează cea mai lungă parte a tubului digestiv, între stomac și anus.",
+    function:
+      "Intestinul subțire finalizează digestia și absoarbe majoritatea nutrienților, iar intestinul gros absoarbe apă și transformă resturile în scaun.",
     technical: {
       origin: "Așezate în cavitatea abdominală, sub stomac.",
       insertion: "Se continuă de la duoden către intestinul subțire, colon și rect.",
@@ -465,12 +584,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-splina",
     modelSelectionId: "organ:splina",
     name: "Splină",
+    popularName: "Splină",
+    popularNameEn: "Spleen",
+    scientificName: "Splină",
+    scientificNameEn: "Spleen",
     latinName: "Lien",
     category: "Aparat limfatic",
     bodyRegion: "abdomen",
     difficulty: "mediu",
-    description: "Organ limfoid situat în partea superioară stângă a abdomenului.",
-    function: "Filtrează sângele și contribuie la răspunsul imun.",
+    description:
+      "Organ al sistemelor limfatic și sanguin, aflat în partea stângă de sus a abdomenului, sub coaste.",
+    function:
+      "Filtrează sângele, îndepărtează globulele roșii îmbătrânite sau deteriorate și contribuie la apărarea împotriva infecțiilor.",
     technical: {
       origin: "Localizată sub hemidiafragma stângă, lateral de stomac.",
       insertion: "Este conectată vascular prin artera și vena splenică.",
@@ -509,12 +634,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-pancreas",
     modelSelectionId: "organ:pancreas",
     name: "Pancreas",
+    popularName: "Pancreas",
+    popularNameEn: "Pancreas",
+    scientificName: "Pancreas",
+    scientificNameEn: "Pancreas",
     latinName: "Pancreas",
     category: "Aparat digestiv și endocrin",
     bodyRegion: "abdomen",
     difficulty: "mediu",
-    description: "Organ alungit situat posterior de stomac, cu rol digestiv și endocrin.",
-    function: "Produce enzime digestive și hormoni implicați în reglarea glicemiei.",
+    description:
+      "Glandă alungită aflată în partea superioară a abdomenului, în spatele stomacului.",
+    function:
+      "Produce enzime care ajută digestia și hormoni, inclusiv insulină, care contribuie la reglarea glicemiei.",
     technical: {
       origin: "Așezat transversal în abdomenul superior, în spatele stomacului.",
       insertion: "Conectat funcțional cu duodenul prin secrețiile pancreatice.",
@@ -554,10 +685,20 @@ export const internalOrgans: InternalOrgan[] = [
       },
     ],
     interactionZones: [
-      { kind: "ellipsoid", position: [0.08, 0.72, 0.48], size: [0.44, 0.24, 0.18], rotation: [0, 0, -0.08] },
+      {
+        kind: "ellipsoid",
+        position: [0.08, 0.72, 0.48],
+        size: [0.44, 0.24, 0.18],
+        rotation: [0, 0, -0.08],
+      },
     ],
     visualParts: [
-      { kind: "capsule", position: [0.02, 0.1, 0.1], scale: [0.014, 0.16, 0.014], rotation: [0, 0, Math.PI / 2] },
+      {
+        kind: "capsule",
+        position: [0.02, 0.1, 0.1],
+        scale: [0.014, 0.16, 0.014],
+        rotation: [0, 0, Math.PI / 2],
+      },
     ],
   },
   {
@@ -565,12 +706,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-vezica-urinara",
     modelSelectionId: "organ:vezica-urinara",
     name: "Vezică urinară",
+    popularName: "Vezică urinară",
+    popularNameEn: "Urinary bladder",
+    scientificName: "Vezică urinară",
+    scientificNameEn: "Urinary bladder",
     latinName: "Vesica urinaria",
     category: "Aparat urinar",
     bodyRegion: "pelvis",
     difficulty: "incepator",
-    description: "Organ cavitar din pelvis care depozitează urina.",
-    function: "Stochează urina înainte de eliminare.",
+    description:
+      "Organ muscular gol aflat în pelvis, care se umple pe măsură ce primește urină de la rinichi.",
+    function:
+      "Stochează urina și o elimină prin uretră atunci când mușchiul vezicii se contractă și sfincterele se relaxează.",
     technical: {
       origin: "Situată în pelvis, sub abdomenul inferior.",
       insertion: "Primește urina prin uretere și se continuă cu uretra.",
@@ -611,21 +758,25 @@ export const internalOrgans: InternalOrgan[] = [
     interactionZones: [
       { kind: "ellipsoid", position: [-0.02, -0.34, 0.5], size: [0.24, 0.22, 0.18] },
     ],
-    visualParts: [
-      { kind: "sphere", position: [0, -0.57, 0.08], scale: [0.055, 0.065, 0.04] },
-    ],
+    visualParts: [{ kind: "sphere", position: [0, -0.57, 0.08], scale: [0.055, 0.065, 0.04] }],
   },
   {
     id: "organ:esofag",
     slug: "organ-esofag",
     modelSelectionId: "organ:esofag",
     name: "Esofag",
+    popularName: "Esofag",
+    popularNameEn: "Esophagus",
+    scientificName: "Esofag",
+    scientificNameEn: "Esophagus",
     latinName: "Oesophagus",
     category: "Aparat digestiv",
     bodyRegion: "gat_torace",
     difficulty: "incepator",
-    description: "Tub muscular care transportă alimentele din faringe către stomac.",
-    function: "Conduce bolul alimentar către stomac prin mișcări peristaltice.",
+    description:
+      "Tub muscular care leagă gâtul de stomac și prin care trec alimentele și lichidele înghițite.",
+    function:
+      "Împinge alimentele și lichidele către stomac prin contracții coordonate ale peretelui său.",
     technical: {
       origin: "Pornește din zona faringelui și coboară prin gât și torace.",
       insertion: "Se deschide în stomac.",
@@ -669,12 +820,18 @@ export const internalOrgans: InternalOrgan[] = [
     slug: "organ-trahee",
     modelSelectionId: "organ:trahee",
     name: "Trahee",
+    popularName: "Trahee",
+    popularNameEn: "Trachea",
+    scientificName: "Trahee",
+    scientificNameEn: "Trachea",
     latinName: "Trachea",
     category: "Aparat respirator",
     bodyRegion: "gat_torace",
     difficulty: "incepator",
-    description: "Conduct respirator care face legătura dintre laringe și bronhii.",
-    function: "Permite trecerea aerului către plămâni.",
+    description:
+      "Tub flexibil al căilor respiratorii care pornește sub laringe și se împarte în cele două bronhii principale.",
+    function:
+      "Conduce aerul între gât și plămâni și ajută la menținerea deschisă a căii respiratorii.",
     technical: {
       origin: "Pornește sub laringe, în regiunea gâtului.",
       insertion: "Se bifurcă în bronhiile principale care intră în plămâni.",

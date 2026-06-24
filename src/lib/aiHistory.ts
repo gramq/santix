@@ -2,14 +2,21 @@ import { supabase } from "@/lib/supabase";
 import type { TissueType } from "@/components/skeleton/SkeletonScene";
 import { getAnatomyDisplayName, type AnatomyNameRecord } from "@/data/anatomyDisplayNames";
 import { fetchAnatomyStructureName } from "@/lib/anatomyStructures";
+import {
+  localizedMessageContent,
+  normalizeConversationLanguage,
+  type ConversationLanguage,
+} from "@/lib/ai/conversationLanguage";
 
 export const AI_HISTORY_REFRESH_EVENT = "santix-ai-history-refresh";
 export const AI_CONVERSATION_OPEN_EVENT = "santix-open-ai-conversation";
 export const AI_CONVERSATION_DELETED_EVENT = "santix-ai-conversation-deleted";
+export type UiLanguage = ConversationLanguage;
 
 export interface AiConversationSummary {
   id: string;
   title: string;
+  language: UiLanguage;
   structure_slug: string | null;
   model_selection_id: string | null;
   tissue: TissueType | null;
@@ -23,16 +30,21 @@ export interface AiConversationSummary {
 
 export interface AiConversationMessage {
   role: "assistant" | "user" | "system";
-  content_ro: string;
+  content: string;
   created_at: string;
 }
 
+export interface AiConversationThread {
+  language: UiLanguage;
+  messages: AiConversationMessage[];
+}
+
 export type OpenAiConversationDetail = AiConversationSummary;
-type UiLanguage = "ro" | "en";
 
 type AiConversationRow = {
   id: string;
   title: string;
+  language: string;
   structure_slug: string | null;
   model_selection_id: string | null;
   tissue: TissueType | null;
@@ -42,7 +54,8 @@ type AiConversationRow = {
 
 type AiMessageRow = {
   role: "assistant" | "user" | "system";
-  content_ro: string;
+  content_ro: string | null;
+  content_en: string | null;
   created_at: string;
 };
 
@@ -52,7 +65,9 @@ export async function fetchAiConversationSummaries(
 ): Promise<AiConversationSummary[]> {
   let query = supabase
     .from("ai_conversations")
-    .select("id, title, structure_slug, model_selection_id, tissue, created_at, updated_at")
+    .select(
+      "id, title, language, structure_slug, model_selection_id, tissue, created_at, updated_at",
+    )
     .order("updated_at", { ascending: false });
 
   if (limit) query = query.limit(limit);
@@ -71,16 +86,21 @@ export async function fetchAiConversationSummaries(
           .eq("conversation_id", conversation.id),
         supabase
           .from("ai_messages")
-          .select("content_ro, role, created_at")
+          .select("content_ro, content_en, role, created_at")
           .eq("conversation_id", conversation.id)
           .order("created_at", { ascending: false })
           .limit(1),
       ]);
 
-      const latestMessage = (latestMessages?.[0] as AiMessageRow | undefined)?.content_ro;
+      const language = normalizeConversationLanguage(conversation.language);
+      const latestMessage = localizedMessageContent(
+        latestMessages?.[0] as AiMessageRow | undefined,
+        language,
+      );
       const display = await fetchConversationDisplayName(conversation, lang);
       return {
         ...conversation,
+        language,
         structure_display_name: display?.title,
         structure_subtitle: display?.subtitle,
         message_count: count ?? 0,
@@ -92,15 +112,27 @@ export async function fetchAiConversationSummaries(
 
 export async function fetchAiConversationMessages(
   conversationId: string,
-): Promise<AiConversationMessage[]> {
-  const { data, error } = await supabase
-    .from("ai_messages")
-    .select("role, content_ro, created_at")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+): Promise<AiConversationThread> {
+  const [{ data: conversation, error: conversationError }, { data, error }] = await Promise.all([
+    supabase.from("ai_conversations").select("language").eq("id", conversationId).single(),
+    supabase
+      .from("ai_messages")
+      .select("role, content_ro, content_en, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true }),
+  ]);
 
+  if (conversationError) throw conversationError;
   if (error) throw error;
-  return (data ?? []) as AiConversationMessage[];
+  const language = normalizeConversationLanguage(conversation.language);
+  return {
+    language,
+    messages: ((data ?? []) as AiMessageRow[]).map((message) => ({
+      role: message.role,
+      content: localizedMessageContent(message, language),
+      created_at: message.created_at,
+    })),
+  };
 }
 
 export async function deleteAiConversation(conversationId: string, userId: string) {
@@ -173,7 +205,8 @@ export function getConversationStructureLabel(
   lang: UiLanguage = "ro",
 ) {
   if (conversation.structure_display_name) return conversation.structure_display_name;
-  if (conversation.model_selection_id) return humanizeStructureId(conversation.model_selection_id, lang);
+  if (conversation.model_selection_id)
+    return humanizeStructureId(conversation.model_selection_id, lang);
   if (conversation.structure_slug) return humanizeStructureId(conversation.structure_slug, lang);
   if (conversation.tissue === "muschi") return lang === "en" ? "Muscle" : "Mușchi";
   if (conversation.tissue === "os") return lang === "en" ? "Bone" : "Os";
@@ -217,8 +250,14 @@ export function formatConversationTitle(title: string, lang: UiLanguage = "ro") 
   const normalizedPrefix = prefix.trim().toLowerCase();
   const localizedPrefix =
     lang === "en"
-      ? ({ anatomie: "Anatomy", durere: "Pain", "conversație": "Conversation", conversatie: "Conversation" }[normalizedPrefix] ?? prefix.trim())
-      : ({ anatomy: "Anatomie", pain: "Durere", conversation: "Conversație" }[normalizedPrefix] ?? prefix.trim());
+      ? ({
+          anatomie: "Anatomy",
+          durere: "Pain",
+          conversație: "Conversation",
+          conversatie: "Conversation",
+        }[normalizedPrefix] ?? prefix.trim())
+      : ({ anatomy: "Anatomie", pain: "Durere", conversation: "Conversație" }[normalizedPrefix] ??
+        prefix.trim());
 
   return target ? `${localizedPrefix} — ${target}` : cleanTitle;
 }

@@ -23,6 +23,37 @@ test("signal extractor captures multiple facts from one message", () => {
   expect(signals.trauma_type).toBe("effort");
 });
 
+test("signal extractor captures English trauma, swelling, numbness, and blocked movement", () => {
+  const signals = extractSignals(
+    "I fell and now my ankle is swollen, numb, and I can't walk on it.",
+  );
+
+  expect(signals.trauma_type).toBe("fall");
+  expect(signals.body_region).toBe("glezna");
+  expect(signals.swelling).toBe("yes");
+  expect(signals.numbness).toBe("yes");
+  expect(signals.movement_ok).toBe("no");
+  expect(signals.red_flags_detected).toBe(true);
+});
+
+test("signal extractor captures English severity, onset, and duration", () => {
+  const signals = extractSignals("The pain is mild and started gradually three days ago.");
+
+  expect(signals.pain_present).toBe("yes");
+  expect(signals.severity).toBe("mild");
+  expect(signals.onset).toBe("gradual");
+  expect(signals.duration).toBe("days");
+});
+
+test("signal extractor detects English chest and breathing warning signs", () => {
+  const signals = extractSignals("I have chest pain and difficulty breathing.");
+
+  expect(signals.red_flags_detected).toBe(true);
+  expect(signals.red_flag_reasons).toEqual(
+    expect.arrayContaining(["durere toracică", "dificultăți de respirație"]),
+  );
+});
+
 test("movement typo is interpreted as normal movement", () => {
   const signals = extractSignals("pot mișca norma");
 
@@ -49,7 +80,10 @@ test("last movement question maps short affirmation plus severe pain", () => {
 
 test("pain quality after severity question is not treated as unclear", () => {
   const signals = extractSignals("înțepătoare");
-  const classification = classifyConversationMessage(normalizeSantixMessage("înțepătoare"), signals);
+  const classification = classifyConversationMessage(
+    normalizeSantixMessage("înțepătoare"),
+    signals,
+  );
 
   expect(signals.pain_quality).toBe("stabbing");
   expect(classification).not.toBe("unclear");

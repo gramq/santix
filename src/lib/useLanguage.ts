@@ -3,13 +3,17 @@ import { translations, type Lang } from "./translations";
 
 function getStoredLang(): Lang {
   if (typeof window === "undefined") return "ro";
-  return (localStorage.getItem("santix-lang") as Lang) ?? "ro";
+  return localStorage.getItem("santix-lang") === "en" ? "en" : "ro";
 }
 
 export function useLanguage() {
-  const [lang, setLang] = useState<Lang>(getStoredLang);
+  const [lang, setLang] = useState<Lang>("ro");
 
   useEffect(() => {
+    const storedLanguage = getStoredLang();
+    setLang(storedLanguage);
+    document.documentElement.lang = storedLanguage;
+
     const handler = (e: Event) => {
       setLang((e as CustomEvent<Lang>).detail);
     };

@@ -1,4 +1,5 @@
 import type { ConversationClassification, ConversationState, NextStep } from "./types";
+import type { ConversationLanguage } from "./conversationLanguage";
 
 export type NextStepDecision = {
   nextStep: NextStep;
@@ -6,15 +7,52 @@ export type NextStepDecision = {
   reply: string;
 };
 
+const REPLIES: Record<ConversationLanguage, Record<NextStep, string>> = {
+  ro: {
+    refuse_out_of_scope:
+      "Te pot ajuta cu anatomie, durere sau mișcare în context educațional Santix.",
+    urgent:
+      "Descrierea include semne care pot necesita evaluare medicală rapidă. Dacă durerea este severă, există deformare, amorțeală sau nu poți mișca zona, mergi la medic sau la urgențe.",
+    ask_trauma_or_effort: "A apărut după o lovitură, căzătură, sport sau efort?",
+    ask_onset: "A început brusc sau treptat?",
+    ask_movement: "Poți mișca zona normal?",
+    ask_severity: "Durerea este ușoară, moderată sau foarte puternică?",
+    ask_pain_quality: "Cum ai descrie durerea: înțepătoare, arsură, presiune, crampă sau altfel?",
+    ask_associated_signs: "Ai observat umflătură, amorțeală sau vânătaie?",
+    ask_duration: "De cât timp simți durerea?",
+    recommend:
+      "Din ce ai descris, pare potrivit să urmărești evoluția, să eviți efortul care declanșează durerea și să ceri sfatul unui specialist dacă simptomele se agravează sau persistă.",
+    clarify: "Spune-mi, te rog, ce zonă te supără și ce simți.",
+  },
+  en: {
+    refuse_out_of_scope:
+      "I can help with anatomy, pain, or movement in the educational context of Santix.",
+    urgent:
+      "Your description includes signs that may require prompt medical evaluation. If the pain is severe, there is deformity or numbness, or you cannot move the area, seek medical care or go to an emergency department.",
+    ask_trauma_or_effort: "Did it start after a hit, fall, sport, or physical effort?",
+    ask_onset: "Did it start suddenly or gradually?",
+    ask_movement: "Can you move the area normally?",
+    ask_severity: "Is the pain mild, moderate, or very severe?",
+    ask_pain_quality:
+      "How would you describe the pain: stabbing, burning, pressure, cramping, or something else?",
+    ask_associated_signs: "Have you noticed swelling, numbness, or bruising?",
+    ask_duration: "How long have you had the pain?",
+    recommend:
+      "Based on what you described, it is reasonable to monitor your symptoms, avoid the activity that triggers the pain, and seek advice from a healthcare professional if the symptoms worsen or persist.",
+    clarify: "Please tell me which area is bothering you and what you feel.",
+  },
+};
+
 export function resolveNextStep(
   state: ConversationState,
   classification: ConversationClassification,
+  language: ConversationLanguage = "ro",
 ): NextStepDecision {
   if (classification === "out_of_scope") {
     return {
       nextStep: "refuse_out_of_scope",
       lastQuestionIntent: null,
-      reply: "Te pot ajuta cu anatomie, durere sau mișcare în context educațional Santix.",
+      reply: REPLIES[language].refuse_out_of_scope,
     };
   }
 
@@ -22,8 +60,7 @@ export function resolveNextStep(
     return {
       nextStep: "urgent",
       lastQuestionIntent: null,
-      reply:
-        "Descrierea include semne care pot necesita evaluare medicală rapidă. Dacă durerea este severă, există deformare, amorțeală sau nu poți mișca zona, mergi la medic sau la urgențe.",
+      reply: REPLIES[language].urgent,
     };
   }
 
@@ -31,7 +68,7 @@ export function resolveNextStep(
     return {
       nextStep: "ask_trauma_or_effort",
       lastQuestionIntent: "trauma_or_effort",
-      reply: "A apărut după o lovitură, căzătură, sport sau efort?",
+      reply: REPLIES[language].ask_trauma_or_effort,
     };
   }
 
@@ -39,7 +76,7 @@ export function resolveNextStep(
     return {
       nextStep: "ask_onset",
       lastQuestionIntent: "onset",
-      reply: "A început brusc sau treptat?",
+      reply: REPLIES[language].ask_onset,
     };
   }
 
@@ -47,7 +84,7 @@ export function resolveNextStep(
     return {
       nextStep: "ask_movement",
       lastQuestionIntent: "movement_ok",
-      reply: "Poți mișca zona normal?",
+      reply: REPLIES[language].ask_movement,
     };
   }
 
@@ -55,7 +92,7 @@ export function resolveNextStep(
     return {
       nextStep: "ask_severity",
       lastQuestionIntent: "severity",
-      reply: "Durerea este ușoară, moderată sau foarte puternică?",
+      reply: REPLIES[language].ask_severity,
     };
   }
 
@@ -63,15 +100,19 @@ export function resolveNextStep(
     return {
       nextStep: "ask_pain_quality",
       lastQuestionIntent: "pain_quality",
-      reply: "Cum ai descrie durerea: înțepătoare, arsură, presiune, crampă sau altfel?",
+      reply: REPLIES[language].ask_pain_quality,
     };
   }
 
-  if (state.swelling === "unknown" || state.numbness === "unknown" || state.bruising === "unknown") {
+  if (
+    state.swelling === "unknown" ||
+    state.numbness === "unknown" ||
+    state.bruising === "unknown"
+  ) {
     return {
       nextStep: "ask_associated_signs",
       lastQuestionIntent: "associated_signs",
-      reply: "Ai observat umflătură, amorțeală sau vânătaie?",
+      reply: REPLIES[language].ask_associated_signs,
     };
   }
 
@@ -79,14 +120,13 @@ export function resolveNextStep(
     return {
       nextStep: "ask_duration",
       lastQuestionIntent: "duration",
-      reply: "De cât timp simți durerea?",
+      reply: REPLIES[language].ask_duration,
     };
   }
 
   return {
     nextStep: "recommend",
     lastQuestionIntent: null,
-    reply:
-      "Din ce ai descris, pare potrivit să urmărești evoluția, să eviți efortul care declanșează durerea și să ceri sfatul unui specialist dacă simptomele se agravează sau persistă.",
+    reply: REPLIES[language].recommend,
   };
 }

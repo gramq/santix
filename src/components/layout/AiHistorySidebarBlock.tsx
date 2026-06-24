@@ -50,7 +50,7 @@ export function AiHistorySidebarBlock() {
         const summaries = await fetchAiConversationSummaries(SIDEBAR_VISIBLE_COUNT + 1, lang);
         if (!cancelled) setConversations(summaries);
       } catch {
-        if (!cancelled) setError("Nu am putut încărca istoricul.");
+        if (!cancelled) setError(t.hist_load_error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -63,7 +63,7 @@ export function AiHistorySidebarBlock() {
       cancelled = true;
       window.removeEventListener(AI_HISTORY_REFRESH_EVENT, loadConversations);
     };
-  }, [user, lang]);
+  }, [user, lang, t.hist_load_error]);
 
   useEffect(() => {
     if (!allHistoryOpen || !user) return;
@@ -75,7 +75,7 @@ export function AiHistorySidebarBlock() {
         const summaries = await fetchAiConversationSummaries(undefined, lang);
         if (!cancelled) setAllConversations(summaries);
       } catch {
-        if (!cancelled) setError("Nu am putut încărca istoricul complet.");
+        if (!cancelled) setError(t.hist_load_all_error);
       } finally {
         if (!cancelled) setIsAllLoading(false);
       }
@@ -88,7 +88,7 @@ export function AiHistorySidebarBlock() {
       cancelled = true;
       window.removeEventListener(AI_HISTORY_REFRESH_EVENT, loadAllConversations);
     };
-  }, [allHistoryOpen, user, lang]);
+  }, [allHistoryOpen, user, lang, t.hist_load_all_error]);
 
   const handleOpenConversation = async (conversation: AiConversationSummary) => {
     setAllHistoryOpen(false);
@@ -113,7 +113,7 @@ export function AiHistorySidebarBlock() {
       setPendingDelete(null);
       window.setTimeout(() => window.dispatchEvent(new CustomEvent(AI_HISTORY_REFRESH_EVENT)), 0);
     } catch {
-      setError("Nu am putut șterge conversația.");
+      setError(t.hist_delete_error);
     } finally {
       setIsDeleting(false);
     }
@@ -135,7 +135,7 @@ export function AiHistorySidebarBlock() {
       setDeleteAllOpen(false);
       window.setTimeout(() => window.dispatchEvent(new CustomEvent(AI_HISTORY_REFRESH_EVENT)), 0);
     } catch {
-      setError("Nu am putut șterge istoricul.");
+      setError(t.hist_delete_all_error);
     } finally {
       setIsDeleting(false);
     }
@@ -156,10 +156,7 @@ export function AiHistorySidebarBlock() {
           title={t.hist_loading_session}
         />
       ) : !user ? (
-        <StatusMessage
-          icon={<Bot className="size-4 text-primary" />}
-          title={t.hist_login_prompt}
-        />
+        <StatusMessage icon={<Bot className="size-4 text-primary" />} title={t.hist_login_prompt} />
       ) : isLoading && conversations.length === 0 ? (
         <StatusMessage
           icon={<Loader2 className="size-4 animate-spin text-primary" />}
@@ -317,7 +314,12 @@ function ConversationRow({
   onDelete: () => void;
 }) {
   const { t, lang } = useLanguage();
-  const Icon = conversation.tissue === "organ" ? HeartPulse : conversation.tissue === "muschi" ? Dumbbell : Bone;
+  const Icon =
+    conversation.tissue === "organ"
+      ? HeartPulse
+      : conversation.tissue === "muschi"
+        ? Dumbbell
+        : Bone;
   const formattedTitle = formatConversationTitle(conversation.title, lang);
   const title =
     conversation.structure_display_name && formattedTitle.includes("—")
@@ -347,6 +349,10 @@ function ConversationRow({
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10.5px] text-muted-foreground">
             <span className="truncate">{structureLabel}</span>
+            <span className="shrink-0">·</span>
+            <span className="shrink-0 rounded-md border border-primary/15 bg-primary/5 px-1 py-0.5 text-[9px] font-bold uppercase text-primary">
+              {conversation.language}
+            </span>
             <span className="shrink-0">·</span>
             <Clock3 className="size-3 shrink-0" />
             <span className="shrink-0">{timeLabel}</span>

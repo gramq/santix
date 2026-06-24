@@ -2,8 +2,11 @@ import type { Bone } from "@/data/bones";
 import type { BoneSelection, TissueType } from "@/components/skeleton/SkeletonScene";
 
 export interface AnatomyDisplayName {
+  popular_name_ro?: string;
+  popular_name_en?: string;
   common_name_ro?: string;
   scientific_name_ro?: string;
+  scientific_name_en?: string;
   latin_name?: string;
   original_name: string;
   display_name: string;
@@ -18,9 +21,13 @@ export interface AnatomyNameRecord {
   name_ro?: string | null;
   name?: string | null;
   romanian_name?: string | null;
+  popular_name_ro?: string | null;
+  popular_name_en?: string | null;
   common_name_ro?: string | null;
   scientific_name_ro?: string | null;
+  scientific_name_en?: string | null;
   display_name_ro?: string | null;
+  display_name_en?: string | null;
   subtitle_name?: string | null;
   english_name?: string | null;
   name_latin?: string | null;
@@ -37,6 +44,13 @@ interface DisplayRule {
 }
 
 const muscleDisplayRules: DisplayRule[] = [
+  {
+    terms: ["occipitalis", "occipital muscle", "occipital"],
+    common_name_ro: "Mușchiul din spatele capului",
+    scientific_name_ro: "Mușchiul occipital",
+    common_name_en: "Back-of-head muscle",
+    tissue: "muschi",
+  },
   {
     terms: ["brachioradialis", "brahioradial"],
     common_name_ro: "Mușchiul lateral al antebrațului",
@@ -68,21 +82,21 @@ const muscleDisplayRules: DisplayRule[] = [
   {
     terms: ["gluteus maximus", "fesier mare"],
     common_name_ro: "Mușchiul fesier mare",
-    scientific_name_ro: "gluteus maximus",
+    scientific_name_ro: "Mușchiul fesier mare",
     common_name_en: "Gluteus Maximus",
     tissue: "muschi",
   },
   {
     terms: ["gluteus medius", "fesier mijlociu"],
     common_name_ro: "Mușchiul fesier lateral",
-    scientific_name_ro: "gluteus medius",
+    scientific_name_ro: "Mușchiul fesier mijlociu",
     common_name_en: "Gluteus Medius",
     tissue: "muschi",
   },
   {
     terms: ["gluteus minimus", "fesier mic"],
     common_name_ro: "Mușchiul fesier profund",
-    scientific_name_ro: "gluteus minimus",
+    scientific_name_ro: "Mușchiul fesier mic",
     common_name_en: "Gluteus Minimus",
     tissue: "muschi",
   },
@@ -124,7 +138,7 @@ const muscleDisplayRules: DisplayRule[] = [
   {
     terms: ["soleus"],
     common_name_ro: "Mușchiul profund al gambei",
-    scientific_name_ro: "soleus",
+    scientific_name_ro: "Mușchiul solear",
     common_name_en: "Deep Calf Muscle",
     tissue: "muschi",
   },
@@ -243,7 +257,7 @@ const muscleDisplayRules: DisplayRule[] = [
   {
     terms: ["sartorius", "croitor"],
     common_name_ro: "Mușchiul lung al coapsei",
-    scientific_name_ro: "sartorius",
+    scientific_name_ro: "Mușchiul croitor",
     common_name_en: "Long Thigh Muscle",
     tissue: "muschi",
   },
@@ -272,7 +286,9 @@ const muscleDisplayRules: DisplayRule[] = [
 
 const boneDisplayById: Record<
   string,
-  Omit<AnatomyDisplayName, "original_name" | "missing_ro_display_name" | "source"> & { title_en?: string }
+  Omit<AnatomyDisplayName, "original_name" | "missing_ro_display_name" | "source"> & {
+    title_en?: string;
+  }
 > = {
   humerus: {
     common_name_ro: "Osul brațului",
@@ -334,6 +350,51 @@ function stripTechnicalPrefix(value: string) {
 
 function formatDisplay(commonName: string) {
   return commonName;
+}
+
+function getSelectionLaterality(selection: BoneSelection, lang: "ro" | "en"): string | undefined {
+  const source = [selection.id, selection.label, selection.labelEn].filter(Boolean).join(" ");
+  if (/(?:-left\b|\((?:stânga|stanga|left)\))/i.test(source)) {
+    return lang === "en" ? "left" : "stânga";
+  }
+  if (/(?:-right\b|\((?:dreapta|right)\))/i.test(source)) {
+    return lang === "en" ? "right" : "dreapta";
+  }
+  return undefined;
+}
+
+function withSelectionLaterality(value: string, selection: BoneSelection, lang: "ro" | "en") {
+  const side = getSelectionLaterality(selection, lang);
+  if (!side || /\((?:stânga|stanga|dreapta|left|right)\)\s*$/i.test(value)) return value;
+  return `${value} (${side})`;
+}
+
+const popularRegionNames: Record<string, { ro: string; en: string }> = {
+  "muschii-capului-gatului": {
+    ro: "Mușchii capului și gâtului",
+    en: "Head and neck muscles",
+  },
+  "muschii-mainii": { ro: "Mușchii mâinii", en: "Hand muscles" },
+  "muschii-piciorului": { ro: "Mușchii labei piciorului", en: "Foot muscles" },
+  "muschii-gambei": { ro: "Mușchii gambei", en: "Lower-leg muscles" },
+  "muschii-coapsei": { ro: "Mușchii coapsei", en: "Thigh muscles" },
+  "muschii-antebratului": { ro: "Mușchii antebrațului", en: "Forearm muscles" },
+  "muschii-bratului": { ro: "Mușchii brațului", en: "Upper-arm muscles" },
+  "muschii-abdomenului": { ro: "Mușchii abdomenului", en: "Abdominal muscles" },
+  "muschii-toracelui": { ro: "Mușchii pieptului", en: "Chest muscles" },
+  "muschii-umarului": { ro: "Mușchii umărului", en: "Shoulder muscles" },
+  "muschii-soldului": { ro: "Mușchii șoldului", en: "Hip muscles" },
+  "muschii-spatelui": { ro: "Mușchii spatelui", en: "Back muscles" },
+  "muschii-bazinului": { ro: "Mușchii bazinului", en: "Pelvic muscles" },
+  "membrul-superior": { ro: "Mușchii membrului superior", en: "Upper-limb muscles" },
+  "membrul-inferior": { ro: "Mușchii membrului inferior", en: "Lower-limb muscles" },
+  "sistem-muscular": { ro: "Sistemul muscular", en: "Muscular system" },
+};
+
+function getPopularRegionName(regionId: string | undefined, lang: "ro" | "en") {
+  const key = regionId?.split(":").at(-1);
+  if (!key) return undefined;
+  return popularRegionNames[key]?.[lang];
 }
 
 function matchesRule(rule: DisplayRule, haystack: string, tissue: TissueType) {
@@ -403,7 +464,8 @@ export function getAnatomyDisplayName(input: {
   }
 
   if (rule) {
-    const title = isEn && rule.common_name_en ? rule.common_name_en : rule.common_name_ro;
+    const baseTitle = isEn && rule.common_name_en ? rule.common_name_en : rule.common_name_ro;
+    const title = withSelectionLaterality(baseTitle, selection, lang);
     return {
       common_name_ro: rule.common_name_ro,
       scientific_name_ro: rule.scientific_name_ro,
@@ -415,13 +477,29 @@ export function getAnatomyDisplayName(input: {
     };
   }
 
-  const fallbackTitle = isEn ? (selection.labelEn ?? originalName) : originalName;
+  const popularRegionName = getPopularRegionName(selection.regionId, lang);
+  const fallbackTitleBase =
+    selection.tissue === "muschi" && popularRegionName
+      ? popularRegionName
+      : isEn
+        ? (selection.labelEn ?? originalName)
+        : originalName;
+  const fallbackTitle =
+    selection.tissue === "muschi"
+      ? withSelectionLaterality(fallbackTitleBase, selection, lang)
+      : fallbackTitleBase;
   const fallbackScientific = stripTechnicalPrefix(originalName);
   return {
     original_name: originalName,
     scientific_name_ro: fallbackScientific,
     display_name: fallbackTitle,
     title: fallbackTitle,
+    subtitle:
+      selection.tissue === "muschi" && fallbackTitle !== originalName
+        ? isEn
+          ? (selection.labelEn ?? originalName)
+          : originalName
+        : undefined,
     missing_ro_display_name: true,
     source: "fallback",
   };
@@ -439,26 +517,56 @@ function getDbDisplayName(
   if (!structure) return null;
 
   const isEn = lang === "en";
-  const englishName = firstText(structure.english_name);
-  if (isEn && !englishName) return null;
-
+  const popularNameRo = firstText(
+    structure.popular_name_ro,
+    structure.display_name_ro,
+    structure.common_name_ro,
+  );
+  const popularNameEn = firstText(
+    structure.popular_name_en,
+    structure.display_name_en,
+    structure.english_name,
+  );
   const romanianName = firstText(
     structure.romanian_name,
     structure.name_ro,
     isLikelyRomanian(structure.name) ? structure.name : null,
   );
-  const displayName = firstText(structure.display_name_ro);
-  const commonName = firstText(structure.common_name_ro);
-  const scientificName = firstText(structure.scientific_name_ro);
-  const fallbackName = firstText(romanianName, structure.name, englishName, originalName);
-  const subtitle = firstText(structure.subtitle_name);
-  const resolvedTitle = isEn ? (englishName ?? displayName) : displayName;
+  const scientificName = firstText(structure.scientific_name_ro, structure.name_ro);
+  const scientificNameEn = firstText(
+    structure.scientific_name_en,
+    structure.english_name,
+    structure.latin_name,
+    structure.name_latin,
+  );
+  const latinName = firstText(structure.latin_name, structure.name_latin);
+  const fallbackName = firstText(
+    isEn ? popularNameEn : popularNameRo,
+    romanianName,
+    structure.name,
+    originalName,
+  );
+  const resolvedTitle = isEn ? popularNameEn : popularNameRo;
+  const subtitle = isEn
+    ? firstText(
+        scientificNameEn && scientificNameEn !== popularNameEn ? scientificNameEn : null,
+        structure.subtitle_name,
+        latinName && latinName !== popularNameEn ? latinName : null,
+      )
+    : firstText(
+        scientificName && scientificName !== popularNameRo ? scientificName : null,
+        structure.subtitle_name,
+        latinName && latinName !== popularNameRo ? latinName : null,
+      );
 
   if (resolvedTitle) {
     return {
-      common_name_ro: commonName,
+      popular_name_ro: popularNameRo,
+      popular_name_en: popularNameEn,
+      common_name_ro: popularNameRo,
       scientific_name_ro: scientificName,
-      latin_name: firstText(structure.latin_name, structure.name_latin),
+      scientific_name_en: scientificNameEn,
+      latin_name: latinName,
       original_name: originalName,
       display_name: resolvedTitle,
       title: resolvedTitle,
@@ -468,61 +576,18 @@ function getDbDisplayName(
     };
   }
 
-  if (commonName && scientificName) {
-    const t = isEn ? (englishName ?? commonName) : commonName;
-    return {
-      common_name_ro: commonName,
-      scientific_name_ro: scientificName,
-      latin_name: firstText(structure.latin_name, structure.name_latin),
-      original_name: originalName,
-      display_name: t,
-      title: t,
-      subtitle,
-      missing_ro_display_name: Boolean(structure.missing_ro_display_name),
-      source: "db",
-    };
-  }
-
-  if (commonName) {
-    const t = isEn ? (englishName ?? commonName) : commonName;
-    return {
-      common_name_ro: commonName,
-      scientific_name_ro: scientificName,
-      latin_name: firstText(structure.latin_name, structure.name_latin),
-      original_name: originalName,
-      display_name: t,
-      title: t,
-      subtitle,
-      missing_ro_display_name: Boolean(structure.missing_ro_display_name),
-      source: "db",
-    };
-  }
-
-  if (romanianName) {
-    const t = isEn ? (englishName ?? romanianName) : romanianName;
-    return {
-      common_name_ro: commonName,
-      scientific_name_ro: scientificName,
-      latin_name: firstText(structure.latin_name, structure.name_latin),
-      original_name: originalName,
-      display_name: t,
-      title: t,
-      subtitle,
-      missing_ro_display_name: Boolean(structure.missing_ro_display_name),
-      source: "db",
-    };
-  }
-
   if (!fallbackName) return null;
 
-  const t = isEn ? (englishName ?? fallbackName) : fallbackName;
   return {
-    common_name_ro: commonName,
+    popular_name_ro: popularNameRo,
+    popular_name_en: popularNameEn,
+    common_name_ro: popularNameRo,
     scientific_name_ro: scientificName,
-    latin_name: firstText(structure.latin_name, structure.name_latin),
+    scientific_name_en: scientificNameEn,
+    latin_name: latinName,
     original_name: originalName,
-    display_name: t,
-    title: t,
+    display_name: fallbackName,
+    title: fallbackName,
     subtitle,
     missing_ro_display_name: true,
     source: "db",
@@ -565,16 +630,16 @@ function inferHandPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
   }
 
   const segmentLabel = haystack.includes("proximal")
-    ? "Baza"
+    ? "Falanga proximală a"
     : haystack.includes("middle")
-      ? "Mijlocul"
+      ? "Falanga mijlocie a"
       : haystack.includes("distal")
-        ? "Vârful"
+        ? "Falanga distală a"
         : null;
   if (!segmentLabel) return null;
 
   const finger = hasAnyNormalized(haystack, ["thumb"])
-    ? "marelui deget"
+    ? "policelui"
     : hasAnyNormalized(haystack, ["index", "second"])
       ? "degetului arătător"
       : hasAnyNormalized(haystack, ["middle finger", "third"])
@@ -619,11 +684,11 @@ function inferFootPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
   }
 
   const segmentLabel = haystack.includes("proximal")
-    ? "Baza"
+    ? "Falanga proximală a"
     : haystack.includes("middle")
-      ? "Mijlocul"
+      ? "Falanga mijlocie a"
       : haystack.includes("distal")
-        ? "Vârful"
+        ? "Falanga distală a"
         : null;
   if (!segmentLabel) return null;
 
@@ -639,7 +704,7 @@ function inferFootPhalanxDisplay(haystack: string, lang: "ro" | "en" = "ro") {
             ? "degetului mic de la picior"
             : null;
 
-  return toe ? `${segmentLabel} ${toe}` : `${segmentLabel} falangei piciorului`;
+  return toe ? `${segmentLabel} ${toe}` : `${segmentLabel} unui deget de la picior`;
 }
 
 function hasAnyNormalized(haystack: string, terms: string[]) {
