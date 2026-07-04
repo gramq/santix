@@ -1,15 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { RESET_VIEW_EVENT, SkeletonScene, type BoneSelection } from "@/components/skeleton/SkeletonScene";
+import { motion } from "framer-motion";
+import {
+  RESET_VIEW_EVENT,
+  SkeletonScene,
+  type BoneSelection,
+} from "@/components/skeleton/SkeletonScene";
 import { BoneInfoPanel } from "@/components/skeleton/BoneInfoPanel";
 import { LayersToggle, type LayerMode } from "@/components/skeleton/LayersToggle";
 import { PainQuickStart, type PainRegionPick } from "@/components/skeleton/PainQuickStart";
 import { AnatomySearch } from "@/components/skeleton/AnatomySearch";
+import { MedicalCareMapModal } from "@/components/medical-care/MedicalCareMapModal";
 import type { AnatomySearchResult } from "@/data/anatomySearch";
 import { bones } from "@/data/bones";
 import { getInternalOrgan } from "@/data/internalOrgans";
-import { MousePointerClick, HeartPulse, RotateCcw } from "lucide-react";
+import { MousePointerClick, HeartPulse, RotateCcw, MapPin } from "lucide-react";
 import type { AiContextSwitchAction } from "@/lib/ai-chat.functions";
 import { useLanguage } from "@/lib/useLanguage";
 import {
@@ -45,6 +50,7 @@ function ExploratorPage() {
   const [preserveAiStateOnSelectionChange, setPreserveAiStateOnSelectionChange] = useState(false);
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
   const [painQuickOpen, setPainQuickOpen] = useState(false);
+  const [medicalCareOpen, setMedicalCareOpen] = useState(false);
 
   const selectedBone = useMemo(
     () => (selection ? (bones.find((b) => b.id === selection.id) ?? null) : null),
@@ -183,39 +189,43 @@ function ExploratorPage() {
       />
 
       <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex flex-col items-center gap-3 px-6 transition-all duration-300 sm:top-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <AnimatePresence>
-          {!selection && (
+        {!selection && (
+          <div
+            className="pointer-events-auto flex w-fit max-w-xs min-w-0 items-center gap-2.5 rounded-2xl px-4 py-3 glass glass-highlight transition-all duration-300 sm:max-w-sm"
+            style={{ boxShadow: "var(--shadow-float), 0 0 0 1px oklch(0.82 0.17 205 / 0.12)" }}
+            title={t.exp_hint}
+            data-testid="anatomy-hint-overlay"
+          >
             <motion.div
-              key="hint"
-              initial={{ opacity: 0, y: -12, scale: 0.94 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.94 }}
-              transition={{ type: "spring", stiffness: 260, damping: 22 }}
-              className="pointer-events-auto flex w-fit max-w-xs min-w-0 items-center gap-2.5 rounded-2xl px-4 py-3 glass glass-highlight transition-all duration-300 sm:max-w-sm"
-              style={{ boxShadow: "var(--shadow-float), 0 0 0 1px oklch(0.82 0.17 205 / 0.12)" }}
-              title={t.exp_hint}
-              data-testid="anatomy-hint-overlay"
+              className="shrink-0"
+              animate={{ y: [0, -5, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
             >
-              <motion.div
-                className="shrink-0"
-                animate={{ y: [0, -5, 0] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <MousePointerClick className="size-4 text-primary" />
-              </motion.div>
-              <span className="min-w-0 truncate text-xs tracking-tight text-muted-foreground">
-                {t.exp_hint}
-              </span>
+              <MousePointerClick className="size-4 text-primary" />
             </motion.div>
-          )}
-        </AnimatePresence>
-        <AnatomySearch
-          onSelect={handleSearchSelect}
-          lang={lang}
-          placeholder={t.exp_search_placeholder}
-          emptyLabel={t.exp_search_empty}
-          className="pointer-events-auto"
-        />
+            <span className="min-w-0 truncate text-xs tracking-tight text-muted-foreground">
+              {t.exp_hint}
+            </span>
+          </div>
+        )}
+        <div className="pointer-events-auto flex w-full min-w-0 flex-col items-center gap-2 sm:w-auto sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setMedicalCareOpen(true)}
+            className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-background/70 px-3.5 text-xs font-bold text-foreground shadow-[0_10px_28px_-18px_rgba(0,242,254,0.72)] backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10 hover:text-primary"
+            aria-label={lang === "en" ? "Nearby care" : "Ajutor aproape"}
+            title={lang === "en" ? "Nearby care" : "Ajutor aproape"}
+          >
+            <MapPin className="size-4 text-primary" />
+            <span>{lang === "en" ? "Nearby care" : "Ajutor aproape"}</span>
+          </button>
+          <AnatomySearch
+            onSelect={handleSearchSelect}
+            lang={lang}
+            placeholder={t.exp_search_placeholder}
+            emptyLabel={t.exp_search_empty}
+          />
+        </div>
       </div>
 
       <LayersToggle
@@ -227,19 +237,14 @@ function ExploratorPage() {
       />
 
       {!selection && (
-        <motion.button
+        <button
           type="button"
           onClick={() => setPainQuickOpen(true)}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, type: "spring", stiffness: 260, damping: 22 }}
-          whileHover={{ y: -2 }}
-          whileTap={{ scale: 0.97 }}
-          className="absolute bottom-6 right-6 z-20 flex items-center gap-2.5 rounded-2xl bg-gradient-to-br from-primary to-accent px-4 py-3 font-semibold text-primary-foreground shadow-[0_10px_30px_-8px_rgba(0,242,254,0.45)]"
+          className="absolute bottom-6 right-6 z-20 flex items-center gap-2.5 rounded-2xl bg-gradient-to-br from-primary to-accent px-4 py-3 font-semibold text-primary-foreground shadow-[0_10px_30px_-8px_rgba(0,242,254,0.45)] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.98]"
         >
           <HeartPulse className="size-4.5" />
           <span className="text-sm tracking-tight">{t.exp_pain_button}</span>
-        </motion.button>
+        </button>
       )}
 
       <button
@@ -261,20 +266,20 @@ function ExploratorPage() {
         subtitle={t.exp_pain_subtitle}
       />
 
-      <AnimatePresence mode="popLayout">
-        {selection && (
-          <BoneInfoPanel
-            key={`${selection.side}-${selection.id}`}
-            bone={selectedBone}
-            selection={selection}
-            onClose={() => handleSelectionChange(null)}
-            onContextSwitch={handleAiContextSwitch}
-            preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
-            visualLayer={layerMode}
-            openConversationId={openConversationId}
-          />
-        )}
-      </AnimatePresence>
+      <MedicalCareMapModal open={medicalCareOpen} onOpenChange={setMedicalCareOpen} lang={lang} />
+
+      {selection && (
+        <BoneInfoPanel
+          key="bone-info-panel"
+          bone={selectedBone}
+          selection={selection}
+          onClose={() => handleSelectionChange(null)}
+          onContextSwitch={handleAiContextSwitch}
+          preserveAiStateOnSelectionChange={preserveAiStateOnSelectionChange}
+          visualLayer={layerMode}
+          openConversationId={openConversationId}
+        />
+      )}
     </div>
   );
 }

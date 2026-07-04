@@ -1,4 +1,5 @@
 import { bones } from "./bones";
+import { getAnatomyDisplayName } from "./anatomyDisplayNames";
 import { internalOrgans } from "./internalOrgans";
 import type { BoneSelection } from "@/components/skeleton/SkeletonScene";
 import type { LayerMode } from "@/components/skeleton/LayersToggle";
@@ -159,21 +160,31 @@ function buildIndex(): AnatomySearchResult[] {
 
   for (const bone of bones) {
     const aliases = BONE_ALIASES[bone.id] ?? [];
+    const selection: BoneSelection = {
+      id: bone.id,
+      side: "male",
+      tissue: "os",
+      label: bone.name,
+      labelEn: bone.name,
+    };
+    const displayRo = getAnatomyDisplayName({ bone, selection, lang: "ro" });
+    const displayEn = getAnatomyDisplayName({ bone, selection, lang: "en" });
     entries.push({
       key: `os:${bone.id}`,
       tissue: "os",
       layer: "skeleton",
-      label: bone.name,
-      labelEn: bone.name, // bones have no separate English name; latin is shown as subtitle
-      subtitle: bone.latin,
-      subtitleEn: bone.latin,
+      label: displayRo.title,
+      labelEn: displayEn.title,
+      subtitle: displayRo.subtitle ?? "Os",
+      subtitleEn: displayEn.subtitle ?? "Bone",
       selection: {
-        id: bone.id,
-        side: "male",
-        tissue: "os",
-        label: bone.name,
+        ...selection,
+        label: displayRo.title,
+        labelEn: displayEn.title,
       },
-      keywords: [bone.name, bone.latin, ...aliases].map(normalize),
+      keywords: [bone.name, bone.latin, displayRo.title, displayEn.title, ...aliases].map(
+        normalize,
+      ),
     });
   }
 

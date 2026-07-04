@@ -51,4 +51,5 @@ test("security headers include browser defensive policies", () => {
   expect(securityHeaders["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
   expect(securityHeaders["X-Content-Type-Options"]).toBe("nosniff");
   expect(securityHeaders["X-Frame-Options"]).toBe("DENY");
+  expect(securityHeaders["Permissions-Policy"]).toContain("geolocation=(self)");
 });

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { type Bone, categoryLabels, categoryLabelsEn } from "@/data/bones";
 import {
   X,
@@ -27,7 +26,6 @@ import {
 } from "@/data/painKnowledge";
 import { classifyAnatomyStructure, translateCurriculumInfo } from "@/data/anatomyCurriculum";
 import { getAnatomyDisplayName } from "@/data/anatomyDisplayNames";
-import { fetchAnatomyStructureName, type AnatomyStructureNameRow } from "@/lib/anatomyStructures";
 import {
   AI_CONVERSATION_DELETED_EVENT,
   dispatchAiHistoryRefresh,
@@ -236,9 +234,7 @@ export function BoneInfoPanel({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [contextSuggestion, setContextSuggestion] = useState<ContextSwitchSuggestion | null>(null);
-  const [dbStructureName, setDbStructureName] = useState<AnatomyStructureNameRow | null>(null);
   const previousSelectionKeyRef = useRef<string | null>(null);
-  const missingNameLogKeyRef = useRef<string | null>(null);
   const shownSuggestionKeysRef = useRef<Set<string>>(new Set());
 
   const MIN_WIDTH = 300;
@@ -345,26 +341,6 @@ export function BoneInfoPanel({
   }, [preserveAiStateOnSelectionChange, selection]);
 
   useEffect(() => {
-    if (!selection) {
-      setDbStructureName(null);
-      return;
-    }
-    let cancelled = false;
-    fetchAnatomyStructureName({
-      id: bone?.id ?? selection.id,
-      label: selection.label,
-      labelEn: selection.labelEn,
-      regionId: selection.regionId,
-      tissue: selection.tissue,
-    }).then((structure) => {
-      if (!cancelled) setDbStructureName(structure);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [bone?.id, selection]);
-
-  useEffect(() => {
     if (!openConversationId) return;
     let cancelled = false;
     setAiLoading(true);
@@ -411,21 +387,6 @@ export function BoneInfoPanel({
       window.removeEventListener(AI_CONVERSATION_DELETED_EVENT, handleDeletedConversation);
   }, [aiConversationId]);
 
-  useEffect(() => {
-    if (!import.meta.env.DEV || !selection) return;
-    const display = getAnatomyDisplayName({ bone, selection, dbStructure: dbStructureName });
-    if (!display.missing_ro_display_name) return;
-    const key = `${selection.tissue}:${selection.id}:${selection.labelEn ?? selection.label ?? ""}`;
-    if (missingNameLogKeyRef.current === key) return;
-    missingNameLogKeyRef.current = key;
-    console.warn("[Santix anatomy names] Missing Romanian display name", {
-      id: selection.id,
-      label: selection.label,
-      labelEn: selection.labelEn,
-      source: display.source,
-    });
-  }, [bone, dbStructureName, selection]);
-
   if (!selection) return null;
 
   const tissue = selection.tissue;
@@ -460,7 +421,6 @@ export function BoneInfoPanel({
   const displayInfo = getAnatomyDisplayName({
     bone,
     selection,
-    dbStructure: dbStructureName,
     lang,
   });
   const displayName = selectedOrgan?.popularName ?? displayInfo.display_name;
@@ -507,7 +467,6 @@ export function BoneInfoPanel({
   const technicalDetails = getTechnicalDetails({
     bone,
     selection,
-    dbStructure: dbStructureName,
     curriculum,
     functionText: funcText,
     organ: selectedOrgan,
@@ -752,11 +711,7 @@ export function BoneInfoPanel({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 32, scale: 0.97 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 24, scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 360, damping: 32 }}
+    <div
       className="absolute right-6 top-6 bottom-24 glass-strong rounded-3xl flex flex-col overflow-hidden"
       style={{ width: panelWidth }}
     >
@@ -768,12 +723,7 @@ export function BoneInfoPanel({
         <div className="w-[3px] h-12 rounded-full bg-white/10 group-hover:bg-primary/50 transition-colors duration-150" />
       </div>
       <div className="flex flex-col flex-1 overflow-hidden p-6">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08, duration: 0.2, ease: "easeOut" }}
-          className="flex items-start justify-between gap-3 mb-5"
-        >
+        <div className="flex items-start justify-between gap-3 mb-5">
           <div className="flex items-center gap-2">
             <div
               className={`size-10 rounded-2xl border flex items-center justify-center ${meta.tagBg}`}
@@ -798,13 +748,9 @@ export function BoneInfoPanel({
           >
             <X className="size-4" />
           </button>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12, duration: 0.2, ease: "easeOut" }}
-        >
+        <div>
           <h2 className="text-3xl font-bold tracking-tight leading-tight mb-1">{displayTitle}</h2>
 
           {bone && (
@@ -816,41 +762,28 @@ export function BoneInfoPanel({
               </span>
             </div>
           )}
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.17, duration: 0.24, ease: "easeOut" }}
-          className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 -mr-1"
-        >
+        <div className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 -mr-1">
           <Section title={t.bone_description}>
             <p className="text-sm leading-relaxed text-foreground/90">{description}</p>
           </Section>
 
-          <AnimatePresence mode="wait" initial={false}>
-            {isCompleteAnatomyMode && (
-              <motion.div
-                key="technical-details"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-              >
-                {completeLayerNote && (
-                  <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/5 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
-                    {completeLayerNote}
-                  </div>
-                )}
-                <TechnicalDetails
-                  details={technicalDetails}
-                  title={t.bone_details_title}
-                  subtitle={t.bone_details_subtitle}
-                />
-                {selectedOrgan && <OrganQuizSummary organ={selectedOrgan} />}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isCompleteAnatomyMode && (
+            <div>
+              {completeLayerNote && (
+                <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/5 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+                  {completeLayerNote}
+                </div>
+              )}
+              <TechnicalDetails
+                details={technicalDetails}
+                title={t.bone_details_title}
+                subtitle={t.bone_details_subtitle}
+              />
+              {selectedOrgan && <OrganQuizSummary organ={selectedOrgan} />}
+            </div>
+          )}
 
           <Section title={t.bone_function}>
             <p className="text-sm leading-relaxed text-foreground/90">{funcText}</p>
@@ -887,17 +820,9 @@ export function BoneInfoPanel({
             </div>
           </Section>
 
-          <AnimatePresence mode="wait" initial={false}>
-            {!hideAssistantInComplete ? (
+          {!hideAssistantInComplete ? (
               user ? (
-                <motion.div
-                  key="ai-assistant"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="order-first pb-3 mb-1 border-b border-primary/10"
-                >
+                <div className="order-first pb-3 mb-1 border-b border-primary/10">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
                       <Bot className="size-4 text-primary-foreground" />
@@ -1035,16 +960,9 @@ export function BoneInfoPanel({
                       </p>
                     </div>
                   )}
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  key={`local-triage-${tissue}`}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="order-first pb-3 mb-1 border-b border-primary/10"
-                >
+                <div className="order-first pb-3 mb-1 border-b border-primary/10">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="size-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_4px_12px_-4px_oklch(0.62_0.20_255_/_0.45)]">
                       <Stethoscope className="size-4 text-primary-foreground" />
@@ -1208,13 +1126,12 @@ export function BoneInfoPanel({
                       </div>
                     </div>
                   )}
-                </motion.div>
+                </div>
               )
             ) : null}
-          </AnimatePresence>
-        </motion.div>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

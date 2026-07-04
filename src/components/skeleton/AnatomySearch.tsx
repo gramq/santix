@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Search, X, BookMarked, Activity, HeartPulse } from "lucide-react";
 import { searchAnatomy, type AnatomySearchResult } from "@/data/anatomySearch";
 
@@ -97,15 +96,8 @@ export function AnatomySearch({
         )}
       </div>
 
-      <AnimatePresence>
-        {showDropdown && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.14 }}
-            className="glass-strong absolute left-0 right-0 top-[calc(100%+8px)] z-40 max-h-[320px] overflow-y-auto rounded-2xl p-1.5"
-          >
+      {showDropdown && (
+        <div className="glass-strong absolute left-0 right-0 top-[calc(100%+8px)] z-40 max-h-[320px] overflow-y-auto rounded-2xl p-1.5">
             {results.length === 0 ? (
               <div className="px-3 py-3 text-xs text-muted-foreground">{emptyLabel}</div>
             ) : (
@@ -138,9 +130,8 @@ export function AnatomySearch({
                 );
               })
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

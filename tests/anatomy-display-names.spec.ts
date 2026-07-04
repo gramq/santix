@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { bones } from "../src/data/bones";
 import { getAnatomyDisplayName, type AnatomyNameRecord } from "../src/data/anatomyDisplayNames";
 import { getInternalOrgan } from "../src/data/internalOrgans";
 import { localizeInternalOrgan } from "../src/data/organLocalization";
@@ -15,6 +16,12 @@ function selection(overrides: Partial<BoneSelection>): BoneSelection {
 
 function display(dbStructure: AnatomyNameRecord, selected: BoneSelection) {
   return getAnatomyDisplayName({ dbStructure, selection: selected });
+}
+
+function boneById(id: string) {
+  const bone = bones.find((item) => item.id === id);
+  if (!bone) throw new Error(`Missing test bone: ${id}`);
+  return bone;
 }
 
 test("uses DB display_name_ro for middle phalanx of fourth finger", () => {
@@ -148,6 +155,99 @@ test("canonical popular names override conflicting legacy display fields", () =>
   expect(en.title).toBe("Upper arm bone");
   expect(ro.subtitle).toBe("Humerus");
   expect(en.subtitle).toBe("Humerus");
+});
+
+test("DB popular bone names still win when they are clear for users", () => {
+  const selected = selection({
+    id: "humerus",
+    labelEn: "Humerus",
+  });
+  const dbStructure = {
+    popular_name_ro: "Osul de sus al brațului",
+    popular_name_en: "Upper arm bone",
+    scientific_name_ro: "Humerus",
+    scientific_name_en: "Humerus",
+    latin_name: "Humerus",
+  };
+
+  const result = getAnatomyDisplayName({
+    bone: boneById("humerus"),
+    dbStructure,
+    selection: selected,
+  });
+
+  expect(result.title).toBe("Osul de sus al brațului");
+  expect(result.subtitle).toBe("Humerus");
+});
+
+test("weak DB forearm bone labels do not replace the user-friendly local title", () => {
+  const result = getAnatomyDisplayName({
+    bone: boneById("ulna"),
+    dbStructure: {
+      display_name_ro: "Osul dinspre degetul mic",
+      scientific_name_ro: "Ulnă",
+      latin_name: "Ulna",
+    },
+    selection: selection({
+      id: "ulna",
+      label: "Ulnă",
+      labelEn: "Ulnă",
+    }),
+  });
+
+  expect(result.title).toBe("Osul antebrațului de pe partea degetului mic");
+  expect(result.title).toContain("antebrațului");
+  expect(result.title).not.toBe("Osul dinspre degetul mic");
+});
+
+test("grouped finger bones use plain-language titles instead of phalanx jargon", () => {
+  const selected = selection({
+    id: "falange-mana",
+    label: "Falange ale mâinii",
+    labelEn: "Falange ale mâinii",
+  });
+
+  const loadingFallback = getAnatomyDisplayName({
+    bone: boneById("falange-mana"),
+    selection: selected,
+  });
+  const weakDbResult = getAnatomyDisplayName({
+    bone: boneById("falange-mana"),
+    dbStructure: {
+      display_name_ro: "Falange (mână)",
+      scientific_name_ro: "Phalanges manus",
+      latin_name: "Phalanges manus",
+    },
+    selection: selected,
+  });
+
+  expect(loadingFallback.title).toBe("Oasele degetelor mâinii");
+  expect(weakDbResult.title).toBe("Oasele degetelor mâinii");
+  expect(weakDbResult.title).not.toContain("Falange");
+});
+
+test("spine base bones use plain-language titles instead of Latin labels", () => {
+  const sacrum = getAnatomyDisplayName({
+    bone: boneById("sacrum"),
+    selection: selection({
+      id: "sacrum",
+      label: "Sacrum",
+      labelEn: "Sacrum",
+    }),
+  });
+  const coccis = getAnatomyDisplayName({
+    bone: boneById("coccis"),
+    selection: selection({
+      id: "coccis",
+      label: "Coccis",
+      labelEn: "Coccis",
+    }),
+  });
+
+  expect(sacrum.title).toBe("Osul de la baza coloanei");
+  expect(sacrum.title).not.toBe("Sacrum");
+  expect(coccis.title).toBe("Osul mic de la capătul coloanei");
+  expect(coccis.title).not.toBe("Coccis");
 });
 
 test("internal organs expose canonical popular, scientific, and Latin names in both languages", () => {

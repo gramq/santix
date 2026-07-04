@@ -252,6 +252,89 @@
   border-color: oklch(0.58 0.16 205 / 0.26);
 }
 
+.santix-care-marker-shell {
+  background: transparent;
+  border: 0;
+}
+
+.santix-care-result-marker,
+.santix-care-user-marker {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-weight: 900;
+  letter-spacing: 0;
+  box-shadow:
+    0 10px 24px oklch(0 0 0 / 0.34),
+    0 0 0 2px oklch(0.055 0.012 230 / 0.92),
+    0 0 0 5px oklch(0.82 0.17 205 / 0.12);
+}
+
+.santix-care-result-marker {
+  width: 30px;
+  height: 30px;
+  color: white;
+  font-size: 12px;
+  background: linear-gradient(135deg, oklch(0.62 0.22 27), oklch(0.47 0.18 20));
+}
+
+.santix-care-result-marker-nonstop_pharmacy {
+  background: linear-gradient(135deg, oklch(0.56 0.23 18), oklch(0.40 0.17 18));
+}
+
+.santix-care-result-marker-emergency_hospital {
+  background: linear-gradient(135deg, oklch(0.48 0.20 18), oklch(0.34 0.14 18));
+}
+
+.santix-care-user-marker {
+  width: 24px;
+  height: 24px;
+  background: oklch(0.82 0.17 205);
+  border: 5px solid oklch(1 0 0 / 0.86);
+}
+
+.santix-care-user-marker::after {
+  content: "";
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid oklch(0.82 0.17 205 / 0.42);
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+}
+
+.leaflet-container {
+  background: oklch(0.075 0.018 230);
+  font-family: var(--font-sans);
+}
+
+.leaflet-control-zoom a {
+  background: oklch(0.10 0.018 230 / 0.92);
+  border-color: oklch(0.82 0.17 205 / 0.18);
+  color: oklch(0.94 0.018 210);
+}
+
+.leaflet-control-zoom a:hover {
+  background: oklch(0.16 0.028 225 / 0.94);
+  color: oklch(0.82 0.17 205);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: oklch(0.10 0.018 230 / 0.96);
+  color: oklch(0.94 0.018 210);
+  border: 1px solid oklch(0.82 0.17 205 / 0.18);
+  box-shadow: var(--shadow-float);
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .light-mode .santix-title-gradient {
   background: linear-gradient(135deg, oklch(0.45 0.15 205) 0%, oklch(0.15 0.05 225) 52%, oklch(0.50 0.16 205) 100%);
   background-size: 220% 100%;

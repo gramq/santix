@@ -66,15 +66,15 @@ export const translations = {
     auth_err_google: "Nu am putut continua cu Google.",
     auth_err_generic: "Nu am putut procesa cererea.",
 
-    layers_title: "Vizualizare Straturi",
+    layers_title: "Alege ce vrei să vezi",
     layers_skeleton: "Schelet",
-    layers_skeleton_sub: "Oase",
+    layers_skeleton_sub: "Oase și articulații",
     layers_muscles: "Sistem Muscular",
-    layers_muscles_sub: "Mușchi",
+    layers_muscles_sub: "Mișcare și efort",
     layers_organs: "Organe",
-    layers_organs_sub: "Organe interne",
+    layers_organs_sub: "Structuri interne",
     layers_full: "Anatomie Completă",
-    layers_full_sub: "Mod avansat",
+    layers_full_sub: "Privire de ansamblu",
 
     exp_hint: "Apasă pe un os, mușchi sau organ pentru detalii",
     exp_pain_button: "Mă doare ceva",
@@ -213,46 +213,60 @@ export const translations = {
 
     landing_title: "Santix — Înțelege-ți corpul",
     landing_meta_desc:
-      "Santix este introducerea către exploratorul anatomic 3D cu schelet, mușchi, tendoane, bibliotecă și quiz.",
+      "Santix te ajută să explorezi corpul uman în 3D și să înțelegi mai ușor o durere, o mișcare sau o structură anatomică.",
     landing_og_desc:
-      "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă.",
-    landing_hero_title: "Platformă medicală 3D interactivă",
+      "Explorator 3D educațional pentru anatomie, dureri descrise simplu și întrebări ghidate.",
+    landing_hero_title: "Începi de la zona care te interesează",
     landing_account_desc:
-      "Creează-ți cont pentru a folosi Santix complet: explorezi corpul în 3D, păstrezi conversațiile recente și poți întreba asistentul AI despre zona selectată, într-un mod educațional.",
+      "Santix te ajută să explorezi corpul uman în 3D și să înțelegi mai ușor o durere, o mișcare sau o structură anatomică. Poți porni de la întrebări simple: „Am căzut și mă doare genunchiul”, „Nu știu dacă mă doare osul sau mușchiul” sau „Vreau să înțeleg ce rol are humerusul”.",
     landing_start: "Începe acum",
     landing_how: "Cum funcționează",
     landing_stat1_val: "3",
-    landing_stat1_label: "Straturi anatomice",
+    landing_stat1_label: "Moduri de explorare",
     landing_stat2_val: "AI",
     landing_stat2_label: "Întrebări ghidate",
     landing_stat3_val: "Istoric",
     landing_stat3_label: "Conversații salvate",
-    landing_features_title: "Ce poți face",
-    landing_feature1_desc: "Explorezi corpul, alegi zona care te interesează și înveți pas cu pas.",
-    landing_feature1_title: "Corp 3D pe straturi",
+    landing_features_title: "Ce faci în Santix",
+    landing_feature1_desc:
+      "Începi de la zona care te interesează, nu de la termeni medicali complicați.",
+    landing_feature1_title: "Vezi separat oasele, mușchii și organele",
     landing_feature2_desc:
-      "Comuți între schelet, mușchi și anatomie completă pentru a vedea zona mai clar.",
-    landing_feature2_title: "Întrebări despre zona aleasă",
+      "Schimbi între schelet, sistem muscular, organe și anatomie completă când ai nevoie de context.",
+    landing_feature2_title: "Întreabă despre durere, mișcare sau rolul unei structuri",
     landing_feature3_desc:
-      "Poți întreba despre durere, mișcare sau rolul unei structuri, într-un limbaj simplu.",
-    landing_feature3_title: "Istoric personal",
+      "Poți descrie ce simți în cuvintele tale, iar asistentul păstrează răspunsul educațional și prudent.",
+    landing_feature3_title: "Revii la explicațiile și conversațiile tale",
     landing_feature4_desc:
-      "Dacă ești autentificat, poți reveni la conversațiile tale recente cu asistentul.",
+      "Dacă ești autentificat, găsești mai ușor conversațiile începute și continui de unde ai rămas.",
     landing_how_title: "Cum funcționează",
-    landing_how_subtitle: "De la o zonă aleasă la o explicație mai clară.",
+    landing_how_subtitle: "Alegi zona, vezi explicația și continui cu întrebări simple.",
     landing_step1_num: "01",
-    landing_step1_title: "Alegi zona",
+    landing_step1_title: "Alegi ce te interesează",
     landing_step1_desc:
-      "Pornești de la modelul 3D și apeși pe osul sau mușchiul care te interesează.",
+      "Pornești de la modelul 3D și apeși pe zona, osul sau mușchiul despre care vrei să afli mai mult.",
     landing_step2_num: "02",
-    landing_step2_title: "Citești explicația",
+    landing_step2_title: "Vezi explicația pe scurt",
     landing_step2_desc:
-      "Panoul de detalii îți arată numele pe înțelesul tău și informațiile importante.",
+      "Panoul de detalii îți arată denumirea prietenoasă, contextul și lucrurile importante de reținut.",
     landing_step3_num: "03",
-    landing_step3_title: "Întrebi mai departe",
+    landing_step3_title: "Pui întrebarea ta",
     landing_step3_desc:
-      "Asistentul te poate ghida cu întrebări despre durere, mișcare sau situația descrisă.",
+      "Asistentul AI educațional te poate ghida cu întrebări despre durere, mișcare sau situația descrisă.",
     landing_selected_zone: "Zonă selectată",
+    landing_why_eyebrow: "De ce am făcut Santix",
+    landing_why_title:
+      "Am vrut o aplicație în care să nu trebuiască să știi din prima dacă te doare osul, mușchiul sau articulația.",
+    landing_why_body:
+      "Santix pornește de la zona pe care o alegi și îți explică pas cu pas, într-un mod educațional. Ideea este să ai un loc în care poți porni de la o întrebare simplă și să ajungi treptat la structura potrivită.",
+    landing_why_point1_title: "Pornești simplu",
+    landing_why_point1_desc: "Alegi zona corpului sau descrii ce simți, fără să ghicești termenul medical.",
+    landing_why_point2_title: "Vezi contextul",
+    landing_why_point2_desc:
+      "Schimbi între oase, mușchi și organe ca să înțelegi mai bine ce privești.",
+    landing_why_point3_title: "Rămâne educațional",
+    landing_why_point3_desc:
+      "Santix explică și orientează, dar nu transformă răspunsul într-un diagnostic.",
 
     quiz_meta_title: "Test Rapid — Santix",
     quiz_meta_desc:
@@ -274,13 +288,13 @@ export const translations = {
 
     ghid_meta_title: "Ghid de utilizare Santix — Santix",
     ghid_meta_desc:
-      "Ghid Santix pentru alegerea scheletului 3D, sistemului muscular sau anatomiei complete.",
+      "Ghid Santix pentru alegerea între schelet, sistem muscular, organe și anatomie completă.",
     ghid_og_desc:
-      "Sfaturi pentru utilizatori despre când să folosească scheletul, mușchii, anatomia completă și AI-ul Santix.",
+      "Explicații simple despre când alegi scheletul, mușchii, organele sau anatomia completă în Santix.",
     ghid_title: "Ghid de utilizare Santix",
-    ghid_subtitle: "Alege mai ușor între schelet, mușchi și anatomie completă",
+    ghid_subtitle: "Alege mai ușor între schelet, mușchi, organe și anatomie completă",
     ghid_disclaimer:
-      "Santix oferă orientare educațională, nu diagnostic medical. Folosește ghidul ca punct de pornire când explorezi o durere, o mișcare sau o structură anatomică.",
+      "Santix oferă orientare educațională, nu diagnostic medical. Ghidul te ajută să alegi punctul de pornire potrivit când explorezi o durere, o mișcare sau o structură anatomică.",
     ghid_prev: "Anterior",
     ghid_next: "Următorul",
     ghid_close: "Închide cardul",
@@ -354,15 +368,15 @@ export const translations = {
     auth_err_google: "Could not continue with Google.",
     auth_err_generic: "Could not process the request.",
 
-    layers_title: "Layer View",
+    layers_title: "Choose what to view",
     layers_skeleton: "Skeleton",
-    layers_skeleton_sub: "Bones",
+    layers_skeleton_sub: "Bones and joints",
     layers_muscles: "Muscular System",
-    layers_muscles_sub: "Muscles",
+    layers_muscles_sub: "Movement and effort",
     layers_organs: "Organs",
-    layers_organs_sub: "Internal organs",
+    layers_organs_sub: "Internal structures",
     layers_full: "Full Anatomy",
-    layers_full_sub: "Advanced mode",
+    layers_full_sub: "Full overview",
 
     exp_hint: "Click on a bone, muscle or organ for details",
     exp_pain_button: "Something hurts",
@@ -500,44 +514,61 @@ export const translations = {
 
     landing_title: "Santix — Understand your body",
     landing_meta_desc:
-      "Santix is your gateway to the 3D anatomy explorer with skeleton, muscles, tendons, library and quiz.",
-    landing_og_desc: "Interactive 3D medical platform for anatomy, symptoms and fast learning.",
-    landing_hero_title: "Interactive 3D medical platform",
+      "Santix helps you explore the human body in 3D and understand a pain, a movement or an anatomical structure more easily.",
+    landing_og_desc:
+      "Educational 3D explorer for anatomy, plain-language pain descriptions and guided questions.",
+    landing_hero_title: "Start from the area you care about",
     landing_account_desc:
-      "Create an account to use Santix fully: explore the body in 3D, keep recent conversations and ask the AI assistant about the selected area in an educational way.",
+      "Santix helps you explore the human body in 3D and understand a pain, a movement or an anatomical structure more easily. You can start with simple questions: “I fell and my knee hurts”, “I do not know if it is bone or muscle pain” or “I want to understand what the humerus does”.",
     landing_start: "Get started",
     landing_how: "How it works",
     landing_stat1_val: "3",
-    landing_stat1_label: "Anatomy layers",
+    landing_stat1_label: "Explorer modes",
     landing_stat2_val: "AI",
     landing_stat2_label: "Guided questions",
     landing_stat3_val: "History",
     landing_stat3_label: "Saved conversations",
-    landing_features_title: "What you can do",
+    landing_features_title: "What you do in Santix",
     landing_feature1_desc:
-      "Explore the body, pick the area you're interested in and learn step by step.",
-    landing_feature1_title: "Layered 3D body",
+      "Start from the area you care about, not from complicated medical terms.",
+    landing_feature1_title: "View bones, muscles and organs separately",
     landing_feature2_desc:
-      "Switch between skeleton, muscles and full anatomy to see the area more clearly.",
-    landing_feature2_title: "Questions about the selected area",
-    landing_feature3_desc: "Ask about pain, movement or the role of a structure in plain language.",
-    landing_feature3_title: "Personal history",
+      "Switch between skeleton, muscular system, organs and full anatomy when you need more context.",
+    landing_feature2_title: "Ask about pain, movement or the role of a structure",
+    landing_feature3_desc:
+      "Describe what you feel in your own words, while the assistant keeps the answer educational and careful.",
+    landing_feature3_title: "Return to your explanations and conversations",
     landing_feature4_desc:
-      "If you're signed in, you can return to your recent conversations with the assistant.",
+      "If you are signed in, you can find previous conversations more easily and continue where you left off.",
     landing_how_title: "How it works",
-    landing_how_subtitle: "From a selected area to a clearer explanation.",
+    landing_how_subtitle: "Pick an area, read the explanation and continue with simple questions.",
     landing_step1_num: "01",
-    landing_step1_title: "Pick an area",
+    landing_step1_title: "Choose what interests you",
     landing_step1_desc:
-      "Start from the 3D model and click on the bone or muscle you're interested in.",
+      "Start from the 3D model and click the area, bone or muscle you want to understand better.",
     landing_step2_num: "02",
-    landing_step2_title: "Read the explanation",
-    landing_step2_desc: "The details panel shows the name in plain language and key information.",
+    landing_step2_title: "See the short explanation",
+    landing_step2_desc:
+      "The details panel shows a friendly name, useful context and the main things to remember.",
     landing_step3_num: "03",
-    landing_step3_title: "Ask further",
+    landing_step3_title: "Ask your own question",
     landing_step3_desc:
-      "The assistant can guide you with questions about pain, movement or the described situation.",
+      "The educational AI assistant can guide you with questions about pain, movement or the situation you describe.",
     landing_selected_zone: "Selected area",
+    landing_why_eyebrow: "Why we built Santix",
+    landing_why_title:
+      "We wanted an app where you do not have to know from the start whether the pain is bone, muscle or joint related.",
+    landing_why_body:
+      "Santix starts from the area you choose and explains things step by step, in an educational way. The idea is to start with a simple question and gradually reach the structure that makes sense.",
+    landing_why_point1_title: "Start simply",
+    landing_why_point1_desc:
+      "Pick a body area or describe what you feel without guessing the medical term.",
+    landing_why_point2_title: "See the context",
+    landing_why_point2_desc:
+      "Switch between bones, muscles and organs to understand what you are looking at.",
+    landing_why_point3_title: "Keep it educational",
+    landing_why_point3_desc:
+      "Santix explains and orients, but does not turn the answer into a diagnosis.",
 
     quiz_meta_title: "Quick Test — Santix",
     quiz_meta_desc:
@@ -558,13 +589,14 @@ export const translations = {
     quiz_restart: "Restart test",
 
     ghid_meta_title: "Santix Usage Guide — Santix",
-    ghid_meta_desc: "Santix guide for choosing the 3D skeleton, muscular system or full anatomy.",
+    ghid_meta_desc:
+      "Santix guide for choosing between skeleton, muscular system, organs and full anatomy.",
     ghid_og_desc:
-      "Tips for users on when to use skeleton, muscles, full anatomy and the Santix AI.",
+      "Simple guidance on when to choose skeleton, muscles, organs or full anatomy in Santix.",
     ghid_title: "Santix Usage Guide",
-    ghid_subtitle: "Easily choose between skeleton, muscles and full anatomy",
+    ghid_subtitle: "Choose between skeleton, muscles, organs and full anatomy more easily",
     ghid_disclaimer:
-      "Santix provides educational guidance, not medical diagnosis. Use this guide as a starting point when exploring a pain, movement or anatomical structure.",
+      "Santix provides educational guidance, not medical diagnosis. The guide helps you choose a useful starting point when exploring a pain, movement or anatomical structure.",
     ghid_prev: "Previous",
     ghid_next: "Next",
     ghid_close: "Close card",

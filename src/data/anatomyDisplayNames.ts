@@ -326,6 +326,114 @@ const boneDisplayById: Record<
     title_en: "Kneecap",
     subtitle: "Genunchi",
   },
+  sacrum: {
+    common_name_ro: "Osul de la baza coloanei",
+    scientific_name_ro: "os sacru",
+    latin_name: "Os sacrum",
+    display_name: "Osul de la baza coloanei",
+    title: "Osul de la baza coloanei",
+    title_en: "Base-of-spine bone",
+    subtitle: "Coloana vertebrală",
+  },
+  coccis: {
+    common_name_ro: "Osul mic de la capătul coloanei",
+    scientific_name_ro: "coccis",
+    latin_name: "Os coccygis",
+    display_name: "Osul mic de la capătul coloanei",
+    title: "Osul mic de la capătul coloanei",
+    title_en: "Tailbone",
+    subtitle: "Coloana vertebrală",
+  },
+  radius: {
+    common_name_ro: "Osul antebrațului de pe partea degetului mare",
+    scientific_name_ro: "radius",
+    latin_name: "Radius",
+    display_name: "Osul antebrațului de pe partea degetului mare",
+    title: "Osul antebrațului de pe partea degetului mare",
+    title_en: "Thumb-side forearm bone",
+    subtitle: "Antebraț",
+  },
+  ulna: {
+    common_name_ro: "Osul antebrațului de pe partea degetului mic",
+    scientific_name_ro: "ulnă",
+    latin_name: "Ulna",
+    display_name: "Osul antebrațului de pe partea degetului mic",
+    title: "Osul antebrațului de pe partea degetului mic",
+    title_en: "Little-finger-side forearm bone",
+    subtitle: "Antebraț",
+  },
+  carp: {
+    common_name_ro: "Oasele încheieturii mâinii",
+    scientific_name_ro: "oase carpiene",
+    latin_name: "Ossa carpi",
+    display_name: "Oasele încheieturii mâinii",
+    title: "Oasele încheieturii mâinii",
+    title_en: "Wrist bones",
+    subtitle: "Mână",
+  },
+  metacarp: {
+    common_name_ro: "Oasele palmei",
+    scientific_name_ro: "metacarpiene",
+    latin_name: "Ossa metacarpi",
+    display_name: "Oasele palmei",
+    title: "Oasele palmei",
+    title_en: "Palm bones",
+    subtitle: "Mână",
+  },
+  "falange-mana": {
+    common_name_ro: "Oasele degetelor mâinii",
+    scientific_name_ro: "falangele mâinii",
+    latin_name: "Phalanges manus",
+    display_name: "Oasele degetelor mâinii",
+    title: "Oasele degetelor mâinii",
+    title_en: "Finger bones",
+    subtitle: "Mână",
+  },
+  tibia: {
+    common_name_ro: "Osul mare al gambei",
+    scientific_name_ro: "tibie",
+    latin_name: "Tibia",
+    display_name: "Osul mare al gambei",
+    title: "Osul mare al gambei",
+    title_en: "Main shin bone",
+    subtitle: "Gambă",
+  },
+  fibula: {
+    common_name_ro: "Osul subțire al gambei",
+    scientific_name_ro: "fibulă",
+    latin_name: "Fibula",
+    display_name: "Osul subțire al gambei",
+    title: "Osul subțire al gambei",
+    title_en: "Thin outer lower-leg bone",
+    subtitle: "Gambă",
+  },
+  tars: {
+    common_name_ro: "Oasele gleznei și călcâiului",
+    scientific_name_ro: "oase tarsiene",
+    latin_name: "Ossa tarsi",
+    display_name: "Oasele gleznei și călcâiului",
+    title: "Oasele gleznei și călcâiului",
+    title_en: "Ankle and heel bones",
+    subtitle: "Picior",
+  },
+  metatars: {
+    common_name_ro: "Oasele din mijlocul labei piciorului",
+    scientific_name_ro: "metatarsiene",
+    latin_name: "Ossa metatarsi",
+    display_name: "Oasele din mijlocul labei piciorului",
+    title: "Oasele din mijlocul labei piciorului",
+    title_en: "Midfoot bones",
+    subtitle: "Picior",
+  },
+  "falange-picior": {
+    common_name_ro: "Oasele degetelor piciorului",
+    scientific_name_ro: "falangele piciorului",
+    latin_name: "Phalanges pedis",
+    display_name: "Oasele degetelor piciorului",
+    title: "Oasele degetelor piciorului",
+    title_en: "Toe bones",
+    subtitle: "Picior",
+  },
 };
 
 function normalize(value: string) {
@@ -367,6 +475,41 @@ function withSelectionLaterality(value: string, selection: BoneSelection, lang: 
   const side = getSelectionLaterality(selection, lang);
   if (!side || /\((?:stânga|stanga|dreapta|left|right)\)\s*$/i.test(value)) return value;
   return `${value} (${side})`;
+}
+
+function compareName(value: string | null | undefined) {
+  return normalize(value ?? "").replace(/[^a-z0-9]+/g, "");
+}
+
+function isTechnicalBoneTitle(display: AnatomyDisplayName | null, bone: Bone) {
+  if (!display) return false;
+  const title = compareName(display.title);
+  if (!title) return false;
+  return [bone.name, bone.latin].some((name) => title === compareName(name));
+}
+
+function isWeakBoneDisplayTitle(display: AnatomyDisplayName | null, bone: Bone) {
+  if (!display?.title) return false;
+  const title = normalize(display.title);
+
+  if (isTechnicalBoneTitle(display, bone)) return true;
+
+  if (
+    (bone.id === "radius" || bone.id === "ulna") &&
+    /^osul\s+(dinspre|de pe partea)/i.test(title) &&
+    !title.includes("antebrat")
+  ) {
+    return true;
+  }
+
+  if (
+    (bone.id === "falange-mana" || bone.id === "falange-picior") &&
+    /\b(falange|phalanx)\b/i.test(title)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 const popularRegionNames: Record<string, { ro: string; en: string }> = {
@@ -413,10 +556,10 @@ export function getAnatomyDisplayName(input: {
   const originalName =
     bone?.name ?? selection.label ?? selection.regionLabel ?? "Structură anatomică";
 
-  const dbDisplay = getDbDisplayName(dbStructure, originalName, lang);
-  if (dbDisplay) return dbDisplay;
-
   if (bone) {
+    const dbDisplay = getDbDisplayName(dbStructure, originalName, lang);
+    if (dbDisplay && !isWeakBoneDisplayTitle(dbDisplay, bone)) return dbDisplay;
+
     const mapped = boneDisplayById[bone.id];
     if (mapped) {
       return {
@@ -427,6 +570,8 @@ export function getAnatomyDisplayName(input: {
         source: "fallback",
       };
     }
+
+    if (dbDisplay) return dbDisplay;
 
     const boneTitle = isEn ? (selection.labelEn ?? bone.name) : bone.name;
     return {
@@ -439,6 +584,9 @@ export function getAnatomyDisplayName(input: {
       source: "fallback",
     };
   }
+
+  const dbDisplay = getDbDisplayName(dbStructure, originalName, lang);
+  if (dbDisplay) return dbDisplay;
 
   const haystack = normalize(
     [selection.labelEn, selection.label, selection.regionLabel, selection.id]

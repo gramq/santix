@@ -69,10 +69,10 @@ function TiltCard({ children, className }: { children: React.ReactNode; classNam
       <motion.div
         className="pointer-events-none absolute inset-0 rounded-3xl"
         style={{
-          background: `radial-gradient(circle at ${glareX} ${glareY}, rgba(0,242,254,0.09) 0%, transparent 55%)`,
+          background: `radial-gradient(circle at ${glareX} ${glareY}, rgba(0,242,254,0.045) 0%, transparent 55%)`,
           opacity: 0,
         }}
-        whileHover={{ opacity: 1 }}
+        whileHover={{ opacity: 0.85 }}
         transition={{ duration: 0.2 }}
       />
       {children}
@@ -121,9 +121,9 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Santix — Înțelege-ți corpul" },
-      { name: "description", content: "Santix este introducerea către exploratorul anatomic 3D cu schelet, mușchi, tendoane, bibliotecă și quiz." },
+      { name: "description", content: "Santix te ajută să explorezi corpul uman în 3D și să înțelegi mai ușor o durere, o mișcare sau o structură anatomică." },
       { property: "og:title", content: "Santix — Înțelege-ți corpul" },
-      { property: "og:description", content: "Platformă medicală 3D interactivă pentru anatomie, simptome și învățare rapidă." },
+      { property: "og:description", content: "Explorator 3D educațional pentru anatomie, dureri descrise simplu și întrebări ghidate." },
     ],
   }),
   component: SantixLanding,
@@ -162,20 +162,20 @@ function SantixLanding() {
       {/* Animated ambient orbs */}
       <motion.div
         className="pointer-events-none absolute left-[8%] top-[14%] h-72 w-72 rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(0,242,254,0.12) 0%, transparent 70%)" }}
-        animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.9, 0.5] }}
+        style={{ background: "radial-gradient(circle, rgba(0,242,254,0.07) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.18, 1], opacity: [0.32, 0.55, 0.32] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="pointer-events-none absolute right-[10%] top-[30%] h-56 w-56 rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(0,144,254,0.10) 0%, transparent 70%)" }}
-        animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.7, 0.4] }}
+        style={{ background: "radial-gradient(circle, rgba(0,144,254,0.055) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.16, 1], opacity: [0.28, 0.46, 0.28] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }}
       />
       <motion.div
         className="pointer-events-none absolute bottom-[20%] left-[40%] h-80 w-80 rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(120,0,254,0.07) 0%, transparent 70%)" }}
-        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+        style={{ background: "radial-gradient(circle, rgba(0,242,254,0.035) 0%, transparent 72%)" }}
+        animate={{ scale: [1, 1.12, 1], opacity: [0.18, 0.32, 0.18] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 4 }}
       />
 
@@ -200,7 +200,7 @@ function SantixLanding() {
         <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="md:ml-0 ml-auto">
           <Link
             to="/explorator"
-            className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_30px_rgba(0,242,254,0.26)] hover:shadow-[0_0_50px_rgba(0,242,254,0.55)] transition-shadow"
+            className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-bold text-black shadow-[0_0_22px_rgba(0,242,254,0.20)] transition-shadow hover:shadow-[0_0_34px_rgba(0,242,254,0.36)]"
           >
             {t.landing_start}
             <ArrowRight className="size-4" />
@@ -243,7 +243,7 @@ function SantixLanding() {
               <motion.div whileHover={{ scale: 1.04, y: -3 }} whileTap={{ scale: 0.97 }}>
                 <Link
                   to="/explorator"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_38px_rgba(0,242,254,0.28)] hover:shadow-[0_0_60px_rgba(0,242,254,0.55)] transition-shadow"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-br from-cyan-300 to-sky-500 px-7 py-4 text-sm font-bold text-black shadow-[0_0_28px_rgba(0,242,254,0.24)] transition-shadow hover:shadow-[0_0_44px_rgba(0,242,254,0.42)]"
                 >
                   {t.landing_start}
                   <MousePointerClick className="size-4" />
@@ -279,6 +279,9 @@ function SantixLanding() {
           </motion.div>
         </section>
 
+        {/* ── WHY SANTIX ── */}
+        <WhySantixSection t={t} />
+
         {/* ── FEATURES ── */}
         <FeatureSection t={t} />
 
@@ -293,9 +296,82 @@ function SantixLanding() {
 
 type TranslationBag = ReturnType<typeof useLanguage>["t"];
 
+function WhySantixSection({ t }: { t: TranslationBag }) {
+  const ref = useRef<HTMLElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-120px" });
+  const points = [
+    { title: t.landing_why_point1_title, text: t.landing_why_point1_desc },
+    { title: t.landing_why_point2_title, text: t.landing_why_point2_desc },
+    { title: t.landing_why_point3_title, text: t.landing_why_point3_desc },
+  ];
+
+  return (
+    <section ref={ref} className="border-y border-white/[0.08] px-6 py-20 md:px-10">
+      <motion.div
+        className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[0.9fr_1.1fr] md:items-start"
+        initial={{ opacity: 0, y: 32 }}
+        animate={isInView ? { opacity: 1, y: 0 } : {}}
+        transition={{ type: "spring", stiffness: 150, damping: 24 }}
+      >
+        <div>
+          <div className="flex items-center gap-2 text-cyan-300/90">
+            <Activity className="size-4" />
+            <p className="text-xs font-bold uppercase tracking-[0.18em]">
+              {t.landing_why_eyebrow}
+            </p>
+          </div>
+          <h2 className="mt-4 max-w-2xl text-3xl font-black tracking-tight text-white md:text-5xl">
+            {t.landing_why_title}
+          </h2>
+        </div>
+        <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.025] p-6 shadow-[0_18px_54px_rgba(0,0,0,0.22)] md:p-7">
+          <p className="text-base leading-8 text-slate-300">{t.landing_why_body}</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {points.map((point, index) => (
+              <div
+                key={point.title}
+                className="rounded-2xl border border-white/[0.08] bg-black/20 p-4"
+              >
+                <div className="mb-3 flex size-8 items-center justify-center rounded-xl bg-cyan-300/10 text-sm font-black text-cyan-200">
+                  {index + 1}
+                </div>
+                <h3 className="text-sm font-black text-white">{point.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{point.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
 function FeatureSection({ t }: { t: TranslationBag }) {
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-120px" });
+  const featureCards = [
+    {
+      icon: Layers,
+      title: t.landing_feature1_title,
+      text: t.landing_feature2_desc,
+      cardClass: "rounded-[1.35rem] border-cyan-300/10 bg-white/[0.03]",
+      iconClass: "rounded-2xl border-cyan-300/[0.18] bg-cyan-300/[0.09] text-cyan-300",
+    },
+    {
+      icon: Brain,
+      title: t.landing_feature2_title,
+      text: t.landing_feature3_desc,
+      cardClass: "rounded-3xl border-white/10 bg-white/[0.026] md:mt-8",
+      iconClass: "rounded-xl border-sky-300/[0.16] bg-sky-300/[0.08] text-sky-200",
+    },
+    {
+      icon: ShieldCheck,
+      title: t.landing_feature3_title,
+      text: t.landing_feature4_desc,
+      cardClass: "rounded-[1.6rem] border-cyan-300/[0.08] bg-black/25 md:mt-3",
+      iconClass: "rounded-2xl border-white/[0.12] bg-white/[0.045] text-cyan-200",
+    },
+  ];
 
   return (
     <section id="anatomie" ref={ref} className="border-t border-cyan-300/10 px-6 py-24 md:px-10">
@@ -317,17 +393,13 @@ function FeatureSection({ t }: { t: TranslationBag }) {
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
       >
-        {[
-          { icon: Layers, title: t.landing_feature1_title, text: t.landing_feature2_desc },
-          { icon: Brain,  title: t.landing_feature2_title, text: t.landing_feature3_desc },
-          { icon: ShieldCheck, title: t.landing_feature3_title, text: t.landing_feature4_desc },
-        ].map(({ icon: Icon, title, text }) => (
+        {featureCards.map(({ icon: Icon, title, text, cardClass, iconClass }) => (
           <motion.div key={title} variants={fadeUpBlur}>
             <TiltCard>
-              <article className="group rounded-3xl border border-cyan-300/10 bg-white/[0.035] p-7 shadow-[0_18px_70px_rgba(0,0,0,0.28)]">
+              <article className={`group border p-7 shadow-[0_16px_48px_rgba(0,0,0,0.22)] ${cardClass}`}>
                 <motion.div
-                  className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-300"
-                  whileHover={{ scale: 1.15, rotate: 6 }}
+                  className={`mb-6 flex size-12 items-center justify-center border ${iconClass}`}
+                  whileHover={{ scale: 1.08, rotate: 4 }}
                   transition={{ type: "spring", stiffness: 400, damping: 18 }}
                 >
                   <Icon className="size-5" />
@@ -348,6 +420,26 @@ function FeatureSection({ t }: { t: TranslationBag }) {
 function StepsSection({ t }: { t: TranslationBag }) {
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const stepCards = [
+    {
+      number: t.landing_step1_num,
+      title: t.landing_step1_title,
+      text: t.landing_step1_desc,
+      cardClass: "rounded-[1.4rem] border-white/10 bg-white/[0.028]",
+    },
+    {
+      number: t.landing_step2_num,
+      title: t.landing_step2_title,
+      text: t.landing_step2_desc,
+      cardClass: "rounded-3xl border-cyan-300/[0.09] bg-cyan-300/[0.025] md:mt-6",
+    },
+    {
+      number: t.landing_step3_num,
+      title: t.landing_step3_title,
+      text: t.landing_step3_desc,
+      cardClass: "rounded-[1.55rem] border-white/10 bg-black/25 md:mt-2",
+    },
+  ];
 
   return (
     <section id="flux" ref={ref} className="px-6 pb-28 md:px-10">
@@ -381,17 +473,13 @@ function StepsSection({ t }: { t: TranslationBag }) {
           initial="hidden"
           animate={isInView ? "visible" : "hidden"}
         >
-          {[
-            { number: t.landing_step1_num, title: t.landing_step1_title, text: t.landing_step1_desc },
-            { number: t.landing_step2_num, title: t.landing_step2_title, text: t.landing_step2_desc },
-            { number: t.landing_step3_num, title: t.landing_step3_title, text: t.landing_step3_desc },
-          ].map(({ number, title, text }) => (
+          {stepCards.map(({ number, title, text, cardClass }) => (
             <motion.div key={title} variants={fadeUpBlur}>
               <TiltCard>
-                <article className="group rounded-3xl border border-white/10 bg-white/[0.03] p-7 h-full">
+                <article className={`group h-full border p-7 ${cardClass}`}>
                   <motion.div
-                    className="text-5xl font-black text-cyan-300/20"
-                    whileHover={{ scale: 1.08, color: "rgba(0,242,254,0.45)" }}
+                    className="text-5xl font-black text-cyan-300/[0.18]"
+                    whileHover={{ scale: 1.04, color: "rgba(0,242,254,0.34)" }}
                     transition={{ type: "spring", stiffness: 300, damping: 22 }}
                   >
                     {number}

@@ -164,7 +164,8 @@ export function resolveExactAnatomy3dMapping(structureId: string) {
 
 const HOVER_COLOR_BONE = new THREE.Color("#7b5cff");
 const HOVER_COLOR_MUSCLE = new THREE.Color("#d91f7b");
-const HOVER_COLOR_ORGAN = new THREE.Color("#9b59d6");
+const ORGAN_SELECTED_COLOR = new THREE.Color("#9333ea");
+const ORGAN_SELECTED_PULSE_COLOR = new THREE.Color("#b36cff");
 const SELECT_COLOR = new THREE.Color("#4a2fb7");
 const SELECT_EMISSIVE = new THREE.Color("#c01874");
 const DIM_COLOR = new THREE.Color("#e7ddf3");
@@ -312,8 +313,7 @@ export function inferCatalogSelection(input: {
   if (hasTerm(name, ["calcaneal"])) return makeCatalogSelection("tars", "Oase tarsiene");
   if (hasTerm(name, ["bony pelvis", "gluteal line", "sciatic foramen", "sciatic notch"]))
     return makeCatalogSelection("coxal", "Oase coxale");
-  if (hasTerm(name, ["conoid tubercle"]))
-    return makeCatalogSelection("clavicula", "Clavicule");
+  if (hasTerm(name, ["conoid tubercle"])) return makeCatalogSelection("clavicula", "Clavicule");
   if (
     hasTerm(name, [
       "coronoid fossa",
@@ -331,10 +331,8 @@ export function inferCatalogSelection(input: {
     return makeCatalogSelection("tibia", "Tibia");
   if (hasTerm(name, ["lateral malleolus", "malleolar fossa"]))
     return makeCatalogSelection("fibula", "Fibulă");
-  if (hasTerm(name, ["medial malleolus"]))
-    return makeCatalogSelection("tibia", "Tibia");
-  if (hasTerm(name, ["nuchal line"]))
-    return makeCatalogSelection("occipital", "Os occipital");
+  if (hasTerm(name, ["medial malleolus"])) return makeCatalogSelection("tibia", "Tibia");
+  if (hasTerm(name, ["nuchal line"])) return makeCatalogSelection("occipital", "Os occipital");
   if (
     hasTerm(name, [
       "foramen ovale",
@@ -1168,8 +1166,7 @@ function ResolvedSimpleSkeletonModel({
 
   useFrame(() => {
     const hovered = hoveredMeshRef.current;
-    const rotating = !selection;
-    if (!simpleIsDirtyRef.current && !hovered && !rotating) return;
+    if (!simpleIsDirtyRef.current && !hovered) return;
 
     let settling = false;
     for (const mesh of simpleMeshes) {
@@ -1194,10 +1191,6 @@ function ResolvedSimpleSkeletonModel({
       if (Math.abs(mat.emissiveIntensity - targetEmissive) > 0.004) settling = true;
     }
     if (!settling && !hovered) simpleIsDirtyRef.current = false;
-
-    if (groupRef.current && rotating) {
-      groupRef.current.rotation.y += 0.0012;
-    }
   });
 
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
@@ -1288,17 +1281,17 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
 
       mesh.userData.tissue = tissue;
       mesh.userData.side = "male";
-      mesh.userData.selectionLabelEn = structureNameEn;
       mesh.userData.exactMappingStatus = exactMapping?.status ?? "unsupported";
       const selectionId =
         exactMapping?.status === "exact" ? (exactMapping.selectionId ?? undefined) : undefined;
       const selectionLabel =
         tissue === "muschi"
           ? readableMuscleSelection?.label
-          : exactMapping?.regionLabel ?? stripLateralityFromLabel(structureName);
+          : (exactMapping?.regionLabel ?? stripLateralityFromLabel(structureName));
 
       mesh.userData.selectionId = selectionId;
       mesh.userData.selectionLabel = selectionLabel;
+      mesh.userData.selectionLabelEn = tissue === "os" ? selectionLabel : structureNameEn;
       mesh.userData.selectionRegionId =
         exactMapping?.status === "exact" ? (exactMapping.regionId ?? undefined) : undefined;
       mesh.userData.selectionRegionLabel =
@@ -1382,8 +1375,7 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
 
   useFrame(() => {
     const hovered = hoveredMeshRef.current;
-    const rotating = !selection;
-    if (!isDirtyRef.current && !hovered && !rotating) return;
+    if (!isDirtyRef.current && !hovered) return;
 
     let settling = false;
     const hasSelection = selection !== null && selection.side === "male";
@@ -1458,10 +1450,6 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
     }
 
     if (!settling && !hovered) isDirtyRef.current = false;
-
-    if (groupRef.current && rotating) {
-      groupRef.current.rotation.y += 0.0012;
-    }
   });
 
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
@@ -1557,8 +1545,7 @@ function AnatomyGlbModel({
   organ,
   model,
   selected = false,
-  hovered = false,
-  dimmed = false,
+  selectionPulseKey = 0,
   opacity = 0.42,
   interactive = true,
   onPointerOver,
@@ -1568,8 +1555,7 @@ function AnatomyGlbModel({
   organ?: InternalOrgan;
   model: OrganModelPart;
   selected?: boolean;
-  hovered?: boolean;
-  dimmed?: boolean;
+  selectionPulseKey?: number;
   opacity?: number;
   interactive?: boolean;
   onPointerOver?: (event: ThreeEvent<PointerEvent>) => void;
@@ -1577,8 +1563,9 @@ function AnatomyGlbModel({
   onClick?: (event: ThreeEvent<MouseEvent>) => void;
 }) {
   const gltf = useGLTF(model.url);
-  const groupRef = useRef<THREE.Group>(null);
   const materialsRef = useRef<THREE.Material[]>([]);
+  const pulseElapsedRef = useRef(Number.POSITIVE_INFINITY);
+  const previousPulseKeyRef = useRef(selectionPulseKey);
   const baseColor = useMemo(
     () => new THREE.Color(organ?.color ?? COMPLETE_REFERENCE_COLOR),
     [organ?.color],
@@ -1588,7 +1575,7 @@ function AnatomyGlbModel({
     [organ?.emissiveColor],
   );
 
-  const { scene, centerOffset, targetPosition, targetScale } = useMemo(() => {
+  const { scene, materials, centerOffset, targetPosition, targetScale } = useMemo(() => {
     const cloned = gltf.scene.clone(true);
     const materials: THREE.Material[] = [];
 
@@ -1600,7 +1587,7 @@ function AnatomyGlbModel({
       const clonedMaterials = originalMaterials.map((sourceMaterial) => {
         const clonedMaterial = sourceMaterial.clone();
         clonedMaterial.transparent = true;
-        clonedMaterial.opacity = opacity;
+        clonedMaterial.opacity = 0;
         clonedMaterial.depthTest = true;
         clonedMaterial.depthWrite = false;
         clonedMaterial.side = THREE.DoubleSide;
@@ -1629,10 +1616,7 @@ function AnatomyGlbModel({
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       mesh.renderOrder = organ ? 34 : 18;
-      if (!interactive) mesh.raycast = () => null;
     });
-
-    materialsRef.current = materials;
 
     const box = new THREE.Box3().setFromObject(cloned);
     const center = model.preserveScenePosition
@@ -1644,70 +1628,59 @@ function AnatomyGlbModel({
 
     return {
       scene: cloned,
+      materials,
       centerOffset: center,
       targetPosition: resolveAnatomicalPosition(model),
       targetScale: scale,
     };
-  }, [baseColor, gltf.scene, glowColor, interactive, model, opacity, organ]);
+  }, [baseColor, gltf.scene, glowColor, model, organ]);
 
-  const initialPosition = useMemo(
-    () => targetPosition.clone().add(new THREE.Vector3(0, -0.08, 0)),
-    [targetPosition],
-  );
-  const initialScale = useMemo(() => targetScale.clone().multiplyScalar(0.72), [targetScale]);
+  useEffect(() => {
+    materialsRef.current = materials;
+  }, [materials]);
+
   const targetRotation = useMemo(
     () => new THREE.Euler(...(model.rotation ?? [0, 0, 0])),
     [model.rotation],
   );
 
-  useEffect(() => {
-    const group = groupRef.current;
-    if (!group) return;
-    group.position.copy(initialPosition);
-    group.scale.copy(initialScale);
-    group.rotation.copy(targetRotation);
-  }, [initialPosition, initialScale, targetRotation]);
-
-  useFrame(() => {
-    const group = groupRef.current;
-    if (group) {
-      group.position.lerp(targetPosition, 0.12);
-      group.scale.lerp(targetScale, 0.12);
-      group.rotation.x += (targetRotation.x - group.rotation.x) * 0.12;
-      group.rotation.y += (targetRotation.y - group.rotation.y) * 0.12;
-      group.rotation.z += (targetRotation.z - group.rotation.z) * 0.12;
+  useFrame((_, delta) => {
+    if (selectionPulseKey !== previousPulseKeyRef.current) {
+      previousPulseKeyRef.current = selectionPulseKey;
+      pulseElapsedRef.current = 0;
     }
 
+    pulseElapsedRef.current += delta;
+    const pulseDuration = 0.34;
+    const pulseProgress = Math.min(pulseElapsedRef.current / pulseDuration, 1);
+    const pulseStrength =
+      selected && pulseProgress < 1 ? Math.sin(pulseProgress * Math.PI) * 0.38 : 0;
+
     materialsRef.current.forEach((material) => {
-      const targetOpacity = selected ? 0.82 : hovered ? 0.72 : dimmed ? 0.18 : opacity;
-      material.opacity += (targetOpacity - material.opacity) * 0.18;
+      material.opacity += (opacity - material.opacity) * 0.18;
 
       const standardMaterial = material as THREE.MeshStandardMaterial;
+      if ("color" in standardMaterial) {
+        const selectedColor = ORGAN_SELECTED_COLOR.clone().lerp(
+          ORGAN_SELECTED_PULSE_COLOR,
+          pulseStrength,
+        );
+        standardMaterial.color.lerp(selected ? selectedColor : baseColor, 0.2);
+      }
       if ("emissive" in standardMaterial) {
-        standardMaterial.color.lerp(
-          selected || hovered
-            ? baseColor.clone().lerp(new THREE.Color("#ffffff"), 0.22)
-            : baseColor,
-          0.15,
-        );
-        standardMaterial.emissive.lerp(
-          selected ? glowColor : hovered ? HOVER_COLOR_ORGAN : baseColor,
-          0.15,
-        );
+        standardMaterial.emissive.lerp(glowColor, 0.15);
+        const originalEmissiveIntensity = organ ? 0.08 : 0.04;
         standardMaterial.emissiveIntensity +=
-          ((selected ? 0.52 : hovered ? 0.55 : dimmed ? 0.02 : organ ? 0.08 : 0.04) -
-            standardMaterial.emissiveIntensity) *
-          0.22;
+          (originalEmissiveIntensity - standardMaterial.emissiveIntensity) * 0.22;
       }
     });
   });
 
   return (
     <group
-      ref={groupRef}
-      position={initialPosition}
-      scale={initialScale}
-      rotation={model.rotation ?? [0, 0, 0]}
+      position={targetPosition}
+      scale={targetScale}
+      rotation={targetRotation}
       renderOrder={organ ? 34 : 18}
       onPointerOver={interactive ? onPointerOver : undefined}
       onPointerOut={interactive ? onPointerOut : undefined}
@@ -1769,22 +1742,38 @@ function InternalOrgansLayer({
   onSelect: (sel: BoneSelection | null) => void;
 }) {
   const [hoveredOrganId, setHoveredOrganId] = useState<string | null>(null);
+  const [selectedOrganId, setSelectedOrganId] = useState<string | null>(
+    selection?.tissue === "organ" ? selection.id : null,
+  );
+  const [selectionPulse, setSelectionPulse] = useState({ organId: "", key: 0 });
 
-  if (layerMode !== "organs" && layerMode !== "complete") return null;
+  useEffect(() => {
+    setSelectedOrganId(selection?.tissue === "organ" ? selection.id : null);
+  }, [selection]);
+
+  useEffect(() => {
+    if (layerMode === "organs") return;
+    setHoveredOrganId(null);
+    document.body.style.cursor = "auto";
+  }, [layerMode]);
+
+  const isVisible = layerMode === "organs" || layerMode === "complete";
 
   return (
-    <group renderOrder={50}>
+    <group visible={isVisible} renderOrder={50}>
       {internalOrgans
         .filter((organ) => organ.modelParts?.length)
         .map((organ) => {
-          const selected = selection?.tissue === "organ" && selection.id === organ.id;
+          const selected = layerMode === "organs" && selectedOrganId === organ.id;
           const hovered = hoveredOrganId === organ.id;
-          const isInteractive = layerMode === "organs" || layerMode === "complete";
-          const hasFocusedOrgan =
-            isInteractive && Boolean(hoveredOrganId || selection?.tissue === "organ");
-          const dimmed = hasFocusedOrgan && !selected && !hovered;
+          const isInteractive = layerMode === "organs";
           const organOpacity = layerMode === "complete" ? 0.24 : 0.42;
-          const selectOrgan = () =>
+          const selectOrgan = () => {
+            setSelectedOrganId(organ.id);
+            setSelectionPulse((current) => ({
+              organId: organ.id,
+              key: current.key + 1,
+            }));
             onSelect({
               id: organ.id,
               side: "male",
@@ -1794,6 +1783,7 @@ function InternalOrgansLayer({
               label: organ.popularName,
               labelEn: organ.popularNameEn,
             });
+          };
           const handleOrganPointerOver = (event: ThreeEvent<PointerEvent>) => {
             event.stopPropagation();
             if (isInteractive) {
@@ -1813,9 +1803,9 @@ function InternalOrgansLayer({
           return (
             <group
               key={organ.id}
-              onPointerOver={handleOrganPointerOver}
-              onPointerOut={handleOrganPointerOut}
-              onClick={handleOrganClick}
+              onPointerOver={isInteractive ? handleOrganPointerOver : undefined}
+              onPointerOut={isInteractive ? handleOrganPointerOut : undefined}
+              onClick={isInteractive ? handleOrganClick : undefined}
             >
               {organ.modelParts?.map((model, index) => (
                 <AnatomyGlbModel
@@ -1823,8 +1813,7 @@ function InternalOrgansLayer({
                   organ={organ}
                   model={model}
                   selected={selected}
-                  hovered={hovered}
-                  dimmed={dimmed}
+                  selectionPulseKey={selectionPulse.organId === organ.id ? selectionPulse.key : 0}
                   opacity={organOpacity}
                   interactive={isInteractive}
                   onPointerOver={handleOrganPointerOver}
@@ -1880,66 +1869,17 @@ function LoadingFallback({ lang }: { lang: "ro" | "en" }) {
 
 type FocusControls = {
   target: THREE.Vector3;
-  getAzimuthalAngle: () => number;
-  setAzimuthalAngle: (v: number) => void;
   update: () => void;
-  addEventListener: (type: string, cb: () => void) => void;
-  removeEventListener: (type: string, cb: () => void) => void;
 };
 
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 0.15, 10);
 const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
 export const RESET_VIEW_EVENT = "santix-reset-anatomy-view";
 
-// Smoothly turns the camera to face and frame the selected structure.
-// Works for any selection (bone / muscle region / organ) by finding the matching
-// meshes in the scene and easing OrbitControls toward their bounding-box centre.
-function CameraFocus({ selection }: { selection: BoneSelection | null }) {
-  const scene = useThree((s) => s.scene);
+function CameraResetController() {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as FocusControls | null;
   const goal = useRef<{ target: THREE.Vector3; cameraPosition?: THREE.Vector3 } | null>(null);
-
-  useEffect(() => {
-    if (!controls) return;
-    const cancel = () => { goal.current = null; };
-    controls.addEventListener("start", cancel);
-    return () => controls.removeEventListener("start", cancel);
-  }, [controls]);
-
-  useEffect(() => {
-    if (!controls) return;
-    if (!selection) return;
-    const box = new THREE.Box3();
-    let found = false;
-    scene.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.visible) return;
-      const ud = mesh.userData;
-      const match =
-        (typeof ud.selectionId === "string" && ud.selectionId === selection.id) ||
-        (!!selection.regionId && ud.selectionRegionId === selection.regionId) ||
-        (typeof ud.boneId === "string" && ud.boneId === selection.id);
-      if (match) {
-        box.expandByObject(mesh);
-        found = true;
-      }
-    });
-    if (!found || box.isEmpty()) {
-      goal.current = null;
-      return;
-    }
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    // Zoom IN on the selected part and centre on it. The camera moves much
-    // closer (magnify) and only partially follows the part's height, so it
-    // reads as "zooming into the area" rather than the camera rising/falling.
-    const ZOOM_DISTANCE = 6.8; // default view sits at ~10
-    goal.current = {
-      target: center,
-      cameraPosition: new THREE.Vector3(center.x * 0.5, 0.15 + center.y * 0.45, ZOOM_DISTANCE),
-    };
-  }, [selection, scene, controls]);
 
   useEffect(() => {
     if (!controls) return;
@@ -1964,7 +1904,8 @@ function CameraFocus({ selection }: { selection: BoneSelection | null }) {
     controls.update();
     const targetDone = controls.target.distanceTo(goal.current.target) < 0.01;
     const cameraDone =
-      !goal.current.cameraPosition || camera.position.distanceTo(goal.current.cameraPosition) < 0.03;
+      !goal.current.cameraPosition ||
+      camera.position.distanceTo(goal.current.cameraPosition) < 0.03;
     if (targetDone && cameraDone) {
       goal.current = null;
     }
@@ -2000,12 +1941,12 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
   }, []);
 
   return (
-      <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        camera={{ position: DEFAULT_CAMERA_POSITION.toArray(), fov: 30 }}
-        gl={{ antialias: true, alpha: true }}
-      onPointerMissed={() => onSelect(null)}
+    <Canvas
+      shadows
+      dpr={[1, 1.5]}
+      camera={{ position: DEFAULT_CAMERA_POSITION.toArray(), fov: 30 }}
+      gl={{ antialias: true, alpha: true }}
+      onPointerMissed={undefined}
       onWheel={(event) => event.stopPropagation()}
     >
       <color attach="background" args={[isLightMode ? "#eef7f8" : "#03090b"]} />
@@ -2074,7 +2015,9 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
         enablePan
         enableZoom
         enableDamping
+        autoRotate={false}
         dampingFactor={0.05}
+        zoomToCursor
         zoomSpeed={0.95}
         panSpeed={0.85}
         screenSpacePanning
@@ -2082,9 +2025,8 @@ export function SkeletonScene({ selection, onSelect, layerMode, mode }: Skeleton
         maxDistance={28}
         minPolarAngle={0.05}
         maxPolarAngle={Math.PI - 0.05}
-        target={DEFAULT_CAMERA_TARGET.toArray()}
       />
-      <CameraFocus selection={selection} />
+      <CameraResetController />
     </Canvas>
   );
 }
