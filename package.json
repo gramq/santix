@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test:e2e": "playwright test",
     "db:audit": "node scripts/audit-supabase-schema.mjs",
+    "db:backfill-embeddings": "node scripts/backfill-ai-knowledge-embeddings.mjs",
     "anatomy:generate-exact-mappings": "node scripts/generate-exact-3d-selection-registry.mjs"
   },
   "dependencies": {

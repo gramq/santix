@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { classifyConversationMessage } from "../src/lib/ai/classifier";
+import { toPgVectorLiteral, validateEmbeddingVector } from "../src/lib/ai/embeddings";
 import { normalizeSantixMessage } from "../src/lib/ai/normalizer";
 import { resolveNextStep } from "../src/lib/ai/next-step";
 import { createAiProvider } from "../src/lib/ai/provider";
@@ -157,6 +158,12 @@ test("structured output validation rejects invalid payloads and accepts valid on
       used_context: [],
     }),
   )?.toMatchObject({ reply: "ok", confidence: "high" });
+});
+
+test("embedding helpers validate dimensions and format pgvector literals", () => {
+  expect(validateEmbeddingVector([0.1, 0.2], 3)).toBeNull();
+  expect(validateEmbeddingVector([0.1, 0.2], 2)).toEqual([0.1, 0.2]);
+  expect(toPgVectorLiteral([0.1, -0.25])).toBe("[0.10000000,-0.25000000]");
 });
 
 test("service orchestrates normalize, signals, state and next step", async () => {

@@ -65,7 +65,7 @@ If the user asks about a non-medical topic, the assistant should refuse briefly 
 - red flags.
 
 9. The server calls the active provider. Ollama is currently used, but routing,
-retrieval and prompt building are kept separate so a later provider can replace it.
+   retrieval and prompt building are kept separate so a later provider can replace it.
 
 Example provider prompt policy:
 
@@ -80,7 +80,30 @@ Do not invent Santix prices, services or internal content.
 ```
 
 10. If the provider is unavailable, the app returns deterministic local/database
-guidance.
+    guidance.
+
+## Semantic Search Embeddings
+
+The database is configured with `pgvector` and `ai_knowledge_entries.embedding`
+uses `vector(1536)`. Runtime semantic retrieval is enabled when the server can
+create a 1536-dimensional query embedding.
+
+Supported runtime providers:
+
+- OpenAI: set `OPENAI_API_KEY`; optional `AI_EMBEDDING_PROVIDER=openai` and
+  `OPENAI_EMBEDDING_MODEL=text-embedding-3-small`.
+- Ollama: set `AI_EMBEDDING_PROVIDER=ollama` and `OLLAMA_EMBEDDING_MODEL`, but
+  the selected model must return exactly 1536 dimensions or Santix will safely
+  fall back to keyword retrieval.
+
+Existing database rows also need embeddings. Backfill them with:
+
+```bash
+npm run db:backfill-embeddings
+```
+
+This command requires `SUPABASE_SERVICE_ROLE_KEY`, because embedding columns are
+server-managed and must not be writable from the browser.
 
 ## Why This Prevents Off-Topic Answers
 

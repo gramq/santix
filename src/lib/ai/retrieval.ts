@@ -1,4 +1,4 @@
-import { createQueryEmbedding } from "./embeddings";
+import { createQueryEmbedding, toPgVectorLiteral } from "./embeddings";
 
 export type KnowledgeEntry = {
   id: string;
@@ -200,7 +200,7 @@ export async function semanticSearchKnowledge(
 
   const rows = await safeRows<KnowledgeEntry>(
     supabase.rpc("match_ai_knowledge_entries", {
-      p_query_embedding: embedding,
+      p_query_embedding: toPgVectorLiteral(embedding),
       p_ai_layer: filters.aiLayer ?? null,
       p_body_region: filters.bodyRegion ?? null,
       p_structure_slug: filters.structureSlug ?? null,
