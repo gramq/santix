@@ -1,4 +1,5 @@
-import type { Bone } from "@/data/bones";
+import { categoryLabels, categoryLabelsEn, type Bone } from "@/data/bones";
+import { getEticheteSchelet } from "@/data/eticheteSchelet";
 import type { BoneSelection, TissueType } from "@/components/skeleton/SkeletonScene";
 
 export interface AnatomyDisplayName {
@@ -562,9 +563,15 @@ export function getAnatomyDisplayName(input: {
 
     const mapped = boneDisplayById[bone.id];
     if (mapped) {
+      const localizedTitle = isEn && mapped.title_en ? mapped.title_en : mapped.title;
+      const localizedSubtitle = isEn
+        ? categoryLabelsEn[bone.category]
+        : (mapped.subtitle ?? categoryLabels[bone.category]);
       return {
         ...mapped,
-        title: isEn && mapped.title_en ? mapped.title_en : mapped.title,
+        display_name: localizedTitle,
+        title: localizedTitle,
+        subtitle: localizedSubtitle,
         original_name: originalName,
         missing_ro_display_name: false,
         source: "fallback",
@@ -573,13 +580,17 @@ export function getAnatomyDisplayName(input: {
 
     if (dbDisplay) return dbDisplay;
 
-    const boneTitle = isEn ? (selection.labelEn ?? bone.name) : bone.name;
+    const catalogLabels = getEticheteSchelet(bone.id);
+    const boneTitle = isEn
+      ? (catalogLabels?.en ?? selection.labelEn ?? bone.name)
+      : (catalogLabels?.ro ?? bone.name);
     return {
       original_name: originalName,
       scientific_name_ro: bone.name,
       latin_name: bone.latin,
       display_name: boneTitle,
       title: boneTitle,
+      subtitle: isEn ? categoryLabelsEn[bone.category] : categoryLabels[bone.category],
       missing_ro_display_name: true,
       source: "fallback",
     };

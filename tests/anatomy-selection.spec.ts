@@ -15,7 +15,7 @@ test("patellar surface is assigned to the femur, not the patella", () => {
       id: "os-patellar-surface-of-femur",
       labelEn: "Patellar surface of femur",
     }),
-  ).toEqual({ id: "femur", label: "Femur" });
+  ).toEqual({ id: "femur", label: "Femur", labelEn: "Femur" });
 });
 
 test("radial notch is assigned to the ulna", () => {
@@ -25,7 +25,7 @@ test("radial notch is assigned to the ulna", () => {
       id: "os-radial-notch",
       labelEn: "Radial notch",
     }),
-  ).toEqual({ id: "ulna", label: "Ulnă" });
+  ).toEqual({ id: "ulna", label: "Ulnă", labelEn: "Ulna" });
 });
 
 test("ulnar notch is assigned to the radius", () => {
@@ -35,7 +35,7 @@ test("ulnar notch is assigned to the radius", () => {
       id: "os-ulnar-notch",
       labelEn: "Ulnar notch",
     }),
-  ).toEqual({ id: "radius", label: "Radius" });
+  ).toEqual({ id: "radius", label: "Radius", labelEn: "Radius" });
 });
 
 test("fibular notch is assigned to the tibia", () => {
@@ -45,7 +45,34 @@ test("fibular notch is assigned to the tibia", () => {
       id: "os-fibular-notch",
       labelEn: "Fibular notch",
     }),
-  ).toEqual({ id: "tibia", label: "Tibia" });
+  ).toEqual({ id: "tibia", label: "Tibia", labelEn: "Tibia" });
+});
+
+test("bone catalog selections keep English labels separate from Romanian labels", () => {
+  expect(
+    inferCatalogSelection({
+      tissue: "os",
+      id: "os-lumbar-vertebra-l4",
+      label: "Vertebră lombară L4",
+      labelEn: "Lumbar vertebra L4",
+    }),
+  ).toEqual({
+    id: "vert-lombare",
+    label: "Vertebre lombare",
+    labelEn: "Lumbar vertebrae",
+  });
+
+  expect(
+    inferCatalogSelection({
+      tissue: "os",
+      id: "os-distal-phalanx-of-fifth-finger-of-hand-left",
+      labelEn: "Distal phalanx of fifth finger of hand",
+    }),
+  ).toEqual({
+    id: "falange-mana",
+    label: "Falange ale mâinii",
+    labelEn: "Finger bones",
+  });
 });
 
 test("every muscle segment in the exported model resolves to an intuitive region", () => {

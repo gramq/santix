@@ -250,6 +250,44 @@ test("spine base bones use plain-language titles instead of Latin labels", () =>
   expect(coccis.title).not.toBe("Coccis");
 });
 
+test("English skeleton fallback uses English titles and display names", () => {
+  const lumbar = getAnatomyDisplayName({
+    bone: boneById("vert-lombare"),
+    selection: selection({
+      id: "vert-lombare",
+      label: "Vertebre lombare",
+      labelEn: "Vertebre lombare",
+    }),
+    lang: "en",
+  });
+
+  expect(lumbar.title).toBe("Lumbar vertebrae");
+  expect(lumbar.display_name).toBe("Lumbar vertebrae");
+  expect(lumbar.subtitle).toBe("Vertebral column");
+});
+
+test("English skeleton labels do not leak Romanian UI names", () => {
+  const romanianUiPattern =
+    /[ăâîșțĂÂÎȘȚ]|\b(Osul|Oasele|Oase|Vertebre|Coaste|Clavicule|Scapule|Rotulă|Ulnă|Fibulă|mâinii|piciorului|lombare|toracice|cervicale|coloanei)\b/i;
+  const failures = bones.flatMap((bone) => {
+    const result = getAnatomyDisplayName({
+      bone,
+      selection: selection({
+        id: bone.id,
+        label: bone.name,
+        labelEn: bone.name,
+      }),
+      lang: "en",
+    });
+    const visibleText = [result.title, result.display_name, result.subtitle]
+      .filter(Boolean)
+      .join(" ");
+    return romanianUiPattern.test(visibleText) ? [`${bone.id}: ${visibleText}`] : [];
+  });
+
+  expect(failures, `Romanian labels leaked in EN UI: ${failures.join(", ")}`).toEqual([]);
+});
+
 test("internal organs expose canonical popular, scientific, and Latin names in both languages", () => {
   const heartRo = getInternalOrgan("organ:inima");
   const heartEn = localizeInternalOrgan(heartRo, "en");

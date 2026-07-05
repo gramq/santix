@@ -18,6 +18,7 @@ import {
   type OrganModelPart,
 } from "@/data/internalOrgans";
 import exactAnatomy3dRegistry from "@/data/exactAnatomy3dMappings.generated";
+import { getEticheteSchelet } from "@/data/eticheteSchelet";
 import { useLanguage } from "@/lib/useLanguage";
 
 const MESH_TO_BONE: Record<string, string> = {
@@ -151,6 +152,8 @@ type ExactAnatomy3dMapping = {
   selectionId: string | null;
   regionId: string | null;
   regionLabel: string | null;
+  labelRo?: string | null;
+  labelEn?: string | null;
 };
 
 const EXACT_ANATOMY_3D_MAPPINGS = exactAnatomy3dRegistry.mappings as Record<
@@ -240,7 +243,8 @@ function makeRegion(regionId: string, regionLabel: string) {
 }
 
 function makeCatalogSelection(id: string, label: string) {
-  return { id, label };
+  const labels = getEticheteSchelet(id);
+  return { id, label: labels?.ro ?? label, labelEn: labels?.en ?? label };
 }
 
 function makeReadableSelection(id: string, label: string) {
@@ -1284,14 +1288,21 @@ function ComplexMaleModel({ url, xOffset, layerMode, selection, onSelect }: Comp
       mesh.userData.exactMappingStatus = exactMapping?.status ?? "unsupported";
       const selectionId =
         exactMapping?.status === "exact" ? (exactMapping.selectionId ?? undefined) : undefined;
+      const catalogLabels = getEticheteSchelet(selectionId);
       const selectionLabel =
         tissue === "muschi"
           ? readableMuscleSelection?.label
-          : (exactMapping?.regionLabel ?? stripLateralityFromLabel(structureName));
+          : (catalogLabels?.ro ??
+            exactMapping?.regionLabel ??
+            stripLateralityFromLabel(structureName));
+      const selectionLabelEn =
+        tissue === "os"
+          ? (catalogLabels?.en ?? exactMapping?.labelEn ?? structureNameEn)
+          : structureNameEn;
 
       mesh.userData.selectionId = selectionId;
       mesh.userData.selectionLabel = selectionLabel;
-      mesh.userData.selectionLabelEn = tissue === "os" ? selectionLabel : structureNameEn;
+      mesh.userData.selectionLabelEn = selectionLabelEn;
       mesh.userData.selectionRegionId =
         exactMapping?.status === "exact" ? (exactMapping.regionId ?? undefined) : undefined;
       mesh.userData.selectionRegionLabel =
